@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useDifficultyProgression, Difficulty } from '../../hooks/useDifficultyProgression';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { getRandomWords } from '../../data/vocabulary';
 
 const GAME_ID = 'FlashReading';
 
@@ -27,7 +28,8 @@ type Props = {
 
 type Phase = 'idle' | 'flash' | 'recall' | 'feedback' | 'ended';
 
-const DEFAULT_WORDS = ['apple', 'banana', 'cherry', 'mango', 'orange', 'grape', 'melon', 'peach'];
+// Use vocabulary database - get 20 random easy words as default
+const DEFAULT_WORDS = getRandomWords(20, 'easy');
 
 function getDifficultyConfig(difficulty: Difficulty) {
   switch (difficulty) {

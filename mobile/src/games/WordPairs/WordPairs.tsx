@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { WORD_PAIRS as VOCABULARY_WORD_PAIRS } from '../../data/vocabulary';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -18,12 +19,8 @@ type Props = {
 
 type Phase = 'idle' | 'running' | 'ended';
 
-const WORD_PAIRS = [
-  ['hot', 'cold'], ['up', 'down'], ['fast', 'slow'], ['big', 'small'],
-  ['day', 'night'], ['left', 'right'], ['open', 'close'], ['happy', 'sad'],
-  ['light', 'dark'], ['new', 'old'], ['hard', 'soft'], ['high', 'low'],
-  ['start', 'end'], ['push', 'pull'], ['win', 'lose'], ['buy', 'sell'],
-];
+// Use the extensive word pairs from vocabulary database
+const WORD_PAIRS = VOCABULARY_WORD_PAIRS;
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];

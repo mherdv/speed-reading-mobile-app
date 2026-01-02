@@ -64,6 +64,7 @@ export default function SchulteNumbers({
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(difficulty);
   const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
   const [grid, setGrid] = useState<number[]>([]);
+  const [activeGridSize, setActiveGridSize] = useState<number>(5); // Track actual grid size being played
   const [nextNumber, setNextNumber] = useState(1);
   const [mistakes, setMistakes] = useState(0);
   const [tapped, setTapped] = useState<Set<number>>(new Set());
@@ -72,7 +73,10 @@ export default function SchulteNumbers({
   const reportedRef = useRef(false);
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
-  const gridSize = gridSizeProp ?? currentConfig.gridSize;
+  // Use activeGridSize during game, currentConfig for idle screen
+  const gridSize = phase === 'running' || phase === 'ended' 
+    ? activeGridSize 
+    : (gridSizeProp ?? currentConfig.gridSize);
   const total = gridSize * gridSize;
 
   // Use dynamic dimensions for responsive layout
@@ -114,8 +118,11 @@ export default function SchulteNumbers({
   }, [autoStart, phase]);
 
   function start() {
+    // Reset all state completely for fresh restart
     reportedRef.current = false;
-    const newGrid = generateGrid(gridSize);
+    const currentGridSize = gridSizeProp ?? getDifficultyConfig(selectedDifficulty).gridSize;
+    const newGrid = generateGrid(currentGridSize);
+    setActiveGridSize(currentGridSize); // Track the actual grid size being used
     setGrid(newGrid);
     setNextNumber(1);
     setMistakes(0);
@@ -269,7 +276,15 @@ export default function SchulteNumbers({
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={() => { setPhase('idle'); setTimeout(start, 50); }}>
+          <Pressable style={styles.playAgainBtn} onPress={() => { 
+            // Complete reset - go to idle first to clear all state
+            setPhase('idle'); 
+            setGrid([]);
+            setNextNumber(1);
+            setMistakes(0);
+            setTapped(new Set());
+            setTimeout(start, 100); 
+          }}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>

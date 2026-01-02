@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Dimensions } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
 
 const GAME_ID = 'EyeMovementTraining';
+
+export type Difficulty = 'easy' | 'medium' | 'hard';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -13,10 +16,22 @@ type GameReportPayload = {
   details?: Record<string, any>;
 };
 
+function getDifficultyConfig(difficulty: Difficulty) {
+  switch (difficulty) {
+    case 'easy':
+      return { gridSize: 3, rounds: 10, intervalMs: 900 }; // 3x3 grid, slower
+    case 'medium':
+      return { gridSize: 3, rounds: 15, intervalMs: 700 }; // 3x3 grid, medium speed
+    case 'hard':
+      return { gridSize: 4, rounds: 20, intervalMs: 500 }; // 4x4 grid, faster
+  }
+}
+
 type Props = {
   positions?: number;
   rounds?: number;
   intervalMs?: number;
+  difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
@@ -24,15 +39,21 @@ type Props = {
 type Phase = 'idle' | 'running' | 'ended';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GRID_SIZE = 3; // 3x3 grid of dots
-const TOTAL_DOTS = GRID_SIZE * GRID_SIZE;
 
-export default function EyeMovementTraining({ positions = TOTAL_DOTS, rounds = 12, intervalMs = 700, autoStart = false, onReportResult }: Props) {
+export default function EyeMovementTraining({ positions: positionsProp, rounds: roundsProp, intervalMs: intervalMsProp, difficulty = 'medium', autoStart = false, onReportResult }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(difficulty);
+  const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
   const [currentRound, setCurrentRound] = useState(0);
   const [position, setPosition] = useState(0);
   const [score, setScore] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+
+  const config = getDifficultyConfig(selectedDifficulty);
+  const gridSize = config.gridSize;
+  const positions = positionsProp ?? gridSize * gridSize;
+  const rounds = roundsProp ?? config.rounds;
+  const intervalMs = intervalMsProp ?? config.intervalMs;
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const roundTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -40,6 +61,13 @@ export default function EyeMovementTraining({ positions = TOTAL_DOTS, rounds = 1
   const reportedRef = useRef(false);
   const roundRef = useRef(0);
   const lastPositionRef = useRef(-1);
+
+  useEffect(() => {
+    loadGameProgress(GAME_ID).then((progress) => {
+      setGameProgress(progress);
+      setSelectedDifficulty(levelToDifficulty(progress.level));
+    });
+  }, []);
 
   // Get random position that's different from the last one
   function getRandomPosition() {
@@ -104,24 +132,32 @@ export default function EyeMovementTraining({ positions = TOTAL_DOTS, rounds = 1
     const now = Date.now();
     const elapsedMs = now - startRef.current;
 
+    // Update progress
+    const success = true; // Eye training is always successful if completed
+    updateProgress(GAME_ID, success, rounds * 10).then(({ progress }) => {
+      setGameProgress(progress);
+      setSelectedDifficulty(levelToDifficulty(progress.level));
+    });
+
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
       score: rounds * 10,
       accuracy: 1,
-      details: { rounds, positions },
+      details: { rounds, positions, difficulty: selectedDifficulty },
     });
 
     setPhase('ended');
   }
 
   function playAgain() {
-    start();
+    setPhase('idle');
+    setTimeout(start, 50);
   }
 
   const dots = Array.from({ length: positions }, (_, i) => i);
-  const dotSize = Math.min((SCREEN_WIDTH - 80) / GRID_SIZE, 60);
+  const dotSize = Math.min((SCREEN_WIDTH - 80) / gridSize, 60);
 
   return (
     <View style={styles.container}>
@@ -133,6 +169,16 @@ export default function EyeMovementTraining({ positions = TOTAL_DOTS, rounds = 1
       {phase === 'idle' && (
         <View style={styles.idleContent}>
           <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
+          <View style={styles.progressInfo}>
+            <Text style={styles.levelLabel}>Level {gameProgress.level}</Text>
+            <Text style={styles.starsDisplay}>
+              {'★'.repeat(levelToStars(gameProgress.level))}
+              {'☆'.repeat(5 - levelToStars(gameProgress.level))}
+            </Text>
+            <Text style={styles.difficultyInfo}>
+              {selectedDifficulty === 'easy' ? '🟢 Slow pace' : selectedDifficulty === 'medium' ? '🟡 Medium pace' : '🔴 Fast pace'}
+            </Text>
+          </View>
           <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
             <Text style={styles.startBtnText}>Start Training</Text>
           </Pressable>
@@ -153,7 +199,7 @@ export default function EyeMovementTraining({ positions = TOTAL_DOTS, rounds = 1
           </View>
 
           <View style={styles.trackArea}>
-            <View testID="dot-track" style={[styles.track, { width: (dotSize + 24) * GRID_SIZE }]}>
+            <View testID="dot-track" style={[styles.track, { width: (dotSize + 24) * gridSize }]}>
               {dots.map((i) => (
                 <View
                   key={i}
@@ -178,6 +224,13 @@ export default function EyeMovementTraining({ positions = TOTAL_DOTS, rounds = 1
           <Text style={styles.endTitle}>Training Complete!</Text>
           <Text style={styles.endScore}>{rounds * 10}</Text>
           <Text style={styles.endMeta}>{rounds} movements in {(elapsed / 1000).toFixed(1)}s</Text>
+          <View style={styles.progressRow}>
+            <Text style={styles.levelText}>Level {gameProgress.level}</Text>
+            <Text style={styles.starsText}>
+              {'★'.repeat(levelToStars(gameProgress.level))}
+              {'☆'.repeat(5 - levelToStars(gameProgress.level))}
+            </Text>
+          </View>
           <Pressable testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Train Again</Text>
           </Pressable>
@@ -200,6 +253,25 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 24,
     paddingHorizontal: 8,
+  },
+  progressInfo: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  levelLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  starsDisplay: {
+    fontSize: 24,
+    letterSpacing: 4,
+  },
+  difficultyInfo: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 8,
   },
   startBtn: { backgroundColor: '#7C3AED', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
@@ -236,6 +308,9 @@ const styles = StyleSheet.create({
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
   endScore: { fontSize: 48, fontWeight: '800', color: '#7C3AED', marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
+  progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
+  levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  starsText: { fontSize: 16, color: '#F59E0B' },
   playAgainBtn: { marginTop: 16, backgroundColor: '#7C3AED', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

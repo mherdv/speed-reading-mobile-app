@@ -111,9 +111,9 @@ const GAMES: GameCardModel[] = [
   },
   {
     id: 'VisualSpanExpansion',
-    title: 'Span',
-    description: 'Expand peripheral vision',
-    iconText: '↔',
+    title: 'Memory',
+    description: 'Remember sequences',
+    iconText: '🧠',
   },
   {
     id: 'FlashReading',
@@ -126,12 +126,6 @@ const GAMES: GameCardModel[] = [
     title: 'Comprehension',
     description: 'Answer questions accurately',
     iconText: '📖',
-  },
-  {
-    id: 'MemoryRecall',
-    title: 'Memory',
-    description: 'Remember and recall items',
-    iconText: '🧠',
   },
   {
     id: 'SymbolRecognition',
@@ -229,7 +223,6 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
                 style={[
                   styles.gameCard,
                   cardWidth != null && { width: cardWidth },
-                  !isLastInRow && { marginRight: GRID_GAP },
                 ]}
                 onPress={() => onOpenGame(g.id)}
               >

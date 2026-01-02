@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { getRandomArticle, type Article } from '../../data/articles';
 
 const GAME_ID = 'PowerReader';
 
@@ -24,15 +25,10 @@ type Props = {
 
 type Phase = 'idle' | 'running' | 'ended';
 
-const DEFAULT_TEXT = `Speed reading is a collection of techniques designed to help you read faster while maintaining or even improving comprehension. The average person reads around 200 to 250 words per minute, but with practice, you can double or even triple that speed.
-
-One of the most fundamental techniques is reducing subvocalization, the habit of silently pronouncing words as you read. While this inner speech can help with comprehension of complex material, it significantly slows down your reading speed. Training yourself to see words as visual patterns rather than sounds is key to breaking this habit.
-
-Another important skill is expanding your peripheral vision. Instead of reading word by word, try to take in groups of three to five words at once. This chunk reading approach allows your eyes to move less frequently across the page, reducing the time spent on each line.
-
-Eye movement training is also crucial. Your eyes naturally make small jumps called saccades when reading. By practicing smooth, controlled eye movements and reducing unnecessary regression, where you reread passages, you can dramatically improve your reading efficiency.
-
-Regular practice with timed exercises helps build these skills gradually. Start with shorter passages and simpler material, then progressively increase both length and complexity. Remember that speed reading is a marathon, not a sprint. Consistent daily practice of even fifteen to twenty minutes will yield better results than occasional intensive sessions.`;
+// Get a random article from the database as the default text
+function getDefaultArticle(): Article {
+  return getRandomArticle();
+}
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
@@ -48,12 +44,16 @@ function getDifficultyConfig(difficulty: Difficulty) {
 }
 
 export default function PowerReader({ 
-  text = DEFAULT_TEXT, 
+  text: textProp, 
   chunkSize: chunkSizeProp, 
   intervalMs: intervalMsProp, 
   autoStart = false,
   onReportResult 
 }: Props & { difficulty?: Difficulty }) {
+  // Get a random article on component mount
+  const [currentArticle] = useState(() => getDefaultArticle());
+  const text = textProp ?? currentArticle.text;
+  
   const [phase, setPhase] = useState<Phase>('idle');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium');
   const [speedMultiplier, setSpeedMultiplier] = useState(1.0);

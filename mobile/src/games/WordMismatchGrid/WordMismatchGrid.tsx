@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Dimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 
@@ -135,19 +135,13 @@ function buildRound(cardCount: number): { cards: WordCard[]; differentIds: Set<n
   return { cards: shuffleArray(cards), differentIds };
 }
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Calculate card width - always 2 columns
-function getCardWidth() {
-  // App.tsx has padding: 12 on game container
-  // WordMismatchGrid has container padding: 12
-  // Total horizontal padding = 24 (12 * 2)
+// Calculate card width - always 2 columns with ~50% width each
+function getCardWidth(screenWidth: number) {
+  // Container has padding: 12 on each side = 24 total
   // Gap between 2 cards = 8
-  const totalHorizontalPadding = 24; // 12 from App.tsx + 12 from container (but only counts once per side)
+  const containerPadding = 24;
   const gap = 8;
-  // Calculate width for exactly 2 cards per row
-  // Available width = SCREEN_WIDTH - (left padding + right padding) - gap between cards
-  const availableWidth = SCREEN_WIDTH - 24 - gap; // 24 = 12px padding on each side
+  const availableWidth = screenWidth - containerPadding - gap;
   return Math.floor(availableWidth / 2);
 }
 
@@ -157,6 +151,7 @@ export default function WordMismatchGrid({
   autoStart = false,
   onReportResult,
 }: Props) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [phase, setPhase] = useState<Phase>('idle');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(difficulty);
   const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
@@ -170,6 +165,9 @@ export default function WordMismatchGrid({
   const reportedRef = useRef(false);
   const scoreRef = useRef(0);
   const roundsRef = useRef(0);
+  
+  // Calculate card width dynamically - always 2 columns
+  const cardWidth = getCardWidth(screenWidth);
 
   // Load progress on mount
   useEffect(() => {
@@ -373,7 +371,6 @@ export default function WordMismatchGrid({
           <View style={styles.cardsGrid}>
             {round.cards.map((card) => {
               const isSelected = selectedCards.has(card.id);
-              const cardWidth = getCardWidth();
               return (
                 <Pressable
                   key={`${roundIndex}-${card.id}`}
@@ -431,7 +428,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 12,
-    maxHeight: SCREEN_HEIGHT - 100,
   },
   title: {
     fontSize: 20,

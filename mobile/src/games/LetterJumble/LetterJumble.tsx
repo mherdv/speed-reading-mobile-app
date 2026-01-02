@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, TextInput as TextInputType } from 'react-native';
 
 import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { getWordsByDifficulty } from '../../data/vocabulary';
 
 const GAME_ID = 'LetterJumble';
 
@@ -26,29 +27,8 @@ type Props = {
 
 type Phase = 'idle' | 'running' | 'ended';
 
-// Word lists by difficulty
-const SHORT_WORDS = [
-  'speed', 'focus', 'brain', 'train', 'learn', 'think', 'quick', 'smart',
-  'power', 'skill', 'sharp', 'flash', 'boost', 'rapid', 'swift', 'clear',
-];
-
-const MEDIUM_WORDS = [
-  'practice', 'improve', 'memory', 'visual', 'mental', 'pattern', 'reading',
-  'absorb', 'recall', 'retain', 'process', 'decode', 'master', 'achieve',
-];
-
-const LONG_WORDS = [
-  'concentration', 'recognition', 'comprehension', 'visualization',
-  'improvement', 'development', 'achievement', 'performance',
-  'memorization', 'acceleration', 'optimization', 'understanding',
-];
-
 function getWordsForDifficulty(difficulty: Difficulty): string[] {
-  switch (difficulty) {
-    case 'easy': return SHORT_WORDS;
-    case 'medium': return MEDIUM_WORDS;
-    case 'hard': return LONG_WORDS;
-  }
+  return getWordsByDifficulty(difficulty);
 }
 
 function shuffle(word: string): string {
@@ -83,6 +63,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
   const reportedRef = useRef(false);
+  const inputRef = useRef<TextInputType>(null);
 
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
@@ -171,6 +152,8 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
     setCurrent(pickWord());
     setInput('');
     setShowHint(false);
+    // Refocus input after submit
+    setTimeout(() => inputRef.current?.focus(), 50);
   }
 
   function onSkip() {
@@ -180,6 +163,8 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
     setCurrent(pickWord());
     setInput('');
     setShowHint(false);
+    // Refocus input after skip
+    setTimeout(() => inputRef.current?.focus(), 50);
   }
 
   function playAgain() {
@@ -235,6 +220,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
           </View>
 
           <TextInput
+            ref={inputRef}
             testID="answer-input"
             style={styles.input}
             value={input}
@@ -243,7 +229,9 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
             placeholderTextColor="#9CA3AF"
             autoCapitalize="none"
             autoCorrect={false}
+            autoFocus={true}
             onSubmitEditing={onSubmit}
+            blurOnSubmit={false}
           />
 
           <View style={styles.buttonRow}>

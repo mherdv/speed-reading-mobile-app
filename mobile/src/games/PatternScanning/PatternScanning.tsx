@@ -88,6 +88,8 @@ export default function PatternScanning({
     targetPatternProp ?? PATTERNS[Math.floor(Math.random() * PATTERNS.length)]
   );
   
+  const [roundNumber, setRoundNumber] = useState(1);
+  
   const config = getDifficultyConfig(selectedDifficulty);
   const gridSize = gridSizeProp ?? config.gridSize;
   const durationMs = durationMsProp ?? config.durationMs;
@@ -95,18 +97,20 @@ export default function PatternScanning({
   
   const { grid, targetPositions } = useMemo(
     () => generateGrid(gridSize, targetPattern, config.targetDensity), 
-    [gridSize, targetPattern, config.targetDensity, phase]
+    [gridSize, targetPattern, config.targetDensity, phase, roundNumber]
   );
   const [found, setFound] = useState<string[]>([]);
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(durationMs);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [totalFound, setTotalFound] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
   const scoreRef = useRef(0);
   const foundRef = useRef<string[]>([]);
+  const totalFoundRef = useRef(0);
 
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
@@ -137,9 +141,12 @@ export default function PatternScanning({
     reportedRef.current = false;
     scoreRef.current = 0;
     foundRef.current = [];
+    totalFoundRef.current = 0;
     setPhase('running');
     setScore(0);
     setFound([]);
+    setTotalFound(0);
+    setRoundNumber(1);
     setTimeLeft(durationMs);
     setFeedback(null);
     startRef.current = Date.now();
@@ -161,10 +168,10 @@ export default function PatternScanning({
 
     const now = Date.now();
     const elapsedMs = now - startRef.current;
-    const accuracy = targetPositions.length > 0 ? foundRef.current.length / targetPositions.length : 0;
+    const accuracy = totalFoundRef.current > 0 ? 1 : 0;
 
-    // Update progress - success if accuracy >= 70%
-    const success = accuracy >= 0.7;
+    // Update progress - success if found at least some patterns
+    const success = totalFoundRef.current >= 3;
     updateProgress(GAME_ID, success, scoreRef.current).then(({ progress }) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
@@ -176,10 +183,19 @@ export default function PatternScanning({
       elapsedMs,
       score: scoreRef.current,
       accuracy,
-      details: { totalTargets: targetPositions.length, found: foundRef.current.length },
+      details: { totalTargets: totalFoundRef.current, found: totalFoundRef.current },
     });
 
     setPhase('ended');
+  }
+
+  function startNextRound() {
+    // Start a new round with a new pattern
+    setSelectedPattern(PATTERNS[Math.floor(Math.random() * PATTERNS.length)]);
+    foundRef.current = [];
+    setFound([]);
+    setRoundNumber(r => r + 1);
+    setFeedback(null);
   }
 
   function tapCell(r: number, c: number) {
@@ -194,12 +210,14 @@ export default function PatternScanning({
       setScore(scoreRef.current);
       foundRef.current = [...foundRef.current, key];
       setFound([...foundRef.current]);
+      totalFoundRef.current += 1;
+      setTotalFound(totalFoundRef.current);
       setFeedback(key);
       setTimeout(() => setFeedback(null), 200);
 
+      // When all patterns found in current round, start a new round instead of finishing
       if (foundRef.current.length === targetPositions.length) {
-        if (timerRef.current) clearInterval(timerRef.current);
-        finish();
+        setTimeout(() => startNextRound(), 300);
       }
     }
   }
@@ -279,9 +297,9 @@ export default function PatternScanning({
       {phase === 'ended' && (
         <View testID="end-screen" style={styles.endCard}>
           <Text style={styles.endEmoji}>🎯</Text>
-          <Text style={styles.endTitle}>{found.length === targetPositions.length ? 'All Found!' : 'Time Up!'}</Text>
+          <Text style={styles.endTitle}>Time Up!</Text>
           <Text style={styles.endScore}>{score}</Text>
-          <Text style={styles.endMeta}>Found {found.length} of {targetPositions.length}</Text>
+          <Text style={styles.endMeta}>Found {totalFound} patterns in {roundNumber} rounds</Text>
           <View style={styles.progressRow}>
             <Text style={styles.levelText}>Level {gameProgress.level}</Text>
             <Text style={styles.starsText}>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ScrollView, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { RootStackParamList } from './types';
 import type { AttemptResult, TextSample } from '../domain/types';
@@ -34,78 +35,88 @@ export function RootNavigator() {
     >
       <Stack.Screen name="Home">
         {({ navigation }) => (
-          <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
-            <HomeScreen
-              refreshToken={refreshToken}
-              onStart={(sample: TextSample) => navigation.navigate('Exercise', { sample })}
-              onOpenHistory={() => navigation.navigate('History')}
-              onOpenGame={(gameId: string) => navigation.navigate('Game', { gameId, autoStart: false })}
-            />
-          </ScrollView>
+          <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
+              <HomeScreen
+                refreshToken={refreshToken}
+                onStart={(sample: TextSample) => navigation.navigate('Exercise', { sample })}
+                onOpenHistory={() => navigation.navigate('History')}
+                onOpenGame={(gameId: string) => navigation.navigate('Game', { gameId, autoStart: false })}
+              />
+            </ScrollView>
+          </SafeAreaView>
         )}
       </Stack.Screen>
 
       <Stack.Screen name="Exercise">
         {({ navigation, route }) => (
-          <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
-            <ExerciseScreen
-              sample={route.params.sample}
-              onCancel={() => navigation.navigate('Home')}
-              onFinish={async (payload) => {
-                const sample = route.params.sample;
-                const result: AttemptResult = {
-                  id: makeId(),
-                  sampleId: sample.id,
-                  sampleTitle: sample.title,
-                  ...payload,
-                };
-                await saveResult(result);
-                refreshResults();
-                navigation.navigate('Result', { result });
-              }}
-            />
-          </ScrollView>
+          <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
+              <ExerciseScreen
+                sample={route.params.sample}
+                onCancel={() => navigation.navigate('Home')}
+                onFinish={async (payload) => {
+                  const sample = route.params.sample;
+                  const result: AttemptResult = {
+                    id: makeId(),
+                    sampleId: sample.id,
+                    sampleTitle: sample.title,
+                    ...payload,
+                  };
+                  await saveResult(result);
+                  refreshResults();
+                  navigation.navigate('Result', { result });
+                }}
+              />
+            </ScrollView>
+          </SafeAreaView>
         )}
       </Stack.Screen>
 
       <Stack.Screen name="Game">
         {({ navigation, route }) => (
-          <GameScreen
-            gameId={route.params.gameId}
-            autoStart={route.params?.autoStart}
-            onBack={() => navigation.navigate('Home')}
-            onFinish={(result: AttemptResult) => {
-              refreshResults();
-              navigation.navigate('Result', { result });
-            }}
-          />
+          <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <GameScreen
+              gameId={route.params.gameId}
+              autoStart={route.params?.autoStart}
+              onBack={() => navigation.navigate('Home')}
+              onFinish={(result: AttemptResult) => {
+                refreshResults();
+                navigation.navigate('Result', { result });
+              }}
+            />
+          </SafeAreaView>
         )}
       </Stack.Screen>
 
       <Stack.Screen name="Result">
         {({ navigation, route }) => (
-          <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
-            <ResultScreen
-              result={route.params.result}
-              onDone={() => navigation.navigate('Home')}
-              onOpenHistory={() => navigation.navigate('History')}
-              onPlayAgain={() => navigation.navigate('Game', { 
-                gameId: route.params.result.sampleId, 
-                autoStart: true 
-              })}
-            />
-          </ScrollView>
+          <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
+              <ResultScreen
+                result={route.params.result}
+                onDone={() => navigation.navigate('Home')}
+                onOpenHistory={() => navigation.navigate('History')}
+                onPlayAgain={() => navigation.navigate('Game', { 
+                  gameId: route.params.result.sampleId, 
+                  autoStart: true 
+                })}
+              />
+            </ScrollView>
+          </SafeAreaView>
         )}
       </Stack.Screen>
 
       <Stack.Screen name="History">
         {({ navigation }) => (
-          <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
-            <HistoryScreen
-              refreshToken={refreshToken}
-              onBack={() => navigation.navigate('Home')}
-            />
-          </ScrollView>
+          <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
+              <HistoryScreen
+                refreshToken={refreshToken}
+                onBack={() => navigation.navigate('Home')}
+              />
+            </ScrollView>
+          </SafeAreaView>
         )}
       </Stack.Screen>
     </Stack.Navigator>
@@ -113,6 +124,10 @@ export function RootNavigator() {
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   scroll: {
     flex: 1,
     backgroundColor: '#FFFFFF',
