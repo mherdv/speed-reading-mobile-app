@@ -1,0 +1,16 @@
+# Debug files (large media)
+debug/
+
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+
+# Expo
+.expo/
+dist/
+
+# Build outputs
+*.ipa
+*.apk

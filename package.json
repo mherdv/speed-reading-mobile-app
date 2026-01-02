@@ -1,0 +1,13 @@
+{
+  "name": "speed-reading-mobile-app",
+  "private": true,
+  "scripts": {
+    "mobile:install": "npm --prefix mobile install",
+    "mobile:start": "npm --prefix mobile start",
+    "mobile:web": "npm --prefix mobile run web",
+    "mobile:ios": "npm --prefix mobile run ios",
+    "mobile:android": "npm --prefix mobile run android",
+    "mobile:test": "npm --prefix mobile test",
+    "mobile:typecheck": "cd mobile && npx tsc --noEmit"
+  }
+}
