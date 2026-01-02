@@ -26,94 +26,12 @@ const GRID_COLUMNS = 3;
 const GRID_GAP = 10;
 
 const GAMES: GameCardModel[] = [
-  // Row 1: Word pairs, Letter jumble, Numbers
-  {
-    id: 'WordPairs',
-    title: 'Pairs',
-    description: 'Match word opposites',
-    iconText: '⇄',
-  },
-  {
-    id: 'LetterJumble',
-    title: 'Jumble',
-    description: 'Unscramble words',
-    iconText: '🔀',
-  },
-  {
-    id: 'NumberRecognition',
-    title: 'Numbers',
-    description: 'Spot numbers rapidly',
-    iconText: '123',
-  },
-  // Row 2: Word search, Schulte numbers, Text search
-  {
-    id: 'WordSearchGame',
-    title: 'Search',
-    description: 'Find hidden words',
-    iconText: '🔍',
-  },
-  {
-    id: 'SchulteNumbers',
-    title: 'Schulte',
-    description: 'Tap 1-25 in order',
-    iconText: '5',
-  },
-  {
-    id: 'TextSearch',
-    title: 'Text',
-    description: 'Find target words quickly',
-    iconText: '🔎',
-  },
-  // Row 3: Number search, Even numbers, Schulte letters
-  {
-    id: 'NumberSearch',
-    title: 'Find',
-    description: 'Find target numbers',
-    iconText: '🔢',
-  },
-  {
-    id: 'EvenNumbers',
-    title: 'Even',
-    description: 'Find even numbers quickly',
-    iconText: '2',
-  },
-  {
-    id: 'SchulteLetters',
-    title: 'Letters',
-    description: 'Tap A-Y in order',
-    iconText: 'Z',
-  },
-  // Row 4: Letter mixup, Schulte mix, Words
-  {
-    id: 'LetterRecognition',
-    title: 'Mixup',
-    description: 'Identify letters in a grid',
-    iconText: 'Aa',
-  },
-  {
-    id: 'SchulteMix',
-    title: 'Mix',
-    description: 'Alternate 1,A,2,B...',
-    iconText: '#',
-  },
+  // === CORE SPEED READING (Most useful) ===
   {
     id: 'PowerReader',
-    title: 'Words',
+    title: 'Power Read',
     description: 'Read chunks of text at speed',
     iconText: '⚡',
-  },
-  // Additional games (not shown in reference design)
-  {
-    id: 'EyeMovementTraining',
-    title: 'Eyes',
-    description: 'Train smooth eye tracking',
-    iconText: '👁',
-  },
-  {
-    id: 'VisualSpanExpansion',
-    title: 'Memory',
-    description: 'Remember sequences',
-    iconText: '🧠',
   },
   {
     id: 'FlashReading',
@@ -123,21 +41,57 @@ const GAMES: GameCardModel[] = [
   },
   {
     id: 'ComprehensionTest',
-    title: 'Comprehension',
+    title: 'Comprehend',
     description: 'Answer questions accurately',
     iconText: '📖',
   },
+  
+  // === FOCUS & ATTENTION ===
   {
-    id: 'SymbolRecognition',
-    title: 'Symbols',
-    description: 'Recognize symbols fast',
-    iconText: '∞',
+    id: 'SchulteNumbers',
+    title: 'Schulte',
+    description: 'Tap 1-25 in order',
+    iconText: '5',
+  },
+  {
+    id: 'SchulteLetters',
+    title: 'Letters',
+    description: 'Tap A-Y in order',
+    iconText: 'Z',
+  },
+  {
+    id: 'SchulteMix',
+    title: 'Mix',
+    description: 'Alternate 1,A,2,B...',
+    iconText: '#',
+  },
+  
+  // === EYE TRAINING ===
+  {
+    id: 'EyeMovementTraining',
+    title: 'Eyes',
+    description: 'Train smooth eye tracking',
+    iconText: '👁',
+  },
+  {
+    id: 'VisualSpanExpansion',
+    title: 'Span',
+    description: 'Expand peripheral vision',
+    iconText: '🧠',
   },
   {
     id: 'PatternScanning',
     title: 'Patterns',
     description: 'Find patterns quickly',
     iconText: '◧',
+  },
+  
+  // === WORD RECOGNITION ===
+  {
+    id: 'TimedWordRecognition',
+    title: 'Words',
+    description: 'Remember flashed words',
+    iconText: '📝',
   },
   {
     id: 'TimedPhraseRecognition',
@@ -146,16 +100,70 @@ const GAMES: GameCardModel[] = [
     iconText: '⏱',
   },
   {
-    id: 'TimedWordRecognition',
-    title: 'Recognition',
-    description: 'Remember flashed words',
-    iconText: '📝',
+    id: 'WordPairs',
+    title: 'Pairs',
+    description: 'Match word opposites',
+    iconText: '⇄',
+  },
+  
+  // === SEARCH & SCAN ===
+  {
+    id: 'TextSearch',
+    title: 'Text',
+    description: 'Find target words quickly',
+    iconText: '🔎',
+  },
+  {
+    id: 'WordSearchGame',
+    title: 'Search',
+    description: 'Find hidden words',
+    iconText: '🔍',
+  },
+  {
+    id: 'NumberSearch',
+    title: 'Numbers',
+    description: 'Find target numbers',
+    iconText: '🔢',
+  },
+  
+  // === RECOGNITION & MEMORY ===
+  {
+    id: 'LetterRecognition',
+    title: 'Letters',
+    description: 'Identify letters in a grid',
+    iconText: 'Aa',
+  },
+  {
+    id: 'NumberRecognition',
+    title: 'Digits',
+    description: 'Spot numbers rapidly',
+    iconText: '123',
+  },
+  {
+    id: 'SymbolRecognition',
+    title: 'Symbols',
+    description: 'Recognize symbols fast',
+    iconText: '∞',
+  },
+  
+  // === BRAIN TEASERS ===
+  {
+    id: 'LetterJumble',
+    title: 'Jumble',
+    description: 'Unscramble words',
+    iconText: '🔀',
   },
   {
     id: 'WordMismatchGrid',
     title: 'Mismatch',
     description: 'Find non-matching pairs',
     iconText: '≠',
+  },
+  {
+    id: 'EvenNumbers',
+    title: 'Even',
+    description: 'Find even numbers quickly',
+    iconText: '2',
   },
 ];
 

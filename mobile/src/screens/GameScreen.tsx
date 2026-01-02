@@ -45,6 +45,7 @@ type Props = {
   gameId: string;
   sessionKey?: string;
   autoStart?: boolean;
+  difficulty?: 'easy' | 'medium' | 'hard';
   onBack: () => void;
   onFinish: (result: AttemptResult) => void;
 };
@@ -55,6 +56,7 @@ function makeId() {
 
 const GAME_COMPONENTS: Record<string, React.ComponentType<{
   autoStart?: boolean;
+  difficulty?: 'easy' | 'medium' | 'hard';
   onReportResult?: (payload: GameReportPayload) => void;
 }>> = {
   PowerReader,
@@ -81,8 +83,8 @@ const GAME_COMPONENTS: Record<string, React.ComponentType<{
   EvenNumbers,
 };
 
-export function GameScreen({ gameId, sessionKey, autoStart, onBack, onFinish }: Props) {
-  console.log('[GameScreen] Mounted with sessionKey:', sessionKey, 'autoStart:', autoStart);
+export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, onFinish }: Props) {
+  console.log('[GameScreen] Mounted with sessionKey:', sessionKey, 'autoStart:', autoStart, 'difficulty:', difficulty);
   
   const handleGameReport = async (payload: GameReportPayload) => {
     console.log('[GameScreen] handleGameReport called with score:', payload.score);
@@ -129,6 +131,7 @@ export function GameScreen({ gameId, sessionKey, autoStart, onBack, onFinish }: 
           <GameComponent
             key={sessionKey ?? gameId}
             autoStart={autoStart}
+            difficulty={difficulty}
             onReportResult={(p: GameReportPayload) => void handleGameReport(p)}
           />
         </View>

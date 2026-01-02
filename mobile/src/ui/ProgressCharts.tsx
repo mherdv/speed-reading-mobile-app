@@ -1,8 +1,12 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, View } from 'react-native';
 
 import type { AttemptResult } from '../domain/types';
 import { colors, gameColors } from '../theme/colors';
+import { LineChart } from './LineChart';
+import { CircularProgress } from './CircularProgress';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type Props = {
   results: AttemptResult[];
@@ -15,6 +19,7 @@ type GameStats = {
   bestScore: number | null;
   latestScore: number | null;
   recentScores: number[];
+  improvement: number;
 };
 
 function groupByGame(results: AttemptResult[]): GameStats[] {
@@ -38,6 +43,11 @@ function groupByGame(results: AttemptResult[]): GameStats[] {
     const scores = sorted.map(a => a.score ?? Math.round((a.accuracy ?? 0) * 100)).filter(s => s > 0);
     const recentScores = scores.slice(0, 10).reverse(); // Last 10, oldest to newest
     
+    // Calculate improvement
+    const improvement = recentScores.length > 1 
+      ? recentScores[recentScores.length - 1] - recentScores[0]
+      : 0;
+    
     stats.push({
       gameId: sorted[0].sampleId || gameName,
       gameName,
@@ -45,38 +55,11 @@ function groupByGame(results: AttemptResult[]): GameStats[] {
       bestScore: scores.length > 0 ? Math.max(...scores) : null,
       latestScore: scores[0] ?? null,
       recentScores,
+      improvement,
     });
   });
   
   return stats.sort((a, b) => b.attempts - a.attempts);
-}
-
-function MiniBarChart({ scores, color }: { scores: number[]; color: string }) {
-  if (scores.length === 0) return null;
-  
-  const maxScore = Math.max(...scores, 1);
-  const barWidth = Math.min(20, 150 / scores.length);
-  
-  return (
-    <View style={styles.chartContainer}>
-      <View style={styles.chartBars}>
-        {scores.map((score, idx) => (
-          <View
-            key={idx}
-            style={[
-              styles.bar,
-              {
-                width: barWidth,
-                height: Math.max(4, (score / maxScore) * 40),
-                backgroundColor: color,
-                opacity: 0.5 + (idx / scores.length) * 0.5, // Fade in effect
-              },
-            ]}
-          />
-        ))}
-      </View>
-    </View>
-  );
 }
 
 export function ProgressCharts({ results }: Props) {
@@ -90,11 +73,16 @@ export function ProgressCharts({ results }: Props) {
     );
   }
   
+  const chartWidth = Math.min(SCREEN_WIDTH - 80, 280);
+  
   return (
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>Progress by Exercise</Text>
       {stats.map((stat) => {
         const color = gameColors[stat.gameId] || colors.primary;
+        const latestPercent = stat.latestScore !== null ? Math.min(100, stat.latestScore) : 0;
+        const improvementColor = stat.improvement >= 0 ? '#4CAF50' : '#F44336';
+        
         return (
           <View key={stat.gameName} style={styles.gameCard}>
             <View style={styles.gameHeader}>
@@ -102,31 +90,62 @@ export function ProgressCharts({ results }: Props) {
               <Text style={styles.gameName} numberOfLines={1}>{stat.gameName}</Text>
             </View>
             
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stat.attempts}</Text>
-                <Text style={styles.statLabel}>Attempts</Text>
+            <View style={styles.mainContent}>
+              {/* Circular Progress for Latest Score */}
+              <View style={styles.circularSection}>
+                <CircularProgress
+                  percentage={latestPercent}
+                  size={80}
+                  strokeWidth={8}
+                  color={color}
+                  centerLabel={`${latestPercent}`}
+                  subLabel="Latest"
+                />
               </View>
               
-              {stat.bestScore !== null && (
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color }]}>{stat.bestScore}</Text>
-                  <Text style={styles.statLabel}>Best</Text>
+              {/* Stats */}
+              <View style={styles.statsSection}>
+                <View style={styles.statRow}>
+                  <Text style={styles.statIcon}>🎮</Text>
+                  <Text style={styles.statLabel}>Attempts:</Text>
+                  <Text style={styles.statValue}>{stat.attempts}</Text>
                 </View>
-              )}
-              
-              {stat.latestScore !== null && (
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{stat.latestScore}</Text>
-                  <Text style={styles.statLabel}>Latest</Text>
-                </View>
-              )}
+                
+                {stat.bestScore !== null && (
+                  <View style={styles.statRow}>
+                    <Text style={styles.statIcon}>🏆</Text>
+                    <Text style={styles.statLabel}>Best:</Text>
+                    <Text style={[styles.statValue, { color }]}>{stat.bestScore}</Text>
+                  </View>
+                )}
+                
+                {stat.recentScores.length > 1 && (
+                  <View style={styles.statRow}>
+                    <Text style={styles.statIcon}>{stat.improvement >= 0 ? '📈' : '📉'}</Text>
+                    <Text style={styles.statLabel}>Trend:</Text>
+                    <Text style={[styles.statValue, { color: improvementColor }]}>
+                      {stat.improvement >= 0 ? '+' : ''}{stat.improvement}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
             
+            {/* Line Chart for Progress Trend */}
             {stat.recentScores.length > 1 && (
               <View style={styles.chartSection}>
-                <Text style={styles.chartLabel}>Recent trend:</Text>
-                <MiniBarChart scores={stat.recentScores} color={color} />
+                <Text style={styles.chartTitle}>Recent Progress</Text>
+                <LineChart
+                  data={stat.recentScores}
+                  width={chartWidth}
+                  height={120}
+                  color={color}
+                  showDots={stat.recentScores.length <= 6}
+                  showArea={true}
+                  showYAxis={true}
+                  showXAxis={true}
+                  yAxisTicks={3}
+                />
               </View>
             )}
           </View>
@@ -141,83 +160,94 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   emptyContainer: {
-    padding: 20,
+    padding: 24,
     alignItems: 'center',
   },
   emptyText: {
     color: colors.textSecondary,
     textAlign: 'center',
+    fontSize: 15,
   },
   gameCard: {
     backgroundColor: colors.cardBackground,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   gameHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   colorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginRight: 10,
   },
   gameName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: colors.textPrimary,
     flex: 1,
   },
-  statsRow: {
+  mainContent: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
-    gap: 24,
+    alignItems: 'center',
+    gap: 20,
   },
-  statItem: {
+  circularSection: {
     alignItems: 'center',
   },
+  statsSection: {
+    flex: 1,
+    gap: 8,
+  },
+  statRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statIcon: {
+    fontSize: 14,
+    width: 22,
+  },
   statValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.textPrimary,
+    marginLeft: 'auto',
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 2,
+    flex: 1,
   },
   chartSection: {
-    marginTop: 12,
-    paddingTop: 10,
+    marginTop: 16,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    alignItems: 'center',
   },
-  chartLabel: {
-    fontSize: 11,
+  chartTitle: {
+    fontSize: 12,
     color: colors.textSecondary,
-    marginBottom: 6,
-  },
-  chartContainer: {
-    height: 44,
-    justifyContent: 'flex-end',
-  },
-  chartBars: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  bar: {
-    borderRadius: 2,
+    marginBottom: 10,
+    fontWeight: '500',
   },
 });

@@ -87,6 +87,7 @@ export function RootNavigator() {
               gameId={route.params.gameId}
               sessionKey={route.params?.sessionKey}
               autoStart={route.params?.autoStart}
+              difficulty={route.params?.difficulty}
               onBack={() => navigation.navigate('Home')}
               onFinish={(result: AttemptResult) => {
                 console.log('[RootNavigator] onFinish called with result id:', result.id, 'score:', result.score);
@@ -119,13 +120,15 @@ export function RootNavigator() {
                 onOpenHistory={() => navigation.navigate('History')}
                 onPlayAgain={() => {
                   const newSessionKey = getNextGameSessionKey();
-                  console.log('[ResultScreen] Play Again - resetting to Game with sessionKey:', newSessionKey);
+                  const difficulty = route.params.result.details?.difficulty as 'easy' | 'medium' | 'hard' | undefined;
+                  console.log('[ResultScreen] Play Again - resetting to Game with sessionKey:', newSessionKey, 'difficulty:', difficulty);
                   // Reset to Home -> Game to fully clear the old Result screen
+                  // Pass the difficulty from the previous game so it replays at same level
                   navigation.reset({
                     index: 1,
                     routes: [
                       { name: 'Home' },
-                      { name: 'Game', params: { gameId: route.params.result.sampleId, autoStart: true, sessionKey: newSessionKey }, key: `game-${newSessionKey}` },
+                      { name: 'Game', params: { gameId: route.params.result.sampleId, autoStart: true, sessionKey: newSessionKey, difficulty }, key: `game-${newSessionKey}` },
                     ],
                   });
                 }}

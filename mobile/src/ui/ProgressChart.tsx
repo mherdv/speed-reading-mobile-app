@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, Dimensions } from 'react-native';
 
 import type { AttemptResult } from '../domain/types';
 import { loadResults } from '../data/resultsStore';
+import { LineChart } from './LineChart';
+import { CircularProgress } from './CircularProgress';
 
 type Props = {
   gameId: string;
@@ -40,7 +42,7 @@ export function ProgressChart({ gameId, currentScore, maxResults = 10 }: Props) 
   if (history.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Progress</Text>
+        <Text style={styles.title}>📈 Progress</Text>
         <Text style={styles.noData}>No previous results for this exercise.</Text>
       </View>
     );
@@ -49,56 +51,79 @@ export function ProgressChart({ gameId, currentScore, maxResults = 10 }: Props) 
   // Get scores for chart
   const scores = history.map((r) => r.score ?? 0);
   const maxScore = Math.max(...scores, currentScore ?? 0, 1);
-  const barWidth = Math.min(30, (SCREEN_WIDTH - 80) / history.length);
 
   // Calculate stats
   const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
   const bestScore = Math.max(...scores);
   const latestScore = scores[scores.length - 1] ?? 0;
   const improvement = scores.length > 1 ? latestScore - scores[0] : 0;
+  const improvementPercent = scores[0] > 0 ? Math.round((improvement / scores[0]) * 100) : 0;
+  
+  // Calculate performance percentage (latest vs best possible, capped at 100)
+  const performancePercent = Math.min(100, Math.round((latestScore / Math.max(bestScore, 1)) * 100));
+
+  // Generate labels for x-axis
+  const labels = scores.map((_, i) => `#${i + 1}`);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Progress History</Text>
+      <Text style={styles.title}>📈 Progress History</Text>
       
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{Math.round(avgScore)}</Text>
-          <Text style={styles.statLabel}>Avg Score</Text>
+      {/* Stats Row with Circular Progress */}
+      <View style={styles.statsRowNew}>
+        <View style={styles.circularContainer}>
+          <CircularProgress
+            percentage={performancePercent}
+            size={80}
+            strokeWidth={8}
+            color="#6366F1"
+            gradientEnd="#EC4899"
+            subLabel="Performance"
+          />
         </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{bestScore}</Text>
-          <Text style={styles.statLabel}>Best</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={[styles.statValue, improvement > 0 && styles.positive, improvement < 0 && styles.negative]}>
-            {improvement > 0 ? '+' : ''}{Math.round(improvement)}
-          </Text>
-          <Text style={styles.statLabel}>Change</Text>
+        
+        <View style={styles.statsColumn}>
+          <View style={styles.statRowItem}>
+            <Text style={styles.statIcon}>🎯</Text>
+            <View>
+              <Text style={styles.statValueNew}>{bestScore}</Text>
+              <Text style={styles.statLabelNew}>Best Score</Text>
+            </View>
+          </View>
+          <View style={styles.statRowItem}>
+            <Text style={styles.statIcon}>📊</Text>
+            <View>
+              <Text style={styles.statValueNew}>{Math.round(avgScore)}</Text>
+              <Text style={styles.statLabelNew}>Average</Text>
+            </View>
+          </View>
+          <View style={styles.statRowItem}>
+            <Text style={styles.statIcon}>{improvement >= 0 ? '📈' : '📉'}</Text>
+            <View>
+              <Text style={[styles.statValueNew, improvement > 0 && styles.positive, improvement < 0 && styles.negative]}>
+                {improvement > 0 ? '+' : ''}{improvementPercent}%
+              </Text>
+              <Text style={styles.statLabelNew}>Trend</Text>
+            </View>
+          </View>
         </View>
       </View>
 
+      {/* Line Chart */}
       <View style={styles.chartContainer}>
-        <View style={styles.chartArea}>
-          {scores.map((score, idx) => {
-            const height = maxScore > 0 ? (score / maxScore) * 80 : 0;
-            return (
-              <View key={idx} style={styles.barContainer}>
-                <View 
-                  style={[
-                    styles.bar, 
-                    { 
-                      height: Math.max(4, height), 
-                      width: barWidth - 4,
-                      backgroundColor: idx === scores.length - 1 ? '#10B981' : '#93C5FD',
-                    }
-                  ]} 
-                />
-                <Text style={styles.barLabel}>{idx + 1}</Text>
-              </View>
-            );
-          })}
-        </View>
+        <Text style={styles.chartTitle}>Score Trend</Text>
+        <LineChart
+          data={scores}
+          width={SCREEN_WIDTH - 64}
+          height={140}
+          color="#6366F1"
+          gradientColor="#6366F1"
+          showDots={scores.length <= 8}
+          showArea={true}
+          showYAxis={true}
+          showXAxis={true}
+          yAxisTicks={4}
+        />
       </View>
 
       <Text style={styles.chartCaption}>Last {history.length} attempts</Text>
@@ -109,17 +134,22 @@ export function ProgressChart({ gameId, currentScore, maxResults = 10 }: Props) 
 const styles = StyleSheet.create({
   container: {
     marginTop: 16,
-    padding: 12,
-    backgroundColor: '#F0F9FF',
-    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   title: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#1E40AF',
-    marginBottom: 8,
+    color: '#1F2937',
+    marginBottom: 16,
   },
   loadingText: {
     color: '#6B7280',
@@ -127,31 +157,37 @@ const styles = StyleSheet.create({
   },
   noData: {
     color: '#6B7280',
-    fontSize: 12,
+    fontSize: 13,
     fontStyle: 'italic',
   },
-  statsRow: {
+  statsRowNew: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 12,
-  },
-  statBox: {
     alignItems: 'center',
-    backgroundColor: 'white',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
+    marginBottom: 16,
   },
-  statValue: {
+  circularContainer: {
+    marginRight: 20,
+  },
+  statsColumn: {
+    flex: 1,
+    gap: 8,
+  },
+  statRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statIcon: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#1E40AF',
+    marginRight: 8,
   },
-  statLabel: {
-    fontSize: 10,
-    color: '#3B82F6',
+  statValueNew: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  statLabelNew: {
+    fontSize: 11,
+    color: '#6B7280',
   },
   positive: {
     color: '#059669',
@@ -160,36 +196,22 @@ const styles = StyleSheet.create({
     color: '#DC2626',
   },
   chartContainer: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  chartArea: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    height: 100,
-    paddingBottom: 20,
-  },
-  barContainer: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
     alignItems: 'center',
-    marginHorizontal: 2,
   },
-  bar: {
-    borderRadius: 4,
-    minWidth: 12,
-  },
-  barLabel: {
-    fontSize: 8,
-    color: '#9CA3AF',
-    marginTop: 4,
+  chartTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 8,
+    alignSelf: 'flex-start',
   },
   chartCaption: {
-    fontSize: 10,
-    color: '#6B7280',
+    fontSize: 11,
+    color: '#9CA3AF',
     textAlign: 'center',
-    marginTop: 6,
+    marginTop: 8,
   },
 });

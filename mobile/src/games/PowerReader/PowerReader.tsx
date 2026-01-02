@@ -56,7 +56,7 @@ export default function PowerReader({
   
   const [phase, setPhase] = useState<Phase>('idle');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium');
-  const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
+  const [targetWpm, setTargetWpm] = useState(200); // Target WPM instead of multiplier
   const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
   
   const [progressLoaded, setProgressLoaded] = useState(false);
@@ -81,7 +81,6 @@ export default function PowerReader({
   
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const chunkSize = chunkSizeProp ?? currentConfig.chunkSize;
-  const baseIntervalMs = intervalMsProp ?? currentConfig.intervalMs;
   
   const words = text.split(/\s+/).filter(Boolean);
   const chunks: string[] = [];
@@ -96,7 +95,7 @@ export default function PowerReader({
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
   const chunkIndexRef = useRef(0);
-  const speedMultiplierRef = useRef(1.0);
+  const targetWpmRef = useRef(200);
 
   useEffect(() => {
     return () => {
@@ -106,7 +105,8 @@ export default function PowerReader({
   }, []);
 
   function scheduleNextChunk() {
-    const currentInterval = Math.round(baseIntervalMs / speedMultiplierRef.current);
+    // Calculate interval based on target WPM: interval = (words per chunk) / WPM * 60000 ms
+    const currentInterval = Math.round((chunkSize / targetWpmRef.current) * 60000);
     chunkTimerRef.current = setTimeout(() => {
       chunkIndexRef.current += 1;
       if (chunkIndexRef.current >= chunks.length) {
@@ -123,8 +123,8 @@ export default function PowerReader({
     if (!force && phase !== 'idle') return;
     reportedRef.current = false;
     chunkIndexRef.current = 0;
-    speedMultiplierRef.current = 1.0;
-    setSpeedMultiplier(1.0);
+    targetWpmRef.current = 200;
+    setTargetWpm(200);
     setPhase('running');
     setChunkIndex(0);
     setElapsed(0);
@@ -138,9 +138,9 @@ export default function PowerReader({
   }
 
   function adjustSpeed(delta: number) {
-    const newMultiplier = Math.max(0.5, Math.min(2.0, speedMultiplierRef.current + delta));
-    speedMultiplierRef.current = newMultiplier;
-    setSpeedMultiplier(newMultiplier);
+    const newWpm = Math.max(50, Math.min(600, targetWpmRef.current + delta));
+    targetWpmRef.current = newWpm;
+    setTargetWpm(newWpm);
   }
 
   function finish() {
@@ -178,7 +178,6 @@ export default function PowerReader({
 
   const current = chunks[chunkIndex] ?? '';
   const progress = ((chunkIndex + 1) / chunks.length) * 100;
-  const wpm = elapsed > 0 ? Math.round((((chunkIndex + 1) * chunkSize) / elapsed) * 60000) : 0;
 
   return (
     <View style={styles.container}>
@@ -232,10 +231,6 @@ export default function PowerReader({
       {phase === 'running' && (
         <View style={styles.gameArea}>
           <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{wpm}</Text>
-              <Text style={styles.statLabel}>WPM</Text>
-            </View>
             <View style={[styles.statBox, styles.progressBox]}>
               <Text style={styles.statValue}>{chunkIndex + 1}/{chunks.length}</Text>
               <Text style={styles.statLabel}>Chunk</Text>
@@ -249,21 +244,21 @@ export default function PowerReader({
           <View style={styles.speedControlRow}>
             <Pressable 
               testID="speed-decrease"
-              style={[styles.speedBtn, speedMultiplier <= 0.5 && styles.speedBtnDisabled]} 
-              onPress={() => adjustSpeed(-0.25)}
-              disabled={speedMultiplier <= 0.5}
+              style={[styles.speedBtn, targetWpm <= 50 && styles.speedBtnDisabled]} 
+              onPress={() => adjustSpeed(-25)}
+              disabled={targetWpm <= 50}
             >
               <Text style={styles.speedBtnText}>−</Text>
             </Pressable>
             <View style={styles.speedDisplay}>
-              <Text style={styles.speedValue}>{speedMultiplier.toFixed(2)}x</Text>
-              <Text style={styles.speedLabel}>Speed</Text>
+              <Text style={styles.speedValue}>{targetWpm}</Text>
+              <Text style={styles.speedLabel}>WPM</Text>
             </View>
             <Pressable 
               testID="speed-increase"
-              style={[styles.speedBtn, speedMultiplier >= 2.0 && styles.speedBtnDisabled]} 
-              onPress={() => adjustSpeed(0.25)}
-              disabled={speedMultiplier >= 2.0}
+              style={[styles.speedBtn, targetWpm >= 600 && styles.speedBtnDisabled]} 
+              onPress={() => adjustSpeed(25)}
+              disabled={targetWpm >= 600}
             >
               <Text style={styles.speedBtnText}>+</Text>
             </Pressable>
