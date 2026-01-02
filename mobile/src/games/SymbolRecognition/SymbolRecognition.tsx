@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type GameReportPayload = {
@@ -28,7 +28,7 @@ function generateStream(): string[] {
 
 export default function SymbolRecognition({ target = '@', stream, durationMs = 20000, autoStart = false, onReportResult }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
-  const seq = useMemo(() => stream ?? generateStream(), [stream]);
+  const [seq, setSeq] = useState<string[]>(() => stream ?? generateStream());
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
@@ -63,6 +63,8 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
+    // Generate fresh stream
+    setSeq(stream ?? generateStream());
     setPhase('running');
     setScore(0);
     setIndex(0);
@@ -99,7 +101,9 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
       details: { target, total: seq.length, attempts: attemptsRef.current },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function evaluate(isMatchPressed: boolean) {

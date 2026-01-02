@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 
@@ -29,7 +29,7 @@ function generateStream(): number[] {
 
 export default function NumberRecognition({ target: initialTarget = 7, stream, durationMs = 20000, autoStart = false, onReportResult }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
-  const seq = useMemo(() => stream ?? generateStream(), [stream]);
+  const [seq, setSeq] = useState<number[]>(() => stream ?? generateStream());
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
@@ -65,6 +65,8 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
+    // Generate fresh stream
+    setSeq(stream ?? generateStream());
     setPhase('running');
     setScore(0);
     setIndex(0);
@@ -84,10 +86,6 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
     }, 100);
   }
 
-  function playAgain() {
-    start();
-  }
-
   function finish() {
     if (reportedRef.current) return;
     reportedRef.current = true;
@@ -105,7 +103,9 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
       details: { target: currentTarget, total: seq.length, attempts: attemptsRef.current },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function evaluate(isMatchPressed: boolean) {
@@ -143,8 +143,8 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
+        <View style={styles.endCard}>
+          <Text style={styles.endTitle}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
           <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
             <Text style={styles.startBtnText}>Start Game</Text>
           </Pressable>

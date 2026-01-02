@@ -73,10 +73,13 @@ export default function EvenNumbers({
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const currentDurationMs = durationMsProp ?? currentConfig.durationMs;
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      setProgressLoaded(true);
     });
   }, []);
 
@@ -89,11 +92,11 @@ export default function EvenNumbers({
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   const currentNumber = usesSequence ? (seq[index] ?? 0) : randomNumber;
 
@@ -153,7 +156,9 @@ export default function EvenNumbers({
       },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function evaluate(isEvenPressed: boolean) {

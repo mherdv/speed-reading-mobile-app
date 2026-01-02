@@ -112,8 +112,13 @@ export default function TimedWordRecognition({
   const displayMs = displayMsProp ?? currentConfig.displayMs;
   const words = getWordsForDifficulty(selectedDifficulty);
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   useEffect(() => {
-    loadGameProgress(GAME_ID).then(setGameProgress);
+    loadGameProgress(GAME_ID).then((progress) => {
+      setGameProgress(progress);
+      setProgressLoaded(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -125,11 +130,11 @@ export default function TimedWordRecognition({
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   function pickWord(): { word: string; options: string[] } {
     const currentWords = getWordsForDifficulty(selectedDifficulty);
@@ -222,7 +227,9 @@ export default function TimedWordRecognition({
       },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function playAgain() {

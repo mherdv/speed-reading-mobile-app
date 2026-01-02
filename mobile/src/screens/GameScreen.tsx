@@ -43,6 +43,7 @@ type GameReportPayload = {
 
 type Props = {
   gameId: string;
+  sessionKey?: string;
   autoStart?: boolean;
   onBack: () => void;
   onFinish: (result: AttemptResult) => void;
@@ -80,8 +81,11 @@ const GAME_COMPONENTS: Record<string, React.ComponentType<{
   EvenNumbers,
 };
 
-export function GameScreen({ gameId, autoStart, onBack, onFinish }: Props) {
+export function GameScreen({ gameId, sessionKey, autoStart, onBack, onFinish }: Props) {
+  console.log('[GameScreen] Mounted with sessionKey:', sessionKey, 'autoStart:', autoStart);
+  
   const handleGameReport = async (payload: GameReportPayload) => {
+    console.log('[GameScreen] handleGameReport called with score:', payload.score);
     const finishedAtIso = payload.finishedAtIso ?? new Date().toISOString();
     const elapsedMs = payload.elapsedMs ?? 0;
     const startedAtIso = payload.startedAtIso ?? new Date(Date.now() - elapsedMs).toISOString();
@@ -101,6 +105,7 @@ export function GameScreen({ gameId, autoStart, onBack, onFinish }: Props) {
       details: payload.details,
     };
 
+    console.log('[GameScreen] Calling onFinish with result id:', result.id, 'score:', result.score);
     await saveResult(result);
     onFinish(result);
   };
@@ -122,6 +127,7 @@ export function GameScreen({ gameId, autoStart, onBack, onFinish }: Props) {
       <View style={styles.container}>
         <View style={styles.gameContainer}>
           <GameComponent
+            key={sessionKey ?? gameId}
             autoStart={autoStart}
             onReportResult={(p: GameReportPayload) => void handleGameReport(p)}
           />

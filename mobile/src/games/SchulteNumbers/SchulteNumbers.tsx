@@ -101,21 +101,24 @@ export default function SchulteNumbers({
   ));
   const actualGridSize = cellSize * gridSize + cellGap * (gridSize - 1) + gridPadding * 2;
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      setProgressLoaded(true);
     });
   }, []);
 
-  // Auto-start when autoStart prop is true
+  // Auto-start when autoStart prop is true AND progress has loaded
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (autoStart && phase === 'idle' && progressLoaded && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   function start() {
     // Reset all state completely for fresh restart
@@ -156,7 +159,11 @@ export default function SchulteNumbers({
       details: { gridSize, mistakes, timeMs: elapsedMs, difficulty: selectedDifficulty },
     });
     
-    setPhase('ended');
+    // Only show ended phase if no onReportResult (standalone mode)
+    // Otherwise, navigation will handle showing results
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function onTap(num: number) {
@@ -276,14 +283,30 @@ export default function SchulteNumbers({
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={() => { 
-            // Complete reset - go to idle first to clear all state
+          <Pressable style={styles.playAgainBtn} onPress={async () => { 
+            // Complete reset - reload progress to get correct difficulty
+            const progress = await loadGameProgress(GAME_ID);
+            const correctDifficulty = levelToDifficulty(progress.level);
+            setGameProgress(progress);
+            setSelectedDifficulty(correctDifficulty);
             setPhase('idle'); 
             setGrid([]);
             setNextNumber(1);
             setMistakes(0);
             setTapped(new Set());
-            setTimeout(start, 100); 
+            // Generate grid with the correct difficulty
+            const correctGridSize = gridSizeProp ?? getDifficultyConfig(correctDifficulty).gridSize;
+            setTimeout(() => {
+              reportedRef.current = false;
+              const newGrid = generateGrid(correctGridSize);
+              setActiveGridSize(correctGridSize);
+              setGrid(newGrid);
+              setNextNumber(1);
+              setMistakes(0);
+              setTapped(new Set());
+              startedAtRef.current = Date.now();
+              setPhase('running');
+            }, 100); 
           }}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>

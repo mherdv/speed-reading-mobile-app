@@ -87,6 +87,8 @@ export default function SchulteMix({
   const startedAtRef = useRef<number>(0);
   const reportedRef = useRef(false);
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const gridSize = gridSizeProp ?? currentConfig.gridSize;
   const total = gridSize * gridSize;
@@ -117,17 +119,18 @@ export default function SchulteMix({
     loadGameProgress(GAME_ID).then((progress) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      setProgressLoaded(true);
     });
   }, []);
 
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   function start() {
     reportedRef.current = false;
@@ -165,7 +168,9 @@ export default function SchulteMix({
       details: { gridSize, mistakes, timeMs: elapsedMs, difficulty: selectedDifficulty },
     });
     
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function onTap(cell: CellType) {

@@ -147,7 +147,9 @@ export default function TextSearch({
       details: { targetWord, totalTargets: targetIndices.length, found: foundRef.current.length },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function tapWord(index: number) {

@@ -64,10 +64,13 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
   const startingLength = startingLengthProp ?? currentConfig.startingLength;
   const displayMs = displayMsProp ?? currentConfig.displayMs;
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      setProgressLoaded(true);
     });
   }, []);
 
@@ -80,11 +83,11 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   function start() {
     if (phase !== 'idle') return;
@@ -164,7 +167,9 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
       details: { maxLevel, attempts: attemptsRef.current, difficulty: selectedDifficulty },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function playAgain() {

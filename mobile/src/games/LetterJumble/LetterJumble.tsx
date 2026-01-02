@@ -65,10 +65,13 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
   const reportedRef = useRef(false);
   const inputRef = useRef<TextInputType>(null);
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      setProgressLoaded(true);
     });
   }, []);
 
@@ -91,11 +94,11 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   function start() {
     reportedRef.current = false;
@@ -135,7 +138,9 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
       details: { rounds: attemptsRef.current, correct: scoreRef.current },
     });
     
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function onSubmit() {

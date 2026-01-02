@@ -94,8 +94,13 @@ export default function WordSearch({
   const gridSize = currentConfig.gridSize;
   const currentDurationMs = durationMsProp ?? currentConfig.durationMs;
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   useEffect(() => {
-    loadGameProgress(GAME_ID).then(setGameProgress);
+    loadGameProgress(GAME_ID).then((progress) => {
+      setGameProgress(progress);
+      setProgressLoaded(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -117,11 +122,11 @@ export default function WordSearch({
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   function start() {
     reportedRef.current = false;
@@ -161,7 +166,9 @@ export default function WordSearch({
       },
     });
     
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function onCellPress(row: number, col: number) {

@@ -115,7 +115,9 @@ export default function WordPairs({ durationMs = 30000, autoStart = false, onRep
       details: { rounds: attemptsRef.current, correct: scoreRef.current },
     });
     
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function onSelect(index: number) {

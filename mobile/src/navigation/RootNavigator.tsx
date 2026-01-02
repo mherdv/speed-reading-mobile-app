@@ -19,6 +19,12 @@ function makeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+// Generate unique session key to force component remount
+let gameSessionCounter = 0;
+function getNextGameSessionKey() {
+  return `game-session-${++gameSessionCounter}`;
+}
+
 export function RootNavigator() {
   const [refreshToken, setRefreshToken] = useState(0);
 
@@ -41,7 +47,7 @@ export function RootNavigator() {
                 refreshToken={refreshToken}
                 onStart={(sample: TextSample) => navigation.navigate('Exercise', { sample })}
                 onOpenHistory={() => navigation.navigate('History')}
-                onOpenGame={(gameId: string) => navigation.navigate('Game', { gameId, autoStart: false })}
+                onOpenGame={(gameId: string) => navigation.navigate('Game', { gameId, autoStart: false, sessionKey: getNextGameSessionKey() })}
               />
             </ScrollView>
           </SafeAreaView>
@@ -77,12 +83,23 @@ export function RootNavigator() {
         {({ navigation, route }) => (
           <SafeAreaView style={styles.safeArea} edges={['top']}>
             <GameScreen
+              key={route.params?.sessionKey ?? route.params.gameId}
               gameId={route.params.gameId}
+              sessionKey={route.params?.sessionKey}
               autoStart={route.params?.autoStart}
               onBack={() => navigation.navigate('Home')}
               onFinish={(result: AttemptResult) => {
+                console.log('[RootNavigator] onFinish called with result id:', result.id, 'score:', result.score);
                 refreshResults();
-                navigation.navigate('Result', { result });
+                // Reset navigation stack to Home -> Result to avoid stale screens
+                // Use result.id as a unique key to force new Result screen instance
+                navigation.reset({
+                  index: 1,
+                  routes: [
+                    { name: 'Home' },
+                    { name: 'Result', params: { result }, key: `result-${result.id}` },
+                  ],
+                });
               }}
             />
           </SafeAreaView>
@@ -90,21 +107,32 @@ export function RootNavigator() {
       </Stack.Screen>
 
       <Stack.Screen name="Result">
-        {({ navigation, route }) => (
+        {({ navigation, route }) => {
+          console.log('[ResultScreen] Rendering with result id:', route.params.result.id, 'score:', route.params.result.score);
+          return (
           <SafeAreaView style={styles.safeArea} edges={['top']}>
             <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
               <ResultScreen
+                key={route.params.result.id}
                 result={route.params.result}
                 onDone={() => navigation.navigate('Home')}
                 onOpenHistory={() => navigation.navigate('History')}
-                onPlayAgain={() => navigation.navigate('Game', { 
-                  gameId: route.params.result.sampleId, 
-                  autoStart: true 
-                })}
+                onPlayAgain={() => {
+                  const newSessionKey = getNextGameSessionKey();
+                  console.log('[ResultScreen] Play Again - resetting to Game with sessionKey:', newSessionKey);
+                  // Reset to Home -> Game to fully clear the old Result screen
+                  navigation.reset({
+                    index: 1,
+                    routes: [
+                      { name: 'Home' },
+                      { name: 'Game', params: { gameId: route.params.result.sampleId, autoStart: true, sessionKey: newSessionKey }, key: `game-${newSessionKey}` },
+                    ],
+                  });
+                }}
               />
             </ScrollView>
           </SafeAreaView>
-        )}
+        );}}
       </Stack.Screen>
 
       <Stack.Screen name="History">

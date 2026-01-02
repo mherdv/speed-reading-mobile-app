@@ -112,10 +112,13 @@ export default function PatternScanning({
   const foundRef = useRef<string[]>([]);
   const totalFoundRef = useRef(0);
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      setProgressLoaded(true);
     });
   }, []);
 
@@ -128,11 +131,11 @@ export default function PatternScanning({
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   function start() {
     if (phase !== 'idle') return;
@@ -186,7 +189,9 @@ export default function PatternScanning({
       details: { totalTargets: totalFoundRef.current, found: totalFoundRef.current },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function startNextRound() {

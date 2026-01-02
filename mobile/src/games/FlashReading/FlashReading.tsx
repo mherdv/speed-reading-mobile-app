@@ -166,7 +166,9 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
       details: { rounds: totalRounds, correct: correctRef.current, difficulty: selectedDifficulty },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function playAgain() {

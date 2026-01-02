@@ -163,7 +163,9 @@ export default function TimedPhraseRecognition({ phrases = DEFAULT_PHRASES, disp
       details: { rounds: totalRounds, correct: correctRef.current },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function playAgain() {

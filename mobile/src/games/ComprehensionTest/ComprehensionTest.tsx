@@ -133,7 +133,9 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
       details: { questionsTotal: questions.length, correctCount },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function playAgain() {

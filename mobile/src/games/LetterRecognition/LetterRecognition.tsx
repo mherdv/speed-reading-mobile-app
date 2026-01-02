@@ -119,22 +119,25 @@ export default function LetterRecognition({
     phaseRef.current = phase;
   }, [phase]);
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   // Load saved progress on mount
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      setProgressLoaded(true);
     });
   }, []);
 
   // Auto-start when autoStart prop is true (e.g., from Play Again)
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       startGame();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   useEffect(() => {
     return () => {
@@ -217,7 +220,9 @@ export default function LetterRecognition({
       },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function onCellPress(cellId: number) {

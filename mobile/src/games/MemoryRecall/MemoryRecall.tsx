@@ -129,7 +129,9 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
       details: { maxLevel: levelRef.current },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function playAgain() {

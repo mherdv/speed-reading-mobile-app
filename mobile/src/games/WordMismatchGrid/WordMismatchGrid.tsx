@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
@@ -138,11 +138,12 @@ function buildRound(cardCount: number): { cards: WordCard[]; differentIds: Set<n
 // Calculate card width - always 2 columns with ~50% width each
 function getCardWidth(screenWidth: number) {
   // Container has padding: 12 on each side = 24 total
-  // Gap between 2 cards = 8
+  // We want 2 cards with a small gap between them
   const containerPadding = 24;
-  const gap = 8;
-  const availableWidth = screenWidth - containerPadding - gap;
-  return Math.floor(availableWidth / 2);
+  const gapBetweenCards = 8;
+  const availableWidth = screenWidth - containerPadding;
+  // Each card gets (available - gap) / 2
+  return Math.floor((availableWidth - gapBetweenCards) / 2);
 }
 
 export default function WordMismatchGrid({
@@ -161,6 +162,7 @@ export default function WordMismatchGrid({
   const [timeLeftMs, setTimeLeftMs] = useState(0);
   const [selectedCards, setSelectedCards] = useState<Set<number>>(new Set());
   const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
+  const [round, setRound] = useState<{ cards: WordCard[]; differentIds: Set<number> }>({ cards: [], differentIds: new Set() });
   
   const reportedRef = useRef(false);
   const scoreRef = useRef(0);
@@ -169,29 +171,28 @@ export default function WordMismatchGrid({
   // Calculate card width dynamically - always 2 columns
   const cardWidth = getCardWidth(screenWidth);
 
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   // Load progress on mount
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      setProgressLoaded(true);
     });
   }, []);
 
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const currentDurationMs = durationMsProp ?? currentConfig.durationMs;
-
-  const round = useMemo(() => {
-    return buildRound(currentConfig.cardCount);
-  }, [roundIndex, currentConfig.cardCount]);
 
 
   useEffect(() => {
@@ -217,15 +218,19 @@ export default function WordMismatchGrid({
 
   function start() {
     if (phase !== 'idle') return;
+    // Reset all refs to initial values
     reportedRef.current = false;
     scoreRef.current = 0;
     roundsRef.current = 0;
+    // Reset all state
     setScore(0);
     setRounds(0);
     setRoundIndex(0);
     setTimeLeftMs(currentDurationMs);
     setStartedAtMs(Date.now());
     setSelectedCards(new Set());
+    // Generate fresh round
+    setRound(buildRound(currentConfig.cardCount));
     setPhase('running');
   }
 
@@ -265,7 +270,9 @@ export default function WordMismatchGrid({
       },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function onSelectCard(cardId: number) {
@@ -319,6 +326,8 @@ export default function WordMismatchGrid({
     setScore(scoreRef.current);
     setRounds(roundsRef.current);
     setSelectedCards(new Set());
+    // Generate new round immediately (not via effect)
+    setRound(buildRound(currentConfig.cardCount));
     setRoundIndex((r) => r + 1);
   }
 
@@ -372,25 +381,25 @@ export default function WordMismatchGrid({
             {round.cards.map((card) => {
               const isSelected = selectedCards.has(card.id);
               return (
-                <Pressable
-                  key={`${roundIndex}-${card.id}`}
-                  testID={`card-${card.id}`}
-                  style={[
-                    styles.card,
-                    { width: cardWidth },
-                    isSelected && styles.cardSelected,
-                  ]}
-                  onPress={() => onSelectCard(card.id)}
-                >
-                  <Text style={[styles.cardWord, styles.cardWordTop]}>{card.word1}</Text>
-                  <View style={styles.cardDivider} />
-                  <Text style={[styles.cardWord, styles.cardWordBottom]}>{card.word2}</Text>
-                  {isSelected && (
-                    <View style={styles.checkMark}>
-                      <Text style={styles.checkMarkText}>✓</Text>
-                    </View>
-                  )}
-                </Pressable>
+                  <Pressable
+                    key={`${roundIndex}-${card.id}`}
+                    testID={`card-${card.id}`}
+                    style={[
+                      styles.card,
+                      { width: cardWidth },
+                      isSelected && styles.cardSelected,
+                    ]}
+                    onPress={() => onSelectCard(card.id)}
+                  >
+                    <Text style={[styles.cardWord, styles.cardWordTop]}>{card.word1}</Text>
+                    <View style={styles.cardDivider} />
+                    <Text style={[styles.cardWord, styles.cardWordBottom]}>{card.word2}</Text>
+                    {isSelected && (
+                      <View style={styles.checkMark}>
+                        <Text style={styles.checkMarkText}>✓</Text>
+                      </View>
+                    )}
+                  </Pressable>
               );
             })}
           </View>
@@ -511,9 +520,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   cardsGrid: {
+    // flexDirection: 'row',
+    display: 'flex',
+    justifyContent: 'space-between',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
   },
   card: {
     // width is set dynamically via inline style
@@ -522,8 +533,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#E5E7EB',
     padding: 10,
+    marginBottom: 8,
     alignItems: 'center',
     position: 'relative',
+    maxWidth: '48%',
   },
   cardSelected: {
     borderColor: '#F59E0B',

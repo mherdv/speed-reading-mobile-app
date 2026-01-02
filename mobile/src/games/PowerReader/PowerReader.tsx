@@ -59,22 +59,25 @@ export default function PowerReader({
   const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
   const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
   
+  const [progressLoaded, setProgressLoaded] = useState(false);
+
   // Load progress on mount
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      setProgressLoaded(true);
     });
   }, []);
 
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
+    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
       start();
     }
-  }, [autoStart, phase]);
+  }, [autoStart, phase, progressLoaded]);
   
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const chunkSize = chunkSizeProp ?? currentConfig.chunkSize;
@@ -164,7 +167,9 @@ export default function PowerReader({
       details: { wordsRead, chunksShown: chunks.length },
     });
 
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function playAgain() {
@@ -218,7 +223,7 @@ export default function PowerReader({
               {text}
             </Text>
           </View>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
+          <Pressable testID="start-button" style={styles.startBtn} onPress={() => start()}>
             <Text style={styles.startBtnText}>Start Reading</Text>
           </Pressable>
         </View>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { loadAllProgress, type GameProgress } from '../data/progressStore';
+import { loadAllProgress, clearProgress, type GameProgress } from '../data/progressStore';
 import { loadResults } from '../data/resultsStore';
 import type { AttemptResult, TextSample } from '../domain/types';
 import { colors, gameColors } from '../theme/colors';
@@ -184,6 +184,33 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
     return width > 0 ? width : null;
   }, [gridWidth]);
 
+  const handleResetDifficulty = async () => {
+    const doReset = async () => {
+      await clearProgress();
+      setProgress({});
+    };
+
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-restricted-globals
+      if (confirm('This will reset all games to level 1. Are you sure?')) {
+        await doReset();
+      }
+    } else {
+      Alert.alert(
+        'Reset Difficulty',
+        'This will reset all games to level 1. Are you sure?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Reset',
+            style: 'destructive',
+            onPress: doReset,
+          },
+        ]
+      );
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -250,8 +277,9 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
         ) : (
           <Text style={styles.latestTextMuted}>No results yet.</Text>
         )}
-        <View style={styles.historyBtn}>
+        <View style={styles.buttonsRow}>
           <Button testID="open-history" label="View history" onPress={onOpenHistory} />
+          <Button testID="reset-difficulty" label="Reset Difficulty" onPress={handleResetDifficulty} />
         </View>
       </View>
     </View>
@@ -283,7 +311,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginBottom: 10,
   },
-  historyBtn: {
+  buttonsRow: {
+    flexDirection: 'row',
+    gap: 12,
     alignItems: 'flex-start',
   },
   gamesGrid: {

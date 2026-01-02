@@ -112,7 +112,9 @@ export default function NumberSearch({ durationMs = 45000, gridSize = 5, autoSta
       details: { rounds: attemptsRef.current, correct: scoreRef.current },
     });
     
-    setPhase('ended');
+    if (!onReportResult) {
+      setPhase('ended');
+    }
   }
 
   function onCellPress(row: number, col: number) {
