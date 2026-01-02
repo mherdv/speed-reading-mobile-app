@@ -44,11 +44,13 @@ bash dev_scripts/extract_audio.sh "$VIDEO_MP4" "$OUT_DIR/audio.wav" || {
 
 bash dev_scripts/normalize_audio.sh "$OUT_DIR/audio.wav" "$OUT_DIR/audio_normalized.wav"
 
-# Optional: voice activity segments (if present in whisper-cpp install)
-if command -v vad-speech-segments >/dev/null 2>&1; then
-  vad-speech-segments -f "$OUT_DIR/audio_normalized.wav" > "$OUT_DIR/vad_segments.txt" || true
-  echo "Wrote: $OUT_DIR/vad_segments.txt"
-fi
+# Optional: voice activity segments (requires whisper-cpp vad-speech-segments + Silero VAD model)
+# Note: transcript.vtt already contains speech timestamps, so VAD is often redundant
+# MODELS_DIR="$(dirname "$0")/../debug/_models"
+# if command -v vad-speech-segments >/dev/null 2>&1 && [[ -f "$MODELS_DIR/silero-vad.bin" ]]; then
+#   vad-speech-segments -vm "$MODELS_DIR/silero-vad.bin" -f "$OUT_DIR/audio_normalized.wav" -np > "$OUT_DIR/vad_segments.txt" 2>/dev/null || true
+#   echo "Wrote: $OUT_DIR/vad_segments.txt"
+# fi
 
 bash dev_scripts/transcribe_audio.sh "$OUT_DIR/audio_normalized.wav" "$OUT_DIR/transcript" || true
 
