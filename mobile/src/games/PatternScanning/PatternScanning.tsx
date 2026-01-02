@@ -108,6 +108,7 @@ export default function PatternScanning({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const foundRef = useRef<string[]>([]);
   const totalFoundRef = useRef(0);
@@ -124,6 +125,7 @@ export default function PatternScanning({
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
@@ -166,6 +168,7 @@ export default function PatternScanning({
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

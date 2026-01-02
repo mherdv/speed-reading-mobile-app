@@ -62,6 +62,7 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
 
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const roundRef = useRef(0);
   const correctRef = useRef(0);
@@ -73,6 +74,7 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     };
   }, []);
@@ -150,6 +152,7 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

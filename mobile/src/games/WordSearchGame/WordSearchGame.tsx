@@ -89,6 +89,7 @@ export default function WordSearch({
   const scoreRef = useRef(0);
   const wordsFoundRef = useRef(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const gridSize = currentConfig.gridSize;
@@ -116,7 +117,10 @@ export default function WordSearch({
       }
     }, 100);
     
-    return () => clearInterval(interval);
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(interval);
+    };
   }, [phase, currentDurationMs]);
 
   // Auto-start when autoStart prop is true
@@ -144,6 +148,7 @@ export default function WordSearch({
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
     

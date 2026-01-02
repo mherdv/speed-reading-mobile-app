@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import React, { useRef, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, Text } from 'react-native';
 
 import type { AttemptResult } from '../domain/types';
 import { saveResult } from '../data/resultsStore';
-import { Button } from '../ui/Button';
+import { BackButton } from '../ui/BackButton';
+import { colors } from '../theme/colors';
 
 import PowerReader from '../games/PowerReader/PowerReader';
 import LetterRecognition from '../games/LetterRecognition/LetterRecognition';
@@ -86,8 +87,23 @@ const GAME_COMPONENTS: Record<string, React.ComponentType<{
 export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, onFinish }: Props) {
   console.log('[GameScreen] Mounted with sessionKey:', sessionKey, 'autoStart:', autoStart, 'difficulty:', difficulty);
   
+  const cancelledRef = useRef(false);
+  
+  const handleBack = useCallback(() => {
+    console.log('[GameScreen] Back pressed, cancelling game');
+    cancelledRef.current = true;
+    onBack();
+  }, [onBack]);
+  
   const handleGameReport = async (payload: GameReportPayload) => {
-    console.log('[GameScreen] handleGameReport called with score:', payload.score);
+    console.log('[GameScreen] handleGameReport called with score:', payload.score, 'cancelled:', cancelledRef.current);
+    
+    // Don't report results if the game was cancelled
+    if (cancelledRef.current) {
+      console.log('[GameScreen] Game was cancelled, skipping result');
+      return;
+    }
+    
     const finishedAtIso = payload.finishedAtIso ?? new Date().toISOString();
     const elapsedMs = payload.elapsedMs ?? 0;
     const startedAtIso = payload.startedAtIso ?? new Date(Date.now() - elapsedMs).toISOString();
@@ -117,16 +133,26 @@ export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, 
   if (!GameComponent) {
     return (
       <View style={styles.container}>
-        <View style={styles.backContainer}>
-          <Button label="← Back" onPress={onBack} />
+        <View style={styles.header}>
+          <BackButton onPress={handleBack} />
+          <Text style={styles.headerTitle}>Game</Text>
+          <View style={styles.headerSpacer} />
         </View>
       </View>
     );
   }
 
+  // Get game title for header
+  const gameTitle = gameId.replace(/([A-Z])/g, ' $1').trim();
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
       <View style={styles.container}>
+        <View style={styles.header}>
+          <BackButton onPress={handleBack} />
+          <Text style={styles.headerTitle}>{gameTitle}</Text>
+          <View style={styles.headerSpacer} />
+        </View>
         <View style={styles.gameContainer}>
           <GameComponent
             key={sessionKey ?? gameId}
@@ -134,9 +160,6 @@ export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, 
             difficulty={difficulty}
             onReportResult={(p: GameReportPayload) => void handleGameReport(p)}
           />
-        </View>
-        <View style={styles.backContainer}>
-          <Button label="← Back" onPress={onBack} />
         </View>
       </View>
     </ScrollView>
@@ -146,22 +169,35 @@ export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, 
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     flexGrow: 1,
   },
   container: {
     flex: 1,
-    padding: 12,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingVertical: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 48,
   },
   gameContainer: {
     flex: 1,
-  },
-  backContainer: {
-    marginTop: 12,
   },
 });

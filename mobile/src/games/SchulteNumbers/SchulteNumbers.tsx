@@ -71,6 +71,7 @@ export default function SchulteNumbers({
 
   const startedAtRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   // Use activeGridSize during game, currentConfig for idle screen
@@ -102,6 +103,13 @@ export default function SchulteNumbers({
   const actualGridSize = cellSize * gridSize + cellGap * (gridSize - 1) + gridPadding * 2;
 
   const [progressLoaded, setProgressLoaded] = useState(false);
+
+  // Cleanup on unmount - prevent reporting results after back button
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
   
   useEffect(() => {
     loadGameProgress(GAME_ID).then((progress) => {
@@ -135,6 +143,7 @@ export default function SchulteNumbers({
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
     

@@ -102,10 +102,11 @@ const styles = StyleSheet.create({
   },
   valueText: {
     fontWeight: '800',
-    color: '#1F2937',
+    color: '#2C3E50',
   },
   subLabel: {
-    color: '#6B7280',
+    color: '#5D6D7E',
     marginTop: 2,
+    fontWeight: '500',
   },
 });

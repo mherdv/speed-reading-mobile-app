@@ -86,8 +86,16 @@ export default function SchulteMix({
 
   const startedAtRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
 
   const [progressLoaded, setProgressLoaded] = useState(false);
+
+  // Cleanup on unmount - prevent reporting results after back button
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const gridSize = gridSizeProp ?? currentConfig.gridSize;
@@ -144,6 +152,7 @@ export default function SchulteMix({
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
     

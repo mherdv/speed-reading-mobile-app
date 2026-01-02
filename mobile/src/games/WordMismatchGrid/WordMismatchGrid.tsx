@@ -165,6 +165,7 @@ export default function WordMismatchGrid({
   const [round, setRound] = useState<{ cards: WordCard[]; differentIds: Set<number> }>({ cards: [], differentIds: new Set() });
   
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const roundsRef = useRef(0);
   
@@ -212,7 +213,10 @@ export default function WordMismatchGrid({
       }
     }, 100);
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(interval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, startedAtMs, currentDurationMs]);
 
@@ -235,6 +239,7 @@ export default function WordMismatchGrid({
   }
 
   function finish(nowMs: number) {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

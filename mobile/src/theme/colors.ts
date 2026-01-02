@@ -1,48 +1,57 @@
 /**
- * App color palette - modern gradient-based design
- * Primary: Deep blue to purple gradient feel
- * Secondary: Vibrant accents
+ * App color palette - SpeedRead design system
+ * Light blue background with white cards
+ * Orange/blue accent colors
  */
 
 export const colors = {
   // Primary brand colors
-  primary: '#6366F1', // Indigo
-  primaryDark: '#4F46E5',
-  primaryLight: '#818CF8',
+  primary: '#4A90D9', // Main blue
+  primaryDark: '#3A7BC8',
+  primaryLight: '#6BA8E5',
   
-  // Secondary accent colors
-  secondary: '#EC4899', // Pink
-  secondaryLight: '#F472B6',
+  // Secondary accent colors (orange/gradient)
+  secondary: '#F5A623', // Orange
+  secondaryLight: '#F7B84C',
+  secondaryDark: '#E09000',
+  
+  // Gradient colors for buttons
+  gradientStart: '#F5A623', // Orange
+  gradientEnd: '#E97B3C', // Darker orange
   
   // Game category colors (for card icons)
-  categorySpeed: '#6366F1', // Indigo - speed/timing games
-  categoryMemory: '#8B5CF6', // Purple - memory games
-  categoryFocus: '#06B6D4', // Cyan - focus/attention games
-  categoryVision: '#10B981', // Emerald - visual training
-  categoryWord: '#F59E0B', // Amber - word/letter games
-  categoryNumber: '#EF4444', // Red - number games
+  categorySpeed: '#6A8FD4', // Blue - speed/timing games
+  categoryMemory: '#9B7BD4', // Purple - memory games
+  categoryFocus: '#5BC0DE', // Cyan - focus/attention games
+  categoryVision: '#5CB85C', // Green - visual training
+  categoryWord: '#F5A623', // Orange - word/letter games
+  categoryNumber: '#D9534F', // Red - number games
   
   // Background colors
-  background: '#F8FAFC',
-  backgroundDark: '#F1F5F9',
+  background: '#E8F4FC', // Light blue background
+  backgroundDark: '#D5EAF7',
   cardBackground: '#FFFFFF',
   
   // Text colors
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
+  textPrimary: '#2C3E50',
+  textSecondary: '#5D6D7E',
+  textMuted: '#95A5A6',
   
   // UI feedback colors
-  success: '#10B981',
-  error: '#EF4444',
-  warning: '#F59E0B',
-  info: '#3B82F6',
+  success: '#5CB85C',
+  error: '#D9534F',
+  warning: '#F5A623',
+  info: '#5BC0DE',
   
   // Neutral colors
-  border: '#E2E8F0',
-  divider: '#CBD5E1',
+  border: '#E1E8ED',
+  divider: '#D5DCE1',
   white: '#FFFFFF',
   black: '#000000',
+  
+  // Star rating color
+  starActive: '#F5A623',
+  starInactive: '#E1E8ED',
 };
 
 // Game icon backgrounds based on category

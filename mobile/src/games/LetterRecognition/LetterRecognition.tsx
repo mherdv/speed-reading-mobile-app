@@ -97,6 +97,7 @@ export default function LetterRecognition({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const roundsRef = useRef(0);
   const correctRef = useRef(0);
@@ -141,6 +142,7 @@ export default function LetterRecognition({
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
@@ -191,6 +193,7 @@ export default function LetterRecognition({
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

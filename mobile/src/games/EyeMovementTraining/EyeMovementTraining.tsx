@@ -59,6 +59,7 @@ export default function EyeMovementTraining({ positions: positionsProp, rounds: 
   const roundTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const roundRef = useRef(0);
   const lastPositionRef = useRef(-1);
 
@@ -85,6 +86,7 @@ export default function EyeMovementTraining({ positions: positionsProp, rounds: 
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
       if (roundTimerRef.current) clearInterval(roundTimerRef.current);
     };
@@ -129,6 +131,7 @@ export default function EyeMovementTraining({ positions: positionsProp, rounds: 
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

@@ -54,8 +54,16 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
   const startRef = useRef<number>(0);
   const readStartRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const answersRef = useRef<number[]>([]);
+
+  // Cleanup on unmount - prevent reporting results after back button
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
 
   // Auto-start when autoStart prop is true
   const autoStartedRef = useRef(false);
@@ -116,6 +124,7 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

@@ -58,6 +58,7 @@ export default function TimedPhraseRecognition({ phrases = DEFAULT_PHRASES, disp
 
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const correctRef = useRef(0);
   const roundRef = useRef(0);
@@ -66,6 +67,7 @@ export default function TimedPhraseRecognition({ phrases = DEFAULT_PHRASES, disp
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
     };
   }, []);
@@ -147,6 +149,7 @@ export default function TimedPhraseRecognition({ phrases = DEFAULT_PHRASES, disp
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

@@ -56,6 +56,7 @@ export default function NumberSearch({ durationMs = 45000, gridSize = 5, autoSta
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     if (phase !== 'running') return;
@@ -70,7 +71,10 @@ export default function NumberSearch({ durationMs = 45000, gridSize = 5, autoSta
       }
     }, 100);
     
-    return () => clearInterval(interval);
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(interval);
+    };
   }, [phase, durationMs]);
 
   // Auto-start when autoStart prop is true
@@ -96,6 +100,7 @@ export default function NumberSearch({ durationMs = 45000, gridSize = 5, autoSta
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
     

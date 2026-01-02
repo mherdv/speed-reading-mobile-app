@@ -102,6 +102,7 @@ export default function TimedWordRecognition({
 
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const correctRef = useRef(0);
   const roundRef = useRef(0);
@@ -123,6 +124,7 @@ export default function TimedWordRecognition({
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
     };
   }, []);
@@ -205,6 +207,7 @@ export default function TimedWordRecognition({
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

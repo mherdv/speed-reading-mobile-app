@@ -82,6 +82,7 @@ export default function TextSearch({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const foundRef = useRef<number[]>([]);
 
   const targetIndices = useMemo(() => {
@@ -92,6 +93,7 @@ export default function TextSearch({
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
@@ -130,6 +132,7 @@ export default function TextSearch({
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);

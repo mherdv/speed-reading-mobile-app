@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   starsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 1,
+    gap: 2,
   },
   starsColumn: {
     flexDirection: 'column',
@@ -121,10 +121,10 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   starFull: {
-    color: '#F59E0B', // Amber/gold filled star
+    color: '#F5A623', // Orange filled star (matching design)
   },
   starEmpty: {
-    color: '#D1D5DB', // Light gray for empty stars
+    color: '#E1E8ED', // Light gray for empty stars
   },
   halfStarContainer: {
     position: 'relative',
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   },
   levelText: {
     marginLeft: 6,
-    color: '#6B7280',
+    color: '#5D6D7E',
     fontWeight: '600',
   },
 });

@@ -36,6 +36,7 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
 
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const levelRef = useRef(startingLength);
   const sequenceRef = useRef<number[]>([]);
@@ -43,6 +44,7 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
     };
   }, []);
@@ -114,6 +116,7 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

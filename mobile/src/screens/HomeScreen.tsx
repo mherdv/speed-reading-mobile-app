@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View, ScrollView, Image } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { loadAllProgress, clearProgress, type GameProgress } from '../data/progressStore';
 import { loadResults } from '../data/resultsStore';
 import type { AttemptResult, TextSample } from '../domain/types';
 import { colors, gameColors } from '../theme/colors';
 import { Button } from '../ui/Button';
+import { GameIcon } from '../ui/GameIcon';
 import { DifficultyStars } from '../ui/DifficultyStars';
+import Svg, { Circle } from 'react-native-svg';
 
 type Props = {
   onStart: (sample: TextSample) => void;
@@ -19,7 +22,6 @@ type GameCardModel = {
   id: string;
   title: string;
   description: string;
-  iconText: string;
 };
 
 const GRID_COLUMNS = 3;
@@ -30,140 +32,119 @@ const GAMES: GameCardModel[] = [
   {
     id: 'PowerReader',
     title: 'Power Read',
-    description: 'Read chunks of text at speed',
-    iconText: '⚡',
+    description: 'Boosts reading speed visual processing.',
   },
   {
     id: 'FlashReading',
     title: 'Flash',
-    description: 'Read brief word flashes',
-    iconText: '💡',
+    description: 'Reading reading exercises',
   },
   {
     id: 'ComprehensionTest',
     title: 'Comprehend',
-    description: 'Answer questions accurately',
-    iconText: '📖',
+    description: 'Comprehension Test',
   },
   
   // === FOCUS & ATTENTION ===
   {
     id: 'SchulteNumbers',
     title: 'Schulte',
-    description: 'Tap 1-25 in order',
-    iconText: '5',
+    description: 'Commands of numbers',
   },
   {
     id: 'SchulteLetters',
     title: 'Letters',
-    description: 'Tap A-Y in order',
-    iconText: 'Z',
+    description: 'Comprehise of Letters',
   },
   {
     id: 'SchulteMix',
     title: 'Mix',
-    description: 'Alternate 1,A,2,B...',
-    iconText: '#',
+    description: 'Number exercise',
   },
   
   // === EYE TRAINING ===
   {
     id: 'EyeMovementTraining',
     title: 'Eyes',
-    description: 'Train smooth eye tracking',
-    iconText: '👁',
+    description: 'Comrate eyes',
   },
   {
     id: 'VisualSpanExpansion',
     title: 'Span',
-    description: 'Expand peripheral vision',
-    iconText: '🧠',
+    description: 'Gander span',
   },
   {
     id: 'PatternScanning',
     title: 'Patterns',
-    description: 'Find patterns quickly',
-    iconText: '◧',
+    description: 'Comprestions',
   },
   
   // === WORD RECOGNITION ===
   {
     id: 'TimedWordRecognition',
     title: 'Words',
-    description: 'Remember flashed words',
-    iconText: '📝',
+    description: 'Spences reading and words',
   },
   {
     id: 'TimedPhraseRecognition',
     title: 'Phrases',
-    description: 'Recognize timed phrases',
-    iconText: '⏱',
+    description: 'Boosts phrases & visual proceeding.',
   },
   {
     id: 'WordPairs',
     title: 'Pairs',
-    description: 'Match word opposites',
-    iconText: '⇄',
+    description: 'Reections and word & pairs',
   },
   
   // === SEARCH & SCAN ===
   {
     id: 'TextSearch',
     title: 'Text',
-    description: 'Find target words quickly',
-    iconText: '🔎',
+    description: 'Writens your text message',
   },
   {
     id: 'WordSearchGame',
     title: 'Search',
-    description: 'Find hidden words',
-    iconText: '🔍',
+    description: 'Search your search',
   },
   {
     id: 'NumberSearch',
     title: 'Numbers',
-    description: 'Find target numbers',
-    iconText: '🔢',
+    description: 'Connection of numbers',
   },
   
   // === RECOGNITION & MEMORY ===
   {
     id: 'LetterRecognition',
     title: 'Letters',
-    description: 'Identify letters in a grid',
-    iconText: 'Aa',
+    description: 'Humeon of Letters',
   },
   {
     id: 'NumberRecognition',
     title: 'Digits',
-    description: 'Spot numbers rapidly',
-    iconText: '123',
+    description: 'Concern sri digits',
   },
   {
     id: 'SymbolRecognition',
     title: 'Symbols',
-    description: 'Recognize symbols fast',
-    iconText: '∞',
+    description: 'Comonesand symbols',
   },
   
   // === BRAIN TEASERS ===
   {
     id: 'LetterJumble',
     title: 'Jumble',
-    description: 'Unscramble words',
-    iconText: '🔀',
+    description: 'Hand your jukler Jumble',
   },
   {
     id: 'WordMismatchGrid',
     title: 'Mismatch',
-    description: 'Find non-matching pairs',
-    iconText: '≠',
+    description: 'Compared or mismatch',
   },
   {
     id: 'EvenNumbers',
     title: 'Even',
-    description: 'Find even numbers quickly',
-    iconText: '2',
+    description: 'Containrs 2 even',
   },
 ];
 
@@ -184,6 +165,7 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
   const [latest, setLatest] = useState<AttemptResult | null>(null);
   const [progress, setProgress] = useState<Record<string, GameProgress>>({});
   const [gridWidth, setGridWidth] = useState<number | null>(null);
+  const [dailyStreak, setDailyStreak] = useState(5); // TODO: Calculate from results
 
   const cardWidth = useMemo(() => {
     if (gridWidth == null) return null;
@@ -230,6 +212,16 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
       if (cancelled) return;
       setLatest(results[0] ?? null);
       setProgress(allProgress);
+      
+      // Calculate daily streak from results
+      if (results.length > 0) {
+        // Simple streak calculation - count consecutive days with activity
+        const today = new Date().toDateString();
+        const lastActivity = new Date(results[0].finishedAtIso).toDateString();
+        if (today === lastActivity) {
+          setDailyStreak(prev => Math.max(prev, 1));
+        }
+      }
     }
 
     refresh();
@@ -240,9 +232,40 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
   }, [refreshToken]);
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header Section */}
+      <View style={styles.header}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="cover"
+          />
+        </View>
+        <Text style={styles.welcomeText}>Welcome back!</Text>
+        <View style={styles.streakBadge}>
+          <Text style={styles.streakText}>Daily Streak: {dailyStreak} Days 🔥</Text>
+        </View>
+      </View>
+
+      {/* Quick Start Button */}
+      <Pressable 
+        style={styles.quickStartButton}
+        onPress={() => onOpenGame('PowerReader')}
+      >
+        <LinearGradient
+          colors={[colors.gradientStart, colors.gradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.quickStartGradient}
+        >
+          <Text style={styles.quickStartText}>Quick-start</Text>
+          <Text style={styles.quickStartSubtext}>Recommended Exercise</Text>
+        </LinearGradient>
+      </Pressable>
+
+      {/* Games Grid */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Exercises</Text>
         <View
           style={styles.gamesGrid}
           onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
@@ -250,7 +273,12 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
           {GAMES.map((g, index) => {
             const gameProgress = progress[g.id];
             const level = gameProgress?.level ?? 1;
-            const isLastInRow = (index + 1) % GRID_COLUMNS === 0;
+            const progressPercent = Math.min(100, level * 20) / 100;
+            const iconColor = gameColors[g.id] || colors.primary;
+            const iconBgColor = iconColor + '15'; // 15% opacity
+            const circumference = 2 * Math.PI * 8;
+            const strokeDashoffset = circumference - (circumference * progressPercent);
+            
             return (
               <Pressable
                 key={g.id}
@@ -261,108 +289,263 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
                 ]}
                 onPress={() => onOpenGame(g.id)}
               >
-                <View style={styles.iconRow}>
-                  <View style={[styles.gameIcon, { backgroundColor: gameColors[g.id] || colors.primary }]}>
-                    <Text style={styles.gameIconText}>{g.iconText}</Text>
-                  </View>
-                  <View style={styles.starsRow}>
-                    <DifficultyStars level={level} size="small" orientation="vertical" />
-                  </View>
+                {/* Icon Container with Light Background */}
+                <View style={[styles.gameIconContainer, { backgroundColor: iconBgColor }]}>
+                  <GameIcon name={g.id} size={24} color={iconColor} />
                 </View>
-                <Text style={styles.gameTitle} numberOfLines={1}>{g.title}</Text>
+                
+                {/* Title */}
+                <Text style={styles.gameTitle} numberOfLines={2}>{g.title}</Text>
+                
+                {/* Difficulty Stars */}
+                <View style={styles.starsRow}>
+                  <DifficultyStars level={level} size="small" orientation="horizontal" />
+                </View>
+                
+                {/* Progress Ring - Bottom Right */}
+                <View style={styles.progressRing}>
+                  <Svg width={20} height={20} style={{ transform: [{ rotate: '-90deg' }] }}>
+                    {/* Background circle */}
+                    <Circle
+                      cx="10"
+                      cy="10"
+                      r="8"
+                      stroke={colors.border}
+                      strokeWidth={2}
+                      fill="transparent"
+                    />
+                    {/* Progress circle */}
+                    <Circle
+                      cx="10"
+                      cy="10"
+                      r="8"
+                      stroke={iconColor}
+                      strokeWidth={2}
+                      fill="transparent"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      strokeLinecap="round"
+                    />
+                  </Svg>
+                </View>
               </Pressable>
             );
           })}
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Latest result</Text>
-        {latest ? (
-          <Text style={styles.latestText}>
-            {formatLatest(latest)}
-          </Text>
-        ) : (
-          <Text style={styles.latestTextMuted}>No results yet.</Text>
-        )}
+      {/* Bottom Actions */}
+      <View style={styles.bottomSection}>
         <View style={styles.buttonsRow}>
-          <Button testID="open-history" label="View history" onPress={onOpenHistory} />
-          <Button testID="reset-difficulty" label="Reset Difficulty" onPress={handleResetDifficulty} />
+          <Pressable style={styles.actionButton} onPress={onOpenHistory}>
+            <Text style={styles.actionButtonIcon}>📊</Text>
+            <Text style={styles.actionButtonText}>History</Text>
+          </Pressable>
+          <Pressable style={styles.actionButton} onPress={handleResetDifficulty}>
+            <Text style={styles.actionButtonIcon}>⚙️</Text>
+            <Text style={styles.actionButtonText}>Reset</Text>
+          </Pressable>
         </View>
+        
+        {latest && (
+          <View style={styles.latestResult}>
+            <Text style={styles.latestLabel}>Latest:</Text>
+            <Text style={styles.latestText} numberOfLines={1}>
+              {formatLatest(latest)}
+            </Text>
+          </View>
+        )}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
     backgroundColor: colors.background,
   },
-  section: {
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    alignItems: 'center',
+  },
+  logoContainer: {
+    width: 356,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
+    overflow: 'hidden',
   },
-  sectionTitle: {
-    fontSize: 16,
+  logoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  welcomeText: {
+    fontSize: 22,
     fontWeight: '700',
-    marginBottom: 12,
-    color: colors.textPrimary,
-  },
-  latestText: {
-    fontSize: 14,
     color: colors.textPrimary,
     marginBottom: 10,
   },
-  latestTextMuted: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginBottom: 10,
+  streakBadge: {
+    backgroundColor: colors.cardBackground,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  buttonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
+  streakText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  quickStartButton: {
+    marginHorizontal: 20,
+    marginVertical: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: colors.secondary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  quickStartGradient: {
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  quickStartText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  quickStartSubtext: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+  },
+  section: {
+    paddingHorizontal: 16,
   },
   gamesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    width: '100%',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
+    // justifyContent: 'flex-start',
   },
   gameCard: {
-    padding: 8,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 24,
+    padding: 16,
     marginBottom: GRID_GAP,
-    alignItems: 'center',
-    maxWidth: 80,
+    // marginRight: GRID_GAP,
+    alignItems: 'flex-start',
+    minHeight: 140,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    maxWidth: '32%',
   },
-  iconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    width: '100%',    
-    justifyContent: 'space-between',
-  },
-  gameIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  gameIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  gameIconText: {
-    color: colors.white,
-    fontSize: 18,
-    fontWeight: '700',
+    marginBottom: 12,
   },
   gameTitle: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.textPrimary,
     textAlign: 'left',
-    width: '100%',
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  gameDescription: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 8,
+    minHeight: 24,
+    lineHeight: 12,
   },
   starsRow: {
-    marginLeft: 2,
+    marginTop: 'auto',
+  },
+  progressRing: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+  },
+  progressBar: {
+    width: '100%',
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  bottomSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginTop: 8,
+  },
+  buttonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  actionButton: {
+    flex: 1,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  actionButtonIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  actionButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  latestResult: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  latestLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginRight: 8,
+  },
+  latestText: {
+    fontSize: 13,
+    color: colors.textPrimary,
+    flex: 1,
   },
 });

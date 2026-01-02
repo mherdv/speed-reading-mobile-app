@@ -55,6 +55,7 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
 
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
   const levelRef = useRef(3);
@@ -76,6 +77,7 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
     };
   }, []);
@@ -143,6 +145,7 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

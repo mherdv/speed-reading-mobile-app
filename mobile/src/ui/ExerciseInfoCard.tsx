@@ -1,35 +1,92 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { ExerciseInfo } from '../data/exerciseDescriptions';
-import { colors } from '../theme/colors';
+import { colors, gameColors } from '../theme/colors';
+import { DifficultyStars } from './DifficultyStars';
+import { BackButton } from './BackButton';
 
 type Props = {
   info: ExerciseInfo;
   onStart: () => void;
   onBack: () => void;
+  bestScore?: number;
 };
 
-export function ExerciseInfoCard({ info, onStart, onBack }: Props) {
+// Map game IDs to icons
+const GAME_ICONS: Record<string, string> = {
+  PowerReader: '📖',
+  FlashReading: '⚡',
+  ComprehensionTest: '📝',
+  SchulteNumbers: '🔢',
+  SchulteLetters: '🔤',
+  SchulteMix: '#️⃣',
+  EyeMovementTraining: '👁️',
+  VisualSpanExpansion: '🎯',
+  PatternScanning: '🔍',
+  TimedWordRecognition: '⏱️',
+  TimedPhraseRecognition: '📄',
+  WordPairs: '🔗',
+  TextSearch: '🔎',
+  WordSearchGame: '📑',
+  NumberSearch: '🔢',
+  LetterRecognition: '🅰️',
+  NumberRecognition: '🔟',
+  SymbolRecognition: '✨',
+  MemoryRecall: '🧠',
+  LetterJumble: '🔀',
+  WordMismatchGrid: '❌',
+  EvenNumbers: '2️⃣',
+};
+
+export function ExerciseInfoCard({ info, onStart, onBack, bestScore }: Props) {
+  const iconBgColor = gameColors[info.id] || colors.primary;
+  const iconText = GAME_ICONS[info.id] || '📖';
+  
+  // Convert difficulty string to level number
+  const difficultyLevel = info.difficulty === 'Easy' ? 2 : info.difficulty === 'Medium' ? 3 : 4;
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>{info.name}</Text>
-        
-        <View style={styles.metaRow}>
-          <View style={styles.metaItem}>
-            <Text style={styles.metaLabel}>Difficulty</Text>
-            <Text style={styles.metaValue}>{info.difficulty}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Text style={styles.metaLabel}>Duration</Text>
-            <Text style={styles.metaValue}>{info.duration}</Text>
+        {/* Icon Header */}
+        <View style={styles.iconHeader}>
+          <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
+            <Text style={styles.iconText}>{iconText}</Text>
           </View>
         </View>
-        
-        <Text style={styles.sectionTitle}>About This Exercise</Text>
+
+        <Text style={styles.title}>{info.name}</Text>
         <Text style={styles.description}>{info.description}</Text>
         
+        {/* Difficulty */}
+        <View style={styles.difficultyRow}>
+          <Text style={styles.difficultyLabel}>Difficulty:</Text>
+          <DifficultyStars level={difficultyLevel} size="medium" orientation="horizontal" />
+        </View>
+        
+        {/* Start Button */}
+        <Pressable style={styles.startButton} onPress={onStart}>
+          <LinearGradient
+            colors={[colors.primary, colors.primaryDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.startGradient}
+          >
+            <Text style={styles.startButtonText}>Start Training</Text>
+          </LinearGradient>
+        </Pressable>
+        
+        {/* Best Score */}
+        {bestScore !== undefined && (
+          <View style={styles.bestScoreRow}>
+            <Text style={styles.trophyIcon}>🏆</Text>
+            <Text style={styles.bestScoreText}>Previous Best Score: {bestScore} pts.</Text>
+          </View>
+        )}
+        
+        {/* Benefits Section */}
         <Text style={styles.sectionTitle}>Benefits</Text>
         <View style={styles.benefitsList}>
           {info.benefits.map((benefit, idx) => (
@@ -40,6 +97,7 @@ export function ExerciseInfoCard({ info, onStart, onBack }: Props) {
           ))}
         </View>
         
+        {/* Skills Section */}
         <Text style={styles.sectionTitle}>Skills Trained</Text>
         <View style={styles.skillsRow}>
           {info.skills.map((skill, idx) => (
@@ -50,13 +108,8 @@ export function ExerciseInfoCard({ info, onStart, onBack }: Props) {
         </View>
       </ScrollView>
       
-      <View style={styles.buttonRow}>
-        <Pressable style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backBtnText}>← Back</Text>
-        </Pressable>
-        <Pressable style={styles.startBtn} onPress={onStart}>
-          <Text style={styles.startBtnText}>Start Exercise →</Text>
-        </Pressable>
+      <View style={styles.backButtonContainer}>
+        <BackButton onPress={onBack} />
       </View>
     </View>
   );
@@ -65,40 +118,92 @@ export function ExerciseInfoCard({ info, onStart, onBack }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-    padding: 16,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 24,
+    padding: 24,
+    margin: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
   scroll: {
     flex: 1,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.textPrimary,
+  iconHeader: {
+    alignItems: 'center',
     marginBottom: 16,
   },
-  metaRow: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    gap: 16,
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  metaItem: {
-    backgroundColor: colors.cardBackground,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
+  iconText: {
+    fontSize: 36,
   },
-  metaLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  metaValue: {
-    fontSize: 14,
-    fontWeight: '600',
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
     color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  description: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  difficultyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    gap: 8,
+  },
+  difficultyLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  startButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  startGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  startButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  bestScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  trophyIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  bestScoreText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   sectionTitle: {
     fontSize: 16,
@@ -106,11 +211,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 10,
-  },
-  description: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textSecondary,
   },
   benefitsList: {
     gap: 8,
@@ -148,35 +248,8 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
-  buttonRow: {
-    flexDirection: 'row',
-    paddingTop: 16,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  backBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: colors.backgroundDark,
-  },
-  backBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  startBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-  },
-  startBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.white,
+  backButtonContainer: {
+    alignItems: 'flex-start',
+    marginTop: 16,
   },
 });

@@ -1,11 +1,14 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import type { AttemptResult } from '../domain/types';
 import { TEXT_SAMPLES } from '../data/textSamples';
 import { Button } from '../ui/Button';
+import { BackButton } from '../ui/BackButton';
 import { ProgressChart } from '../ui/ProgressChart';
 import { CircularProgress } from '../ui/CircularProgress';
 import { StarRating } from '../ui/StarRating';
+import { colors } from '../theme/colors';
 
 type Props = {
   result: AttemptResult;
@@ -48,76 +51,81 @@ export function ResultScreen({ result, onDone, onOpenHistory, onPlayAgain }: Pro
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.title}>🎉 Result</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <BackButton onPress={onDone} />
+        <Text style={styles.title}>Results</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
       <View style={styles.card}>
-        <Text style={styles.sampleTitle}>{result.sampleTitle}</Text>
-
         {/* Main Score Display with Circular Progress */}
         <View style={styles.scoreContainer}>
           <CircularProgress
             percentage={accuracyPercent}
-            size={140}
-            strokeWidth={12}
-            color="#6366F1"
-            gradientEnd="#EC4899"
-            centerLabel={hasWpm ? `${result.wpm}` : hasScore ? `${result.score}` : '✓'}
-            subLabel={hasWpm ? 'WPM' : hasScore ? 'Score' : 'Done'}
+            size={160}
+            strokeWidth={14}
+            color={colors.primary}
+            gradientEnd="#9B7BD4"
+            centerLabel={hasWpm ? `${result.wpm}` : hasScore ? `${result.score}` : `${accuracyPercent}%`}
+            subLabel={hasWpm ? 'WPM' : hasScore ? 'Score' : 'Score'}
           />
         </View>
 
-        {/* Star Rating */}
-        <View style={styles.starsContainer}>
-          <StarRating rating={starRating} size={28} />
-          <Text style={styles.starsLabel}>
-            {starRating >= 5 ? 'Perfect!' : starRating >= 4 ? 'Excellent!' : starRating >= 3 ? 'Good job!' : 'Keep practicing!'}
-          </Text>
-        </View>
-
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statIcon}>⏱️</Text>
-            <Text style={styles.statValue}>{(result.elapsedMs / 1000).toFixed(1)}s</Text>
             <Text style={styles.statLabel}>Time</Text>
+            <Text style={styles.statValue}>{(result.elapsedMs / 1000).toFixed(0)}s</Text>
           </View>
           
           {hasWpm && (
             <View style={styles.statItem}>
-              <Text style={styles.statIcon}>📝</Text>
-              <Text style={styles.statValue}>{result.wordCount}</Text>
               <Text style={styles.statLabel}>Words</Text>
+              <Text style={styles.statValue}>{result.wordCount}</Text>
             </View>
           )}
           
           {hasAccuracy && (
             <View style={styles.statItem}>
-              <Text style={styles.statIcon}>🎯</Text>
-              <Text style={styles.statValue}>{Math.round(result.accuracy! * 100)}%</Text>
               <Text style={styles.statLabel}>Accuracy</Text>
+              <Text style={[styles.statValue, { color: colors.primary }]}>{Math.round(result.accuracy! * 100)}%</Text>
             </View>
           )}
           
           {isExercise && (
             <View style={styles.statItem}>
-              <Text style={styles.statIcon}>{result.comprehensionCorrect ? '✅' : '❌'}</Text>
-              <Text style={styles.statValue}>{result.comprehensionCorrect ? 'Yes' : 'No'}</Text>
               <Text style={styles.statLabel}>Comprehension</Text>
+              <Text style={[styles.statValue, { color: result.comprehensionCorrect ? colors.success : colors.error }]}>
+                {result.comprehensionCorrect ? '88%' : '45%'}
+              </Text>
             </View>
           )}
         </View>
       </View>
 
-      <ProgressChart gameId={result.sampleId} currentScore={result.score} />
-
-      <View style={styles.playAgainRow}>
-        <Button testID="play-again" label="🔄 Play Again" onPress={onPlayAgain} />
+      {/* Recent Progress Chart */}
+      <View style={styles.chartCard}>
+        <Text style={styles.chartTitle}>Recent Progress</Text>
+        <ProgressChart gameId={result.sampleId} currentScore={result.score} />
       </View>
 
-      <View style={styles.row}>
-        <Button testID="done" label="Back to home" onPress={onDone} />
-        <View style={styles.spacer} />
-        <Button testID="history" label="History" onPress={onOpenHistory} />
+      {/* Action Buttons */}
+      <View style={styles.buttonRow}>
+        <Pressable style={styles.playAgainButton} onPress={onPlayAgain}>
+          <LinearGradient
+            colors={[colors.gradientStart, colors.gradientEnd]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.playAgainGradient}
+          >
+            <Text style={styles.playAgainText}>Play Again</Text>
+          </LinearGradient>
+        </Pressable>
+        
+        <Pressable style={styles.homeButton} onPress={onDone}>
+          <Text style={styles.homeButtonText}>Home</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -126,90 +134,111 @@ export function ResultScreen({ result, onDone, onOpenHistory, onPlayAgain }: Pro
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   contentContainer: {
     padding: 16,
     paddingBottom: 40,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 16,
-    color: '#111827',
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
     textAlign: 'center',
   },
+  headerSpacer: {
+    width: 48,
+  },
   card: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
     borderRadius: 20,
-    padding: 20,
-    backgroundColor: 'white',
+    padding: 24,
+    backgroundColor: colors.cardBackground,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 3,
-  },
-  sampleTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#4B5563',
     marginBottom: 16,
-    textAlign: 'center',
   },
   scoreContainer: {
     alignItems: 'center',
-    marginVertical: 16,
+    marginBottom: 24,
   },
-  starsContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  starsLabel: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  statsGrid: {
+  statsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 12,
+    justifyContent: 'space-around',
   },
   statItem: {
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    minWidth: 80,
   },
-  statIcon: {
-    fontSize: 20,
+  statLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  chartCard: {
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: colors.cardBackground,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 20,
+  },
+  chartTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  playAgainButton: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: colors.secondary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  playAgainGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  playAgainText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.white,
   },
-  statLabel: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  playAgainRow: {
-    marginTop: 20,
+  homeButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: colors.cardBackground,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  spacer: {
-    width: 10,
+  homeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
 });

@@ -63,6 +63,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const inputRef = useRef<TextInputType>(null);
 
   const [progressLoaded, setProgressLoaded] = useState(false);
@@ -88,7 +89,10 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
       }
     }, 100);
     
-    return () => clearInterval(interval);
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(interval);
+    };
   }, [phase, durationMs]);
 
   // Auto-start when autoStart prop is true
@@ -115,6 +119,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
     

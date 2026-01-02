@@ -40,11 +40,13 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
 
   useEffect(() => {
     return () => {
+      cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
@@ -87,6 +89,7 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
   }
 
   function finish() {
+    if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
 

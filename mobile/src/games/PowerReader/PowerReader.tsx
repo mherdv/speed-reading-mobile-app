@@ -1,10 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { getRandomArticle, type Article } from '../../data/articles';
+import { colors } from '../../theme/colors';
+import { loadResults } from '../../data/resultsStore';
 
 const GAME_ID = 'PowerReader';
+
+type Intensity = 'beginner' | 'intermediate' | 'advanced';
+
+const INTENSITY_CONFIG: Record<Intensity, { wpm: number; label: string; chunkSize: number; color: string }> = {
+  beginner: { wpm: 150, label: 'Beginner', chunkSize: 2, color: '#10B981' },
+  intermediate: { wpm: 300, label: 'Intermediate', chunkSize: 3, color: '#8B5CF6' },
+  advanced: { wpm: 500, label: 'Advanced', chunkSize: 5, color: '#6366F1' },
+};
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -56,18 +68,31 @@ export default function PowerReader({
   
   const [phase, setPhase] = useState<Phase>('idle');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium');
-  const [targetWpm, setTargetWpm] = useState(200); // Target WPM instead of multiplier
+  const [selectedIntensity, setSelectedIntensity] = useState<Intensity>('intermediate');
+  const [targetWpm, setTargetWpm] = useState(300); // Target WPM instead of multiplier
   const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
+  const [bestWpm, setBestWpm] = useState(0);
   
   const [progressLoaded, setProgressLoaded] = useState(false);
 
   // Load progress on mount
   useEffect(() => {
-    loadGameProgress(GAME_ID).then((progress) => {
+    async function loadData() {
+      const [progress, results] = await Promise.all([
+        loadGameProgress(GAME_ID),
+        loadResults(),
+      ]);
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
+      
+      // Calculate best WPM from PowerReader results
+      const powerReaderResults = results.filter(r => r.sampleId === GAME_ID);
+      const maxWpm = powerReaderResults.reduce((max, r) => Math.max(max, r.wpm || r.score || 0), 0);
+      setBestWpm(maxWpm);
+      
       setProgressLoaded(true);
-    });
+    }
+    loadData();
   }, []);
 
   // Auto-start when autoStart prop is true
@@ -80,7 +105,8 @@ export default function PowerReader({
   }, [autoStart, phase, progressLoaded]);
   
   const currentConfig = getDifficultyConfig(selectedDifficulty);
-  const chunkSize = chunkSizeProp ?? currentConfig.chunkSize;
+  const intensityConfig = INTENSITY_CONFIG[selectedIntensity];
+  const chunkSize = chunkSizeProp ?? intensityConfig.chunkSize;
   
   const words = text.split(/\s+/).filter(Boolean);
   const chunks: string[] = [];
@@ -94,11 +120,14 @@ export default function PowerReader({
   const chunkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const chunkIndexRef = useRef(0);
   const targetWpmRef = useRef(200);
 
   useEffect(() => {
+    cancelledRef.current = false;
     return () => {
+      cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
       if (chunkTimerRef.current) clearTimeout(chunkTimerRef.current);
     };
@@ -123,8 +152,8 @@ export default function PowerReader({
     if (!force && phase !== 'idle') return;
     reportedRef.current = false;
     chunkIndexRef.current = 0;
-    targetWpmRef.current = 200;
-    setTargetWpm(200);
+    targetWpmRef.current = intensityConfig.wpm;
+    setTargetWpm(intensityConfig.wpm);
     setPhase('running');
     setChunkIndex(0);
     setElapsed(0);
@@ -144,7 +173,7 @@ export default function PowerReader({
   }
 
   function finish() {
-    if (reportedRef.current) return;
+    if (reportedRef.current || cancelledRef.current) return;
     reportedRef.current = true;
 
     const now = Date.now();
@@ -154,6 +183,7 @@ export default function PowerReader({
 
     // Save progress - completing the reading is always success
     updateProgress(GAME_ID, true, wpm).then(({ progress }) => {
+      if (cancelledRef.current) return;
       setGameProgress(progress);
       setSelectedDifficulty(levelToDifficulty(progress.level));
     });
@@ -181,49 +211,92 @@ export default function PowerReader({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Power Reader</Text>
-        <Text style={styles.subtitle}>Read chunks at high speed</Text>
-      </View>
-
       {phase === 'idle' && (
         <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
-          <Text style={styles.difficultyLabel}>Select Difficulty:</Text>
-          <View style={styles.difficultyRow}>
-            {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
-              <Pressable
-                key={d}
-                style={[
-                  styles.difficultyBtn,
-                  selectedDifficulty === d && styles.difficultyBtnActive,
-                ]}
-                onPress={() => setSelectedDifficulty(d)}
-              >
-                <Text
-                  style={[
-                    styles.difficultyBtnText,
-                    selectedDifficulty === d && styles.difficultyBtnTextActive,
-                  ]}
-                >
-                  {d.charAt(0).toUpperCase() + d.slice(1)}
-                </Text>
-              </Pressable>
-            ))}
+          {/* Icon Container */}
+          <View style={styles.iconContainer}>
+            <Svg width={48} height={48} viewBox="0 0 100 100" fill="none">
+              {/* Speedometer outline */}
+              <Path
+                d="M20 60 A35 35 0 1 1 80 60"
+                stroke="#4B5563"
+                strokeWidth="6"
+                strokeLinecap="round"
+                fill="none"
+              />
+              {/* Speedometer tick marks */}
+              <Path d="M25 50 L30 52" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
+              <Path d="M35 38 L38 42" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
+              <Path d="M50 32 L50 38" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
+              <Path d="M65 38 L62 42" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
+              <Path d="M75 50 L70 52" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
+              {/* Needle */}
+              <Path d="M50 55 L68 40" stroke="#4B5563" strokeWidth="4" strokeLinecap="round" />
+              <Circle cx="50" cy="55" r="5" fill="#4B5563" />
+            </Svg>
           </View>
-          <Text style={styles.difficultyHint}>
-            {selectedDifficulty === 'easy' && '2 words per chunk, slower pace'}
-            {selectedDifficulty === 'medium' && '3 words per chunk, moderate pace'}
-            {selectedDifficulty === 'hard' && '5 words per chunk, fast pace'}
+
+          {/* Title */}
+          <Text style={styles.heroTitle}>Expand Your Visual Span</Text>
+          
+          {/* Description */}
+          <Text style={styles.heroDescription}>
+            Train your brain to recognize word clusters instead individual letters. This exercise increases processing speed by 40%.
           </Text>
-          <Text style={styles.previewLabel}>Text preview ({words.length} words):</Text>
-          <View style={styles.previewCard}>
-            <Text style={styles.previewText} numberOfLines={4}>
-              {text}
-            </Text>
+
+          {/* Intensity Selection */}
+          <Text style={styles.sectionLabel}>Select Intensity</Text>
+          <View style={styles.intensityRow}>
+            {(['beginner', 'intermediate', 'advanced'] as Intensity[]).map((intensity) => {
+              const config = INTENSITY_CONFIG[intensity];
+              const isSelected = selectedIntensity === intensity;
+              return (
+                <Pressable
+                  key={intensity}
+                  style={[
+                    styles.intensityBtn,
+                    { borderColor: config.color },
+                    isSelected && { backgroundColor: config.color + '15' },
+                  ]}
+                  onPress={() => setSelectedIntensity(intensity)}
+                >
+                  <Text style={[styles.intensityLabel, { color: config.color }]}>
+                    {config.label}
+                  </Text>
+                  <Text style={[styles.intensityWpm, { color: config.color }]}>
+                    {config.wpm} WPM
+                  </Text>
+                  {isSelected && (
+                    <View style={[styles.selectedDot, { backgroundColor: config.color }]} />
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={() => start()}>
-            <Text style={styles.startBtnText}>Start Reading</Text>
+
+          {/* Stats Row */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{bestWpm || '—'}</Text>
+              <Text style={styles.statDescription}>Best WPM</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>Lvl {gameProgress.level}</Text>
+              <Text style={styles.statDescription}>Current Mastery</Text>
+            </View>
+          </View>
+
+          {/* Start Button */}
+          <Pressable testID="start-button" style={styles.startBtnWrapper} onPress={() => start()}>
+            <LinearGradient
+              colors={['#8B5CF6', '#6366F1']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.startBtnGradient}
+            >
+              <Text style={styles.startBtnText}>START TRAINING</Text>
+            </LinearGradient>
           </Pressable>
         </View>
       )}
@@ -307,83 +380,137 @@ export default function PowerReader({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 12 },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background,
+  },
+  idleContent: { 
+    flex: 1, 
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  iconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  heroDescription: {
+    fontSize: 15,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+    paddingHorizontal: 8,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  intensityRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  intensityBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  intensityLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  intensityWpm: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  selectedDot: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#E5E7EB',
+  },
+  statNumber: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  statDescription: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  startBtnWrapper: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: 'auto',
+    marginBottom: 20,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  startBtnGradient: {
+    paddingVertical: 18,
+    alignItems: 'center',
+  },
+  startBtnText: { 
+    color: 'white', 
+    fontSize: 16, 
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  // Running phase styles
   header: { marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
   subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  idleContent: { flex: 1 },
-  descriptionText: {
-    fontSize: 15,
-    color: '#4B5563',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
-  difficultyLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  difficultyRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  difficultyBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    marginHorizontal: 4,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  difficultyBtnActive: {
-    borderColor: '#DC2626',
-    backgroundColor: '#FEE2E2',
-  },
-  difficultyBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  difficultyBtnTextActive: {
-    color: '#991B1B',
-  },
-  difficultyHint: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  previewLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  previewCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  previewText: {
-    fontSize: 13,
-    color: '#4B5563',
-    lineHeight: 18,
-  },
-  startBtn: { backgroundColor: '#DC2626', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
-  gameArea: { flex: 1 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
-  statBox: { alignItems: 'center', backgroundColor: '#FEE2E2', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
-  progressBox: { backgroundColor: '#FECACA' },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#991B1B' },
-  statLabel: { fontSize: 10, color: '#B91C1C' },
+  gameArea: { flex: 1, paddingHorizontal: 12 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12, marginTop: 12 },
+  statBox: { alignItems: 'center', backgroundColor: '#EEF2FF', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
+  progressBox: { backgroundColor: '#E0E7FF' },
+  statValue: { fontSize: 18, fontWeight: '700', color: '#4F46E5' },
+  statLabel: { fontSize: 10, color: '#6366F1' },
   speedControlRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -394,7 +521,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#DC2626',
+    backgroundColor: '#6366F1',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -415,21 +542,21 @@ const styles = StyleSheet.create({
   speedValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#991B1B',
+    color: '#4F46E5',
   },
   speedLabel: {
     fontSize: 10,
-    color: '#B91C1C',
+    color: '#6366F1',
   },
   chunkCard: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#EEF2FF',
     borderRadius: 12,
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
     borderWidth: 3,
-    borderColor: '#DC2626',
+    borderColor: '#6366F1',
     minHeight: 120,
     flexDirection: 'row',
   },
@@ -446,27 +573,27 @@ const styles = StyleSheet.create({
   },
   focusBracket: {
     fontSize: 36,
-    color: '#DC2626',
+    color: '#6366F1',
     fontWeight: '300',
   },
   focusLine: {
     width: 60,
     height: 3,
-    backgroundColor: '#FCA5A5',
+    backgroundColor: '#A5B4FC',
     borderRadius: 2,
     marginVertical: 8,
   },
-  chunk: { fontSize: 24, fontWeight: '700', color: '#991B1B', textAlign: 'center' },
-  progressBar: { height: 8, backgroundColor: '#FEE2E2', borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#DC2626' },
+  chunk: { fontSize: 24, fontWeight: '700', color: '#4F46E5', textAlign: 'center' },
+  progressBar: { height: 8, backgroundColor: '#E0E7FF', borderRadius: 4, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: '#6366F1' },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#DC2626', marginVertical: 8 },
+  endScore: { fontSize: 48, fontWeight: '800', color: '#6366F1', marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
   starsText: { fontSize: 16, color: '#F59E0B' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#DC2626', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  playAgainBtn: { marginTop: 16, backgroundColor: '#6366F1', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

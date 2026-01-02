@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View, ScrollView } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View, ScrollView, Dimensions } from 'react-native';
 
 import type { AttemptResult } from '../domain/types';
 import { clearResults, loadResults } from '../data/resultsStore';
 import { Button } from '../ui/Button';
+import { BackButton } from '../ui/BackButton';
 import { ProgressCharts } from '../ui/ProgressCharts';
+import { LineChart } from '../ui/LineChart';
 import { colors } from '../theme/colors';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type Props = {
   onBack: () => void;
@@ -13,6 +17,24 @@ type Props = {
 };
 
 type Tab = 'charts' | 'history';
+
+function calculateTotalTime(results: AttemptResult[]): string {
+  const totalMs = results.reduce((sum, r) => sum + r.elapsedMs, 0);
+  const totalMinutes = Math.floor(totalMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function calculateAverageSpeed(results: AttemptResult[]): string {
+  const wpmResults = results.filter(r => r.wpm > 0);
+  if (wpmResults.length === 0) return '0';
+  const avgWpm = Math.round(wpmResults.reduce((sum, r) => sum + r.wpm, 0) / wpmResults.length);
+  return `${avgWpm}`;
+}
 
 export function HistoryScreen({ onBack, refreshToken }: Props) {
   const [results, setResults] = useState<AttemptResult[]>([]);
@@ -39,23 +61,76 @@ export function HistoryScreen({ onBack, refreshToken }: Props) {
     setResults([]);
   }
 
+  // Get daily scores for the main chart
+  const getDailyScores = () => {
+    const last30Days = results
+      .filter(r => r.score !== undefined)
+      .slice(0, 30)
+      .reverse();
+    return last30Days.map(r => r.score ?? 0);
+  };
+
+  const getDayLabels = () => {
+    const last30Days = results.slice(0, 30).reverse();
+    return last30Days.map((r, i) => {
+      if (i % 5 === 0) return `${i + 1}`;
+      return '';
+    });
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Progress & History</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <BackButton onPress={onBack} />
+        <Text style={styles.title}>History</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
+      {/* Summary Stats */}
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Total Training Time</Text>
+          <Text style={styles.summaryValue}>{calculateTotalTime(results)}</Text>
+        </View>
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Average Speed</Text>
+          <Text style={styles.summaryValue}>{calculateAverageSpeed(results)} wpm</Text>
+        </View>
+      </View>
+
+      {/* Main Progress Chart */}
+      {results.length > 1 && (
+        <View style={styles.mainChartCard}>
+          <LineChart
+            data={getDailyScores().length > 0 ? getDailyScores() : [0]}
+            width={SCREEN_WIDTH - 64}
+            height={180}
+            color={colors.primary}
+            showDots={getDailyScores().length <= 10}
+            showArea={true}
+            showYAxis={true}
+            showXAxis={true}
+            yAxisTicks={4}
+          />
+          <Text style={styles.chartCaption}>Days</Text>
+        </View>
+      )}
+
+      {/* Tabs */}
       <View style={styles.tabRow}>
-        <View 
+        <Pressable 
           style={[styles.tab, activeTab === 'charts' && styles.tabActive]}
-          onTouchEnd={() => setActiveTab('charts')}
+          onPress={() => setActiveTab('charts')}
         >
           <Text style={[styles.tabText, activeTab === 'charts' && styles.tabTextActive]}>📊 Charts</Text>
-        </View>
-        <View 
+        </Pressable>
+        <Pressable 
           style={[styles.tab, activeTab === 'history' && styles.tabActive]}
-          onTouchEnd={() => setActiveTab('history')}
+          onPress={() => setActiveTab('history')}
         >
           <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>📋 History</Text>
-        </View>
+        </Pressable>
       </View>
 
       {activeTab === 'charts' ? (
@@ -112,16 +187,68 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: colors.background,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   title: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 12,
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
     color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 48,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  summaryItem: {
+    flex: 1,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 14,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  mainChartCard: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    alignItems: 'center',
+  },
+  chartCaption: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 8,
   },
   tabRow: {
     flexDirection: 'row',
     marginBottom: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: colors.backgroundDark,
     padding: 4,
   },
@@ -129,7 +256,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 10,
   },
   tabActive: {
     backgroundColor: colors.cardBackground,
@@ -166,14 +293,18 @@ const styles = StyleSheet.create({
   empty: {
     color: colors.textSecondary,
     marginTop: 20,
+    textAlign: 'center',
   },
   item: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
     marginBottom: 10,
     backgroundColor: colors.cardBackground,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   itemTitle: {
     fontSize: 15,
@@ -182,6 +313,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   itemMeta: {
+    fontSize: 13,
     color: colors.textSecondary,
   },
 });
