@@ -110,13 +110,13 @@ describe('App E2E Flow Tests', () => {
         await Promise.resolve();
       });
 
-      // Should show the section title
-      expect(getByText('Exercises')).toBeTruthy();
+      // Should show the welcome text
+      expect(getByText('Welcome back!')).toBeTruthy();
       
       // Should show game cards
       expect(getByText('Words')).toBeTruthy();
-      expect(getByText('Letter mixup')).toBeTruthy();
-      expect(getByText('Eye movement')).toBeTruthy();
+      expect(getByText('Jumble')).toBeTruthy();
+      expect(getByText('Eyes')).toBeTruthy();
     });
 
     it('displays difficulty indicators for each game', async () => {
@@ -128,7 +128,7 @@ describe('App E2E Flow Tests', () => {
 
       // All games display difficulty dots (rendered as Views with colored backgrounds)
       // Just verify the component renders without checking for specific text
-      expect(getByText('Exercises')).toBeTruthy();
+      expect(getByText('Welcome back!')).toBeTruthy();
     });
 
     it('has history button', async () => {
@@ -156,7 +156,7 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Tap on Letter mixup game
-      const letterRecCard = getByText('Letter mixup');
+      const letterRecCard = getByText('Jumble');
       fireEvent.press(letterRecCard);
 
       await act(async () => {
@@ -176,7 +176,7 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Tap on Letter mixup game
-      fireEvent.press(getByText('Letter mixup'));
+      fireEvent.press(getByText('Jumble'));
 
       await act(async () => {
         await Promise.resolve();
@@ -202,7 +202,7 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Tap on a game
-      fireEvent.press(getByText('Letter mixup'));
+      fireEvent.press(getByText('Jumble'));
 
       await act(async () => {
         await Promise.resolve();
@@ -221,7 +221,7 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Tap on a game
-      fireEvent.press(getByText('Letter mixup'));
+      fireEvent.press(getByText('Jumble'));
 
       await act(async () => {
         await Promise.resolve();
@@ -250,7 +250,7 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Tap on Letter mixup
-      fireEvent.press(getByText('Letter mixup'));
+      fireEvent.press(getByText('Jumble'));
 
       await act(async () => {
         await Promise.resolve();
@@ -281,7 +281,7 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Open a game
-      fireEvent.press(getByText('Letter mixup'));
+      fireEvent.press(getByText('Jumble'));
 
       await act(async () => {
         await Promise.resolve();
@@ -357,7 +357,7 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Open a game - this should trigger progress loading
-      fireEvent.press(getByText('Letter mixup'));
+      fireEvent.press(getByText('Jumble'));
 
       await act(async () => {
         await Promise.resolve();
@@ -376,7 +376,7 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Play a quick game
-      fireEvent.press(getByText('Letter mixup'));
+      fireEvent.press(getByText('Jumble'));
 
       await act(async () => {
         await Promise.resolve();
@@ -413,7 +413,7 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Open first game
-      fireEvent.press(getByText('Letter mixup'));
+      fireEvent.press(getByText('Jumble'));
 
       await act(async () => {
         await Promise.resolve();
@@ -448,8 +448,8 @@ describe('App E2E Flow Tests', () => {
       });
 
       // Difficulty indicators are now rendered as dots (View elements with colored backgrounds)
-      // Just verify the exercises section renders correctly
-      expect(getByText('Exercises')).toBeTruthy();
+      // Just verify the home screen renders correctly
+      expect(getByText('Welcome back!')).toBeTruthy();
     });
   });
 });

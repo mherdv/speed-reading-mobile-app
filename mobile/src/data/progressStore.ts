@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { normalizeGameId } from './gameIds';
 
 const STORAGE_KEY = 'speed-reading:progress:v1';
 
@@ -33,7 +34,15 @@ export async function loadAllProgress(): Promise<ProgressStore> {
 
   try {
     const parsed = JSON.parse(raw);
-    return parsed as ProgressStore;
+    if (!parsed || typeof parsed !== 'object') return {};
+    const normalized: ProgressStore = {};
+    for (const [gameId, progress] of Object.entries(parsed as ProgressStore)) {
+      const normalizedId = normalizeGameId(gameId);
+      if (!normalized[normalizedId]) {
+        normalized[normalizedId] = progress as GameProgress;
+      }
+    }
+    return normalized;
   } catch {
     return {};
   }
@@ -49,7 +58,7 @@ export async function saveGameProgress(
   progress: GameProgress
 ): Promise<void> {
   const all = await loadAllProgress();
-  all[gameId] = progress;
+  all[normalizeGameId(gameId)] = progress;
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(all));
 }
 

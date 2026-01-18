@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { RootStackParamList } from './types';
 import type { AttemptResult, TextSample } from '../domain/types';
 import { saveResult } from '../data/resultsStore';
+import { normalizeGameId } from '../data/gameIds';
 
 import { HomeScreen } from '../screens/HomeScreen';
 import { ExerciseScreen } from '../screens/ExerciseScreen';
@@ -47,7 +48,7 @@ export function RootNavigator() {
                 refreshToken={refreshToken}
                 onStart={(sample: TextSample) => navigation.navigate('Exercise', { sample })}
                 onOpenHistory={() => navigation.navigate('History')}
-                onOpenGame={(gameId: string) => navigation.navigate('Game', { gameId, autoStart: false, sessionKey: getNextGameSessionKey() })}
+                onOpenGame={(gameId: string) => navigation.navigate('Game', { gameId: normalizeGameId(gameId), autoStart: false, sessionKey: getNextGameSessionKey() })}
               />
             </ScrollView>
           </SafeAreaView>
@@ -128,7 +129,7 @@ export function RootNavigator() {
                     index: 1,
                     routes: [
                       { name: 'Home' },
-                      { name: 'Game', params: { gameId: route.params.result.sampleId, autoStart: true, sessionKey: newSessionKey, difficulty }, key: `game-${newSessionKey}` },
+                      { name: 'Game', params: { gameId: normalizeGameId(route.params.result.sampleId), autoStart: true, sessionKey: newSessionKey, difficulty }, key: `game-${newSessionKey}` },
                     ],
                   });
                 }}

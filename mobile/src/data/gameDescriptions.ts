@@ -3,7 +3,9 @@
  * These are displayed when a game is selected, in the idle state before starting.
  */
 
-export const GAME_DESCRIPTIONS: Record<string, string> = {
+import type { GameId } from './gameIds';
+
+export const GAME_DESCRIPTIONS: Record<GameId, string> = {
   PowerReader:
     'Train your brain to process multiple words at once. Text is displayed in rapid chunks to break the habit of subvocalization and increase reading speed while maintaining comprehension.',
 

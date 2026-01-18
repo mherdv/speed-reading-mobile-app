@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { useAutoStart } from '../gameHooks';
+import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
 
 const GAME_ID = 'TextSearch';
 
@@ -98,14 +101,7 @@ export default function TextSearch({
     };
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase]);
+  useAutoStart(autoStart, phase, true, start);
 
   function start() {
     if (phase !== 'idle') return;
@@ -183,8 +179,15 @@ export default function TextSearch({
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
+        <SimpleIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          onStart={start}
+          startLabel="Start Search"
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        >
           <Text style={styles.sectionLabel}>Select Difficulty:</Text>
           <View style={styles.difficultyRow}>
             {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
@@ -211,32 +214,35 @@ export default function TextSearch({
               </Pressable>
             ))}
           </View>
-          
-          <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-            <Text style={styles.startBtnText}>Start Search</Text>
-          </Pressable>
-        </View>
+        </SimpleIdlePanel>
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
-          <View testID="score-display" style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>
-                {config.showCount ? `${found.length}/${targetIndices.length}` : `${found.length}/?`}
-              </Text>
-              <Text style={styles.statLabel}>Found</Text>
-            </View>
-            <View style={[styles.statBox, styles.timerBox]}>
-              <Text style={styles.statValue}>
-                {config.timeLimit 
+          <StatsRow
+            style={styles.statsRow}
+            testID="score-display"
+            items={[
+              {
+                key: 'found',
+                value: config.showCount ? `${found.length}/${targetIndices.length}` : `${found.length}/?`,
+                label: 'Found',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'time',
+                value: config.timeLimit
                   ? `${Math.max(0, (config.timeLimit - elapsed) / 1000).toFixed(1)}s`
-                  : `${(elapsed / 1000).toFixed(1)}s`
-                }
-              </Text>
-              <Text style={styles.statLabel}>{config.timeLimit ? 'Left' : 'Time'}</Text>
-            </View>
-          </View>
+                  : `${(elapsed / 1000).toFixed(1)}s`,
+                label: config.timeLimit ? 'Left' : 'Time',
+                containerStyle: [styles.statBox, styles.timerBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <ScrollView testID="paragraph-display" style={styles.textBox}>
             <View style={styles.wordWrap}>

@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { WORD_PAIRS as VOCABULARY_WORD_PAIRS } from '../../data/vocabulary';
+import { useAutoStart } from '../gameHooks';
+import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
+
+const GAME_ID = 'WordPairs';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -80,14 +86,7 @@ export default function WordPairs({ durationMs = 30000, autoStart = false, onRep
     };
   }, [phase, durationMs]);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase]);
+  useAutoStart(autoStart, phase, true, start);
 
   function start() {
     reportedRef.current = false;
@@ -152,27 +151,47 @@ export default function WordPairs({ durationMs = 30000, autoStart = false, onRep
       </View>
 
       {phase === 'idle' && (
-        <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-          <Text style={styles.startBtnText}>Start Game</Text>
-        </Pressable>
+        <SimpleIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          onStart={start}
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        />
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{Math.ceil(timeLeftMs / 1000)}</Text>
-              <Text style={styles.statLabel}>Seconds</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{attempts}</Text>
-              <Text style={styles.statLabel}>Rounds</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'time',
+                value: Math.ceil(timeLeftMs / 1000),
+                label: 'Seconds',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'rounds',
+                value: attempts,
+                label: 'Rounds',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={[styles.wordCard, feedback === 'correct' && styles.cardCorrect, feedback === 'wrong' && styles.cardWrong]}>
             <Text style={styles.wordLabel}>Find the opposite of:</Text>
@@ -221,6 +240,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  idleContent: { flex: 1 },
+  descriptionText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 16,
   },
   startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },

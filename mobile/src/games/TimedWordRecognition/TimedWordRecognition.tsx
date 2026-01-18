@@ -1,18 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {
-  loadGameProgress,
-  updateProgress,
-  levelToDifficulty,
-  levelToStars,
-  type GameProgress,
-} from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { GameIdlePanel } from '../../ui/GameIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
+import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
 
-const GAME_ID = 'timed-word-recognition';
-
-type Difficulty = 'easy' | 'medium' | 'hard';
+const GAME_ID = 'TimedWordRecognition';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -22,8 +17,6 @@ type GameReportPayload = {
   accuracy?: number;
   details?: Record<string, any>;
 };
-
-export type { Difficulty };
 
 type Props = {
   words?: string[];
@@ -91,8 +84,12 @@ export default function TimedWordRecognition({
   onReportResult,
 }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
-  const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
-  const selectedDifficulty = levelToDifficulty(gameProgress.level);
+  const {
+    gameProgress,
+    setGameProgress,
+    selectedDifficulty,
+    progressLoaded,
+  } = useGameProgress(GAME_ID, difficulty);
   const [round, setRound] = useState(0);
   const [currentWord, setCurrentWord] = useState('');
   const [options, setOptions] = useState<string[]>([]);
@@ -113,15 +110,6 @@ export default function TimedWordRecognition({
   const displayMs = displayMsProp ?? currentConfig.displayMs;
   const words = getWordsForDifficulty(selectedDifficulty);
 
-  const [progressLoaded, setProgressLoaded] = useState(false);
-
-  useEffect(() => {
-    loadGameProgress(GAME_ID).then((progress) => {
-      setGameProgress(progress);
-      setProgressLoaded(true);
-    });
-  }, []);
-
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
@@ -129,14 +117,7 @@ export default function TimedWordRecognition({
     };
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase, progressLoaded]);
+  useAutoStart(autoStart, phase, progressLoaded, start);
 
   function pickWord(): { word: string; options: string[] } {
     const currentWords = getWordsForDifficulty(selectedDifficulty);
@@ -248,33 +229,44 @@ export default function TimedWordRecognition({
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
-          <View style={styles.progressInfo}>
-            <Text style={styles.levelLabel}>Level {gameProgress.level}</Text>
-            <Text style={styles.starsDisplay}>
-              {'★'.repeat(levelToStars(gameProgress.level))}
-              {'☆'.repeat(5 - levelToStars(gameProgress.level))}
-            </Text>
-          </View>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-            <Text style={styles.startBtnText}>Start Game</Text>
-          </Pressable>
-        </View>
+        <GameIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          level={gameProgress.level}
+          stars={levelToStars(gameProgress.level)}
+          onStart={start}
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          progressInfoStyle={styles.progressInfo}
+          levelLabelStyle={styles.levelLabel}
+          starsStyle={styles.starsDisplay}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        />
       )}
 
       {phase === 'show' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={[styles.statBox, styles.roundBox]}>
-              <Text style={styles.statValue}>{round + 1}/{totalRounds}</Text>
-              <Text style={styles.statLabel}>Round</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'round',
+                value: `${round + 1}/${totalRounds}`,
+                label: 'Round',
+                containerStyle: [styles.statBox, styles.roundBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View testID="word-flash" style={styles.wordCard}>
             <Text testID="word" style={styles.word}>{currentWord}</Text>
@@ -286,16 +278,27 @@ export default function TimedWordRecognition({
 
       {phase === 'choose' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={[styles.statBox, styles.roundBox]}>
-              <Text style={styles.statValue}>{round + 1}/{totalRounds}</Text>
-              <Text style={styles.statLabel}>Round</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'round',
+                value: `${round + 1}/${totalRounds}`,
+                label: 'Round',
+                containerStyle: [styles.statBox, styles.roundBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <Text style={styles.chooseTitle}>Which word did you see?</Text>
 

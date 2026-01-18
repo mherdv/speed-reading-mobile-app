@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, Dimensions } from 'react-native';
 
 import type { AttemptResult } from '../domain/types';
 import { loadResults } from '../data/resultsStore';
+import { normalizeGameId } from '../data/gameIds';
 import { LineChart } from './LineChart';
 import { CircularProgress } from './CircularProgress';
 
@@ -20,9 +21,10 @@ export function ProgressChart({ gameId, currentScore, maxResults = 10 }: Props) 
 
   useEffect(() => {
     async function loadHistory() {
+      const normalizedGameId = normalizeGameId(gameId);
       const all = await loadResults();
       const gameResults = all
-        .filter((r) => r.sampleId === gameId)
+        .filter((r) => r.sampleId === normalizedGameId)
         .slice(0, maxResults)
         .reverse(); // Oldest first for chart
       setHistory(gameResults);

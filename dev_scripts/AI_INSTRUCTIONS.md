@@ -86,10 +86,12 @@ OCR scripts use `frames_small/` for better performance and accuracy.
 - `ffmpeg` (video conversion, audio extraction)
 - `tesseract` (OCR)
 - `whisper-cpp` (`whisper-cli` for offline transcription)
+- `jq` (JSON parsing for Gemini API responses)
+- `GEMINI_API_KEY` environment variable (for AI vision style extraction)
 
 Install (macOS/Homebrew):
 ```bash
-brew install ffmpeg tesseract whisper-cpp
+brew install ffmpeg tesseract whisper-cpp jq
 ```
 
 Model download (one-time):
@@ -253,7 +255,78 @@ FRAMES (Visual)              TRANSCRIPT (Audio)
 | Shadows | Presence, intensity, offset |
 
 ---
+## Gemini Vision Style Extraction
 
+**For extracting detailed visual styles from reference designs or screenshots, use the Gemini API script.**
+
+### Setup
+
+1. Set your Gemini API key:
+   ```bash
+   export GEMINI_API_KEY="your-api-key-here"
+   ```
+   Or add to your shell profile (~/.zshrc):
+   ```bash
+   echo 'export GEMINI_API_KEY="your-api-key-here"' >> ~/.zshrc
+   ```
+
+2. Get an API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+### Usage
+
+Analyze a single image:
+```bash
+./dev_scripts/gemini.sh debug/<folder>/frames/frame_001.png
+```
+
+Analyze multiple images:
+```bash
+./dev_scripts/gemini.sh debug/<folder>/frames/frame_*.png
+```
+
+Analyze specific reference design:
+```bash
+./dev_scripts/gemini.sh debug/<folder>/reference_design.png
+```
+
+### What Gemini Extracts
+
+The script provides a comprehensive visual style report including:
+
+| Category | Details |
+|----------|----------|
+| Overall Style | Visual aesthetic, design language, style influences |
+| Layout | Grid structure, composition, spacing system |
+| Colors | Full palette with gradients, contrast analysis |
+| Typography | Font styles, hierarchy, sizes, weights |
+| UI Components | Buttons, cards, icons, patterns |
+| Design System | Recognized influences (Material, iOS HIG, custom) |
+| Consistency | Design hierarchy and uniformity |
+
+### Workflow Integration
+
+1. **Extract reference frame:**
+   ```bash
+   cp debug/<folder>/frames/frame_XXX.png debug/<folder>/reference_design.png
+   ```
+
+2. **Run Gemini analysis:**
+   ```bash
+   ./dev_scripts/gemini.sh debug/<folder>/reference_design.png > debug/<folder>/style_analysis.txt
+   ```
+
+3. **Use extracted styles** in your implementation (colors, spacing, typography, etc.)
+
+### Combining with OCR
+
+| Tool | Purpose |
+|------|----------|
+| `tesseract` (OCR) | Extract text labels, button text, error messages |
+| `gemini.sh` (Vision) | Extract colors, spacing, styling, layout, design patterns |
+
+Use OCR for **what text says**, use Gemini for **how it looks**.
+
+---
 ## Creating the Engineering Task
 
 A good task is **small, testable, unambiguous, and traceable to video evidence**.

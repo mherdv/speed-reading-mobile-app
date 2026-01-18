@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Dimensions } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
-import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
+import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { GameIdlePanel } from '../../ui/GameIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
+import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
 
 const GAME_ID = 'EyeMovementTraining';
-
-export type Difficulty = 'easy' | 'medium' | 'hard';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -42,8 +43,13 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function EyeMovementTraining({ positions: positionsProp, rounds: roundsProp, intervalMs: intervalMsProp, difficulty = 'medium', autoStart = false, onReportResult }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(difficulty);
-  const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
+  const {
+    gameProgress,
+    setGameProgress,
+    selectedDifficulty,
+    setSelectedDifficulty,
+    progressLoaded,
+  } = useGameProgress(GAME_ID, difficulty);
   const [currentRound, setCurrentRound] = useState(0);
   const [position, setPosition] = useState(0);
   const [score, setScore] = useState(0);
@@ -62,16 +68,6 @@ export default function EyeMovementTraining({ positions: positionsProp, rounds: 
   const cancelledRef = useRef(false);
   const roundRef = useRef(0);
   const lastPositionRef = useRef(-1);
-
-  const [progressLoaded, setProgressLoaded] = useState(false);
-
-  useEffect(() => {
-    loadGameProgress(GAME_ID).then((progress) => {
-      setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
-      setProgressLoaded(true);
-    });
-  }, []);
 
   // Get random position that's different from the last one
   function getRandomPosition() {
@@ -92,14 +88,7 @@ export default function EyeMovementTraining({ positions: positionsProp, rounds: 
     };
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase, progressLoaded]);
+  useAutoStart(autoStart, phase, progressLoaded, start);
 
   function start() {
     if (phase !== 'idle') return;
@@ -175,36 +164,49 @@ export default function EyeMovementTraining({ positions: positionsProp, rounds: 
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
-          <View style={styles.progressInfo}>
-            <Text style={styles.levelLabel}>Level {gameProgress.level}</Text>
-            <Text style={styles.starsDisplay}>
-              {'★'.repeat(levelToStars(gameProgress.level))}
-              {'☆'.repeat(5 - levelToStars(gameProgress.level))}
-            </Text>
-            <Text style={styles.difficultyInfo}>
-              {selectedDifficulty === 'easy' ? '🟢 Slow pace' : selectedDifficulty === 'medium' ? '🟡 Medium pace' : '🔴 Fast pace'}
-            </Text>
-          </View>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-            <Text style={styles.startBtnText}>Start Training</Text>
-          </Pressable>
-        </View>
+        <GameIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          level={gameProgress.level}
+          stars={levelToStars(gameProgress.level)}
+          onStart={start}
+          startLabel="Start Training"
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          progressInfoStyle={styles.progressInfo}
+          levelLabelStyle={styles.levelLabel}
+          starsStyle={styles.starsDisplay}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        >
+          <Text style={styles.difficultyInfo}>
+            {selectedDifficulty === 'easy' ? '🟢 Slow pace' : selectedDifficulty === 'medium' ? '🟡 Medium pace' : '🔴 Fast pace'}
+          </Text>
+        </GameIdlePanel>
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{currentRound + 1}/{rounds}</Text>
-              <Text style={styles.statLabel}>Round</Text>
-            </View>
-            <View style={[styles.statBox, styles.timerBox]}>
-              <Text style={styles.statValue}>{(elapsed / 1000).toFixed(1)}s</Text>
-              <Text style={styles.statLabel}>Time</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'round',
+                value: `${currentRound + 1}/${rounds}`,
+                label: 'Round',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'time',
+                value: `${(elapsed / 1000).toFixed(1)}s`,
+                label: 'Time',
+                containerStyle: [styles.statBox, styles.timerBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={styles.trackArea}>
             <View testID="dot-track" style={[styles.track, { width: (dotSize + 24) * gridSize }]}>

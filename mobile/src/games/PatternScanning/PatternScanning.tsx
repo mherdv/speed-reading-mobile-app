@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
+import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { GameIdlePanel } from '../../ui/GameIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
+import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
 
 const GAME_ID = 'PatternScanning';
 
@@ -13,8 +16,6 @@ type GameReportPayload = {
   accuracy?: number;
   details?: Record<string, any>;
 };
-
-export type Difficulty = 'easy' | 'medium' | 'hard';
 
 type Props = {
   gridSize?: number;
@@ -81,8 +82,13 @@ export default function PatternScanning({
   onReportResult 
 }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(difficulty);
-  const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
+  const {
+    gameProgress,
+    setGameProgress,
+    selectedDifficulty,
+    setSelectedDifficulty,
+    progressLoaded,
+  } = useGameProgress(GAME_ID, difficulty);
   // Auto-select a random pattern - user no longer needs to select manually
   const [selectedPattern, setSelectedPattern] = useState<string>(
     targetPatternProp ?? PATTERNS[Math.floor(Math.random() * PATTERNS.length)]
@@ -113,16 +119,6 @@ export default function PatternScanning({
   const foundRef = useRef<string[]>([]);
   const totalFoundRef = useRef(0);
 
-  const [progressLoaded, setProgressLoaded] = useState(false);
-
-  useEffect(() => {
-    loadGameProgress(GAME_ID).then((progress) => {
-      setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
-      setProgressLoaded(true);
-    });
-  }, []);
-
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
@@ -130,14 +126,7 @@ export default function PatternScanning({
     };
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase, progressLoaded]);
+  useAutoStart(autoStart, phase, progressLoaded, start);
 
   function start() {
     if (phase !== 'idle') return;
@@ -242,37 +231,52 @@ export default function PatternScanning({
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
-          <View style={styles.progressInfo}>
-            <Text style={styles.levelLabel}>Level {gameProgress.level}</Text>
-            <Text style={styles.starsDisplay}>
-              {'★'.repeat(levelToStars(gameProgress.level))}
-              {'☆'.repeat(5 - levelToStars(gameProgress.level))}
-            </Text>
-          </View>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-            <Text style={styles.startBtnText}>Start Game</Text>
-          </Pressable>
-        </View>
+        <GameIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          level={gameProgress.level}
+          stars={levelToStars(gameProgress.level)}
+          onStart={start}
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          progressInfoStyle={styles.progressInfo}
+          levelLabelStyle={styles.levelLabel}
+          starsStyle={styles.starsDisplay}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        />
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{found.length}/{targetPositions.length}</Text>
-              <Text style={styles.statLabel}>Found</Text>
-            </View>
-            <View style={[styles.statBox, styles.timerBox]}>
-              <Text style={styles.statValue}>{(timeLeft / 1000).toFixed(1)}s</Text>
-              <Text style={styles.statLabel}>Time</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'found',
+                value: `${found.length}/${targetPositions.length}`,
+                label: 'Found',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'time',
+                value: `${(timeLeft / 1000).toFixed(1)}s`,
+                label: 'Time',
+                containerStyle: [styles.statBox, styles.timerBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View testID="grid" style={styles.gridContainer}>
             {grid.map((row, r) => (

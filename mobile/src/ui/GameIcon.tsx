@@ -1,5 +1,5 @@
 import React from 'react';
-import Svg, { Path, Circle, Line, Polyline, Rect } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 
 type Props = {
   name: string;
@@ -7,196 +7,94 @@ type Props = {
   color?: string;
 };
 
-// SVG icon paths for each game
-const ICON_DATA: Record<string, React.ReactNode> = {
-  PowerReader: (
-    <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-  ),
-  FlashReading: (
-    <>
-      <Path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5" />
-      <Path d="M9 18h6" />
-      <Path d="M10 22h4" />
-    </>
-  ),
-  ComprehensionTest: (
-    <>
-      <Path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-      <Path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-    </>
-  ),
-  SchulteNumbers: (
-    <>
-      <Rect width="18" height="18" x="3" y="3" rx="2" />
-      <Path d="M3 9h18" />
-      <Path d="M3 15h18" />
-      <Path d="M9 3v18" />
-      <Path d="M15 3v18" />
-    </>
-  ),
-  SchulteLetters: (
-    <>
-      <Rect width="18" height="18" x="3" y="3" rx="2" />
-      <Path d="M3 9h18" />
-      <Path d="M3 15h18" />
-      <Path d="M9 3v18" />
-      <Path d="M15 3v18" />
-    </>
-  ),
-  SchulteMix: (
-    <>
-      <Rect width="18" height="18" x="3" y="3" rx="2" />
-      <Path d="M3 9h18" />
-      <Path d="M3 15h18" />
-      <Path d="M9 3v18" />
-      <Path d="M15 3v18" />
-    </>
-  ),
-  EyeMovementTraining: (
-    <>
-      <Path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-      <Circle cx="12" cy="12" r="3" />
-    </>
-  ),
-  VisualSpanExpansion: (
-    <>
-      <Path d="M12 4.5V2" />
-      <Path d="M12 22v-2.5" />
-      <Path d="M4.5 12H2" />
-      <Path d="M22 12h-2.5" />
-      <Path d="m17.3 17.3 1.7 1.7" />
-      <Path d="m5 5 1.7 1.7" />
-      <Path d="m17.3 6.7 1.7-1.7" />
-      <Path d="m5 19 1.7-1.7" />
-      <Circle cx="12" cy="12" r="4" />
-    </>
-  ),
-  PatternScanning: (
-    <>
-      <Path d="M3 3h6v6H3z" />
-      <Path d="M15 3h6v6h-6z" />
-      <Path d="M3 15h6v6H3z" />
-      <Path d="M15 15h6v6h-6z" />
-    </>
-  ),
-  TimedWordRecognition: (
-    <>
-      <Path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <Path d="M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z" />
-    </>
-  ),
-  TimedPhraseRecognition: (
-    <>
-      <Circle cx="12" cy="12" r="10" />
-      <Polyline points="12 6 12 12 16 14" />
-    </>
-  ),
-  WordPairs: (
-    <>
-      <Path d="m7 10 5-5 5 5" />
-      <Path d="m7 14 5 5 5-5" />
-    </>
-  ),
-  TextSearch: (
-    <>
-      <Circle cx="11" cy="11" r="8" />
-      <Path d="m21 21-4.3-4.3" />
-    </>
-  ),
-  WordSearchGame: (
-    <>
-      <Circle cx="11" cy="11" r="8" />
-      <Path d="m21 21-4.3-4.3" />
-    </>
-  ),
-  NumberSearch: (
-    <>
-      <Line x1="10" x2="21" y1="6" y2="6" />
-      <Line x1="10" x2="21" y1="12" y2="12" />
-      <Line x1="10" x2="21" y1="18" y2="18" />
-      <Path d="M4 6h1v4" />
-      <Path d="M4 10h2" />
-      <Path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
-    </>
-  ),
-  LetterRecognition: (
-    <>
-      <Polyline points="4 7 4 4 20 4 20 7" />
-      <Line x1="9" x2="15" y1="20" y2="20" />
-      <Line x1="12" x2="12" y1="4" y2="20" />
-    </>
-  ),
-  NumberRecognition: (
-    <>
-      <Line x1="10" x2="21" y1="6" y2="6" />
-      <Line x1="10" x2="21" y1="12" y2="12" />
-      <Line x1="10" x2="21" y1="18" y2="18" />
-      <Path d="M4 6h1v4" />
-      <Path d="M4 10h2" />
-      <Path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
-    </>
-  ),
-  SymbolRecognition: (
-    <Path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z" />
-  ),
-  MemoryRecall: (
-    <>
-      <Path d="M12 4.5V2" />
-      <Path d="M12 22v-2.5" />
-      <Path d="M4.5 12H2" />
-      <Path d="M22 12h-2.5" />
-      <Circle cx="12" cy="12" r="4" />
-    </>
-  ),
-  LetterJumble: (
-    <>
-      <Path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22" />
-      <Path d="m18 2 4 4-4 4" />
-      <Path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2" />
-      <Path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8" />
-      <Path d="m18 14 4 4-4 4" />
-    </>
-  ),
-  WordMismatchGrid: (
-    <>
-      <Line x1="5" x2="19" y1="9" y2="9" />
-      <Line x1="5" x2="19" y1="15" y2="15" />
-      <Line x1="19" x2="5" y1="5" y2="19" />
-    </>
-  ),
-  EvenNumbers: (
-    <>
-      <Circle cx="12" cy="12" r="10" />
-      <Path d="M8 12h8" />
-      <Path d="M12 8v8" />
-    </>
-  ),
+// Professional icons from Phosphor icon set via Iconify API
+// Using 256x256 viewBox with filled paths for crisp rendering
+const ICON_PATHS: Record<string, string> = {
+  // PowerReader - Lightning bolt (rapid reading)
+  PowerReader: 'm213.85 125.46l-112 120a8 8 0 0 1-13.69-7l14.66-73.33l-57.63-21.64a8 8 0 0 1-3-13l112-120a8 8 0 0 1 13.69 7l-14.7 73.41l57.63 21.61a8 8 0 0 1 3 12.95Z',
+  
+  // FlashReading - Lightbulb (flash words)
+  FlashReading: 'M176 232a8 8 0 0 1-8 8H88a8 8 0 0 1 0-16h80a8 8 0 0 1 8 8m40-128a87.55 87.55 0 0 1-33.64 69.21A16.24 16.24 0 0 0 176 186v6a16 16 0 0 1-16 16H96a16 16 0 0 1-16-16v-6a16 16 0 0 0-6.23-12.66A87.59 87.59 0 0 1 40 104.49C39.74 56.83 78.26 17.14 125.88 16A88 88 0 0 1 216 104m-32.11-9.34a57.6 57.6 0 0 0-46.56-46.55a8 8 0 0 0-2.66 15.78c16.57 2.79 30.63 16.85 33.44 33.45A8 8 0 0 0 176 104a9 9 0 0 0 1.35-.11a8 8 0 0 0 6.54-9.23',
+  
+  // ComprehensionTest - Open book (reading comprehension)
+  ComprehensionTest: 'M240 56v144a8 8 0 0 1-8 8h-72a24 24 0 0 0-24 23.94a7.9 7.9 0 0 1-5.12 7.55A8 8 0 0 1 120 232a24 24 0 0 0-24-24H24a8 8 0 0 1-8-8V56a8 8 0 0 1 8-8h64a32 32 0 0 1 32 32v87.73a8.17 8.17 0 0 0 7.47 8.25a8 8 0 0 0 8.53-8V80a32 32 0 0 1 32-32h64a8 8 0 0 1 8 8',
+  
+  // EyeMovementTraining - Eye (visual tracking)
+  EyeMovementTraining: 'M247.31 124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57 61.26 162.88 48 128 48S61.43 61.26 36.34 86.35C17.51 105.18 9 124 8.69 124.76a8 8 0 0 0 0 6.5c.35.79 8.82 19.57 27.65 38.4C61.43 194.74 93.12 208 128 208s66.57-13.26 91.66-38.34c18.83-18.83 27.3-37.61 27.65-38.4a8 8 0 0 0 0-6.5M128 192c-30.78 0-57.67-11.19-79.93-33.25A133.5 133.5 0 0 1 25 128a133.3 133.3 0 0 1 23.07-30.75C70.33 75.19 97.22 64 128 64s57.67 11.19 79.93 33.25A133.5 133.5 0 0 1 231.05 128c-7.21 13.46-38.62 64-103.05 64m0-112a48 48 0 1 0 48 48a48.05 48.05 0 0 0-48-48m0 80a32 32 0 1 1 32-32a32 32 0 0 1-32 32',
+  
+  // LetterRecognition - Letter A (alphabet recognition)
+  LetterRecognition: 'M87.24 52.59a8 8 0 0 0-14.48 0l-64 136a8 8 0 1 0 14.48 6.81L39.9 160h80.2l16.66 35.4a8 8 0 1 0 14.48-6.81ZM47.43 144L80 74.79L112.57 144ZM200 96c-12.76 0-22.73 3.47-29.63 10.32a8 8 0 0 0 11.26 11.36c3.8-3.77 10-5.68 18.37-5.68c13.23 0 24 9 24 20v3.22a42.76 42.76 0 0 0-24-7.22c-22.06 0-40 16.15-40 36s17.94 36 40 36a42.73 42.73 0 0 0 24-7.25a8 8 0 0 0 16-.75v-60c0-19.85-17.94-36-40-36m0 88c-13.23 0-24-9-24-20s10.77-20 24-20s24 9 24 20s-10.77 20-24 20',
+  
+  // NumberRecognition - List numbers (number identification)
+  NumberRecognition: 'M224 128a8 8 0 0 1-8 8H104a8 8 0 0 1 0-16h112a8 8 0 0 1 8 8M104 72h112a8 8 0 0 0 0-16H104a8 8 0 0 0 0 16m112 112H104a8 8 0 0 0 0 16h112a8 8 0 0 0 0-16M43.58 55.16L48 52.94V104a8 8 0 0 0 16 0V40a8 8 0 0 0-11.58-7.16l-16 8a8 8 0 0 0 7.16 14.32m36.19 101.56a23.73 23.73 0 0 0-9.6-15.95a24.86 24.86 0 0 0-34.11 4.7a23.6 23.6 0 0 0-3.57 6.46a8 8 0 1 0 15 5.47a7.8 7.8 0 0 1 1.18-2.13a8.76 8.76 0 0 1 12-1.59a7.9 7.9 0 0 1 3.26 5.32a7.64 7.64 0 0 1-1.57 5.78a1 1 0 0 0-.08.11l-28.69 38.32A8 8 0 0 0 40 216h32a8 8 0 0 0 0-16H56l19.08-25.53a23.47 23.47 0 0 0 4.69-17.75',
+  
+  // SymbolRecognition - Infinity (symbol matching)
+  SymbolRecognition: 'M248 128a56 56 0 0 1-95.6 39.6l-.33-.35l-59.95-67.7a40 40 0 1 0 0 56.9l8.52-9.62a8 8 0 1 1 12 10.61l-8.69 9.81l-.33.35a56 56 0 1 1 0-79.2l.33.35l59.95 67.7a40 40 0 1 0 0-56.9l-8.52 9.62a8 8 0 1 1-12-10.61l8.69-9.81l.33-.35A56 56 0 0 1 248 128',
+  
+  // MemoryRecall - Brain (memory exercises)
+  MemoryRecall: 'M248 124a56.11 56.11 0 0 0-32-50.61V72a48 48 0 0 0-88-26.49A48 48 0 0 0 40 72v1.39a56 56 0 0 0 0 101.2V176a48 48 0 0 0 88 26.49A48 48 0 0 0 216 176v-1.41A56.09 56.09 0 0 0 248 124M88 208a32 32 0 0 1-31.81-28.56A56 56 0 0 0 64 180h8a8 8 0 0 0 0-16h-8a40 40 0 0 1-13.33-77.73A8 8 0 0 0 56 78.73V72a32 32 0 0 1 64 0v68.26A47.8 47.8 0 0 0 88 128a8 8 0 0 0 0 16a32 32 0 0 1 0 64m104-44h-8a8 8 0 0 0 0 16h8a56 56 0 0 0 7.81-.56A32 32 0 1 1 168 144a8 8 0 0 0 0-16a47.8 47.8 0 0 0-32 12.26V72a32 32 0 0 1 64 0v6.73a8 8 0 0 0 5.33 7.54A40 40 0 0 1 192 164m16-52a8 8 0 0 1-8 8h-4a36 36 0 0 1-36-36v-4a8 8 0 0 1 16 0v4a20 20 0 0 0 20 20h4a8 8 0 0 1 8 8m-148 8h-4a8 8 0 0 1 0-16h4a20 20 0 0 0 20-20v-4a8 8 0 0 1 16 0v4a36 36 0 0 1-36 36',
+  
+  // PatternScanning - Grid squares (pattern recognition)
+  PatternScanning: 'M104 40H56a16 16 0 0 0-16 16v48a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16m0 64H56V56h48zm96-64h-48a16 16 0 0 0-16 16v48a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16m0 64h-48V56h48zm-96 32H56a16 16 0 0 0-16 16v48a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16v-48a16 16 0 0 0-16-16m0 64H56v-48h48zm96-64h-48a16 16 0 0 0-16 16v48a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16v-48a16 16 0 0 0-16-16m0 64h-48v-48h48z',
+  
+  // TimedPhraseRecognition - Clock (timed reading)
+  TimedPhraseRecognition: 'M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m64-88a8 8 0 0 1-8 8h-56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48a8 8 0 0 1 8 8',
+  
+  // TimedWordRecognition - Document (word flashing)
+  TimedWordRecognition: 'm213.66 82.34l-56-56A8 8 0 0 0 152 24H56a16 16 0 0 0-16 16v176a16 16 0 0 0 16 16h144a16 16 0 0 0 16-16V88a8 8 0 0 0-2.34-5.66M160 51.31L188.69 80H160ZM200 216H56V40h88v48a8 8 0 0 0 8 8h48zm-32-80a8 8 0 0 1-8 8H96a8 8 0 0 1 0-16h64a8 8 0 0 1 8 8m0 32a8 8 0 0 1-8 8H96a8 8 0 0 1 0-16h64a8 8 0 0 1 8 8',
+  
+  // VisualSpanExpansion - Target (visual span)
+  VisualSpanExpansion: 'M221.87 83.16A104.1 104.1 0 1 1 195.67 49l22.67-22.68a8 8 0 0 1 11.32 11.32l-96 96a8 8 0 0 1-11.32-11.32l27.72-27.72a40 40 0 1 0 17.87 31.09a8 8 0 1 1 16-.9a56 56 0 1 1-22.38-41.65l22.75-22.75a87.88 87.88 0 1 0 23.13 29.67a8 8 0 0 1 14.44-6.9',
+  
+  // LetterJumble - Shuffle (letter scramble)
+  LetterJumble: 'M237.66 178.34a8 8 0 0 1 0 11.32l-24 24a8 8 0 0 1-11.32-11.32L212.69 192h-11.75a72.12 72.12 0 0 1-58.59-30.15l-41.72-58.4A56.1 56.1 0 0 0 55.06 80H32a8 8 0 0 1 0-16h23.06a72.12 72.12 0 0 1 58.59 30.15l41.72 58.4A56.1 56.1 0 0 0 200.94 176h11.75l-10.35-10.34a8 8 0 0 1 11.32-11.32ZM143 107a8 8 0 0 0 11.16-1.86l1.2-1.67A56.1 56.1 0 0 1 200.94 80h11.75l-10.35 10.34a8 8 0 0 0 11.32 11.32l24-24a8 8 0 0 0 0-11.32l-24-24a8 8 0 0 0-11.32 11.32L212.69 64h-11.75a72.12 72.12 0 0 0-58.59 30.15l-1.2 1.67A8 8 0 0 0 143 107m-30 42a8 8 0 0 0-11.16 1.86l-1.2 1.67A56.1 56.1 0 0 1 55.06 176H32a8 8 0 0 0 0 16h23.06a72.12 72.12 0 0 0 58.59-30.15l1.2-1.67A8 8 0 0 0 113 149',
+  
+  // SchulteNumbers - Number 5 (schulte grid)
+  SchulteNumbers: 'M176 160a56 56 0 0 1-93.33 41.74a8 8 0 1 1 10.66-11.92a40 40 0 1 0 .77-60.3a8 8 0 0 1-13-7.66l15.06-75.43A8 8 0 0 1 104 40h64a8 8 0 0 1 0 16h-57.44l-10.32 51.6A56 56 0 0 1 176 160',
+  
+  // SchulteLetters - Text T (letter grid)
+  SchulteLetters: 'M208 56v32a8 8 0 0 1-16 0V64h-56v128h24a8 8 0 0 1 0 16H96a8 8 0 0 1 0-16h24V64H64v24a8 8 0 0 1-16 0V56a8 8 0 0 1 8-8h144a8 8 0 0 1 8 8',
+  
+  // SchulteMix - Hash (mixed grid)
+  SchulteMix: 'M224 88h-48.6l8.47-46.57a8 8 0 0 0-15.74-2.86l-9 49.43H111.4l8.47-46.57a8 8 0 0 0-15.74-2.86L95.14 88H48a8 8 0 0 0 0 16h44.23l-8.73 48H32a8 8 0 0 0 0 16h48.6l-8.47 46.57a8 8 0 0 0 6.44 9.3A8 8 0 0 0 80 224a8 8 0 0 0 7.86-6.57l9-49.43h47.74l-8.47 46.57a8 8 0 0 0 6.44 9.3a8 8 0 0 0 1.43.13a8 8 0 0 0 7.86-6.57l9-49.43H208a8 8 0 0 0 0-16h-44.23l8.73-48H224a8 8 0 0 0 0-16m-76.5 64H99.77l8.73-48h47.73Z',
+  
+  // WordPairs - Arrows exchange (word matching)
+  WordPairs: 'm213.66 181.66l-32 32a8 8 0 0 1-11.32-11.32L188.69 184H48a8 8 0 0 1 0-16h140.69l-18.35-18.34a8 8 0 0 1 11.32-11.32l32 32a8 8 0 0 1 0 11.32m-139.32-64a8 8 0 0 0 11.32-11.32L67.31 88H208a8 8 0 0 0 0-16H67.31l18.35-18.34a8 8 0 0 0-11.32-11.32l-32 32a8 8 0 0 0 0 11.32Z',
+  
+  // WordMismatchGrid - Strikethrough (mismatch detection)
+  WordMismatchGrid: 'M224 160a8 8 0 0 1-8 8H102.45l-48.53 53.38a8 8 0 0 1-11.84-10.76L80.82 168H40a8 8 0 0 1 0-16h55.37L139 104H40a8 8 0 0 1 0-16h113.55l48.53-53.38a8 8 0 0 1 11.84 10.76L175.18 88H216a8 8 0 0 1 0 16h-55.37L117 152h99a8 8 0 0 1 8 8',
+  
+  // TextSearch - Magnifying glass (word search)
+  TextSearch: 'm229.66 218.34l-50.07-50.06a88.11 88.11 0 1 0-11.31 11.31l50.06 50.07a8 8 0 0 0 11.32-11.32M40 112a72 72 0 1 1 72 72a72.08 72.08 0 0 1-72-72',
+  
+  // WordSearchGame - Magnifying glass (word finding)
+  WordSearchGame: 'm229.66 218.34l-50.07-50.06a88.11 88.11 0 1 0-11.31 11.31l50.06 50.07a8 8 0 0 0 11.32-11.32M40 112a72 72 0 1 1 72 72a72.08 72.08 0 0 1-72-72',
+  
+  // NumberSearch - Table grid (number finding)
+  NumberSearch: 'M216 48H40a16 16 0 0 0-16 16v128a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V64a16 16 0 0 0-16-16m-112 96v-32h48v32Zm48 16v32h-48v-32ZM40 112h48v32H40Zm64-16V64h48v32Zm64 16h48v32h-48Zm48-16h-48V64h48ZM88 64v32H40V64Zm-48 96h48v32H40Zm176 32h-48v-32h48z',
+  
+  // EvenNumbers - Number 2 (even number identification)
+  EvenNumbers: 'M176 208a8 8 0 0 1-8 8H88a8 8 0 0 1-6.4-12.8l71.94-95.92a32 32 0 1 0-51.1-38.53a32.5 32.5 0 0 0-3.78 6.46A8 8 0 1 1 84 68.8a48 48 0 1 1 82.33 48.09L104 200h64a8 8 0 0 1 8 8',
 };
 
 export function GameIcon({ name, size = 24, color = '#FFFFFF' }: Props) {
-  const iconContent = ICON_DATA[name];
+  const pathData = ICON_PATHS[name];
   
-  if (!iconContent) {
+  if (!pathData) {
     // Fallback to a simple circle
     return (
-      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Circle cx="12" cy="12" r="8" stroke={color} strokeWidth="2" />
+      <Svg width={size} height={size} viewBox="0 0 256 256">
+        <Path
+          d="M128 48a80 80 0 1 0 80 80a80.09 80.09 0 0 0-80-80m0 144a64 64 0 1 1 64-64a64.07 64.07 0 0 1-64 64"
+          fill={color}
+        />
       </Svg>
     );
   }
 
   return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {iconContent}
+    <Svg width={size} height={size} viewBox="0 0 256 256">
+      <Path d={pathData} fill={color} />
     </Svg>
   );
 }

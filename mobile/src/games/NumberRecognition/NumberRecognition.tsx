@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { useAutoStart } from '../gameHooks';
+import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
 
 const GAME_ID = 'NumberRecognition';
 
@@ -51,14 +54,7 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
     };
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase]);
+  useAutoStart(autoStart, phase, true, start);
 
   const current = seq[Math.min(index, seq.length - 1)] ?? 0;
 
@@ -146,31 +142,48 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.endCard}>
-          <Text style={styles.endTitle}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-            <Text style={styles.startBtnText}>Start Game</Text>
-          </Pressable>
-        </View>
+        <SimpleIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          onStart={start}
+          containerStyle={styles.endCard}
+          descriptionStyle={styles.endTitle}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        />
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
           <Text testID="score" style={styles.hiddenText}>Score: {score}</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={[styles.statBox, styles.timerBox]}>
-              <Text style={styles.statValue}>{(timeLeft / 1000).toFixed(1)}s</Text>
-              <Text style={styles.statLabel}>Time</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{currentTarget}</Text>
-              <Text style={styles.statLabel}>Target</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'time',
+                value: `${(timeLeft / 1000).toFixed(1)}s`,
+                label: 'Time',
+                containerStyle: [styles.statBox, styles.timerBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'target',
+                value: currentTarget,
+                label: 'Target',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={[
             styles.numberCard,

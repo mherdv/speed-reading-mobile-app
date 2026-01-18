@@ -4,6 +4,9 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDifficultyProgression, Difficulty } from '../../hooks/useDifficultyProgression';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { getRandomWords } from '../../data/vocabulary';
+import { useAutoStart } from '../gameHooks';
+import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
 
 const GAME_ID = 'FlashReading';
 
@@ -79,14 +82,7 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
     };
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase]);
+  useAutoStart(autoStart, phase, true, start);
 
   function pickWord(): string {
     return words[Math.floor(Math.random() * words.length)];
@@ -193,8 +189,14 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
+        <SimpleIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          onStart={start}
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        >
           <Text style={styles.difficultyLabel}>Select Difficulty:</Text>
           <View style={styles.difficultyRow}>
             {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
@@ -222,24 +224,32 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
             {selectedDifficulty === 'medium' && 'Quick flash (0.2s)'}
             {selectedDifficulty === 'hard' && 'Quick flash + bottom half masked'}
           </Text>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-            <Text style={styles.startBtnText}>Start Game</Text>
-          </Pressable>
-        </View>
+        </SimpleIdlePanel>
       )}
 
       {phase === 'flash' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={[styles.statBox, styles.roundBox]}>
-              <Text style={styles.statValue}>{round + 1}/{totalRounds}</Text>
-              <Text style={styles.statLabel}>Round</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'round',
+                value: `${round + 1}/${totalRounds}`,
+                label: 'Round',
+                containerStyle: [styles.statBox, styles.roundBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={styles.flashCard}>
             <View style={styles.wordContainer}>
@@ -252,16 +262,27 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
 
       {(phase === 'recall' || phase === 'feedback') && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={[styles.statBox, styles.roundBox]}>
-              <Text style={styles.statValue}>{round + 1}/{totalRounds}</Text>
-              <Text style={styles.statLabel}>Round</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'round',
+                value: `${round + 1}/${totalRounds}`,
+                label: 'Round',
+                containerStyle: [styles.statBox, styles.roundBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={[
             styles.inputCard,

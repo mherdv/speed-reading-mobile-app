@@ -3,44 +3,10 @@ import { View, StyleSheet, ScrollView, Text } from 'react-native';
 
 import type { AttemptResult } from '../domain/types';
 import { saveResult } from '../data/resultsStore';
+import { normalizeGameId } from '../data/gameIds';
 import { BackButton } from '../ui/BackButton';
 import { colors } from '../theme/colors';
-
-import PowerReader from '../games/PowerReader/PowerReader';
-import LetterRecognition from '../games/LetterRecognition/LetterRecognition';
-import TextSearch from '../games/TextSearch/TextSearch';
-import EyeMovementTraining from '../games/EyeMovementTraining/EyeMovementTraining';
-import VisualSpanExpansion from '../games/VisualSpanExpansion/VisualSpanExpansion';
-import FlashReading from '../games/FlashReading/FlashReading';
-import ComprehensionTest from '../games/ComprehensionTest/ComprehensionTest';
-import MemoryRecall from '../games/MemoryRecall/MemoryRecall';
-import NumberRecognition from '../games/NumberRecognition/NumberRecognition';
-import SymbolRecognition from '../games/SymbolRecognition/SymbolRecognition';
-import PatternScanning from '../games/PatternScanning/PatternScanning';
-import TimedPhraseRecognition from '../games/TimedPhraseRecognition/TimedPhraseRecognition';
-import TimedWordRecognition from '../games/TimedWordRecognition/TimedWordRecognition';
-import WordMismatchGrid from '../games/WordMismatchGrid/WordMismatchGrid';
-import WordPairs from '../games/WordPairs/WordPairs';
-import LetterJumble from '../games/LetterJumble/LetterJumble';
-import SchulteNumbers from '../games/SchulteNumbers/SchulteNumbers';
-import SchulteLetters from '../games/SchulteLetters/SchulteLetters';
-import SchulteMix from '../games/SchulteMix/SchulteMix';
-import WordSearchGame from '../games/WordSearchGame/WordSearchGame';
-import NumberSearch from '../games/NumberSearch/NumberSearch';
-import EvenNumbers from '../games/EvenNumbers/EvenNumbers';
-
-type GameReportPayload = {
-  elapsedMs?: number;
-  startedAtIso?: string;
-  finishedAtIso?: string;
-  score?: number;
-  accuracy?: number;
-  details?: {
-    wordCount?: number;
-    wpm?: number;
-    [key: string]: any;
-  };
-};
+import { getGameMeta, type GameReportPayload } from '../games/registry';
 
 type Props = {
   gameId: string;
@@ -55,37 +21,9 @@ function makeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-const GAME_COMPONENTS: Record<string, React.ComponentType<{
-  autoStart?: boolean;
-  difficulty?: 'easy' | 'medium' | 'hard';
-  onReportResult?: (payload: GameReportPayload) => void;
-}>> = {
-  PowerReader,
-  LetterRecognition,
-  TextSearch,
-  EyeMovementTraining,
-  VisualSpanExpansion,
-  FlashReading,
-  ComprehensionTest,
-  MemoryRecall,
-  NumberRecognition,
-  SymbolRecognition,
-  PatternScanning,
-  TimedPhraseRecognition,
-  TimedWordRecognition,
-  WordMismatchGrid,
-  WordPairs,
-  LetterJumble,
-  SchulteNumbers,
-  SchulteLetters,
-  SchulteMix,
-  WordSearchGame,
-  NumberSearch,
-  EvenNumbers,
-};
-
 export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, onFinish }: Props) {
   console.log('[GameScreen] Mounted with sessionKey:', sessionKey, 'autoStart:', autoStart, 'difficulty:', difficulty);
+  const normalizedGameId = normalizeGameId(gameId);
   
   const cancelledRef = useRef(false);
   
@@ -108,10 +46,11 @@ export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, 
     const elapsedMs = payload.elapsedMs ?? 0;
     const startedAtIso = payload.startedAtIso ?? new Date(Date.now() - elapsedMs).toISOString();
 
+    const gameMeta = getGameMeta(normalizedGameId);
     const result: AttemptResult = {
       id: makeId(),
-      sampleId: gameId,
-      sampleTitle: gameId,
+      sampleId: normalizedGameId,
+      sampleTitle: gameMeta?.title ?? normalizedGameId,
       startedAtIso,
       finishedAtIso,
       elapsedMs,
@@ -128,7 +67,8 @@ export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, 
     onFinish(result);
   };
 
-  const GameComponent = GAME_COMPONENTS[gameId];
+  const gameMeta = getGameMeta(normalizedGameId);
+  const GameComponent = gameMeta?.component;
 
   if (!GameComponent) {
     return (
@@ -143,7 +83,7 @@ export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, 
   }
 
   // Get game title for header
-  const gameTitle = gameId.replace(/([A-Z])/g, ' $1').trim();
+  const gameTitle = gameMeta?.title ?? normalizedGameId.replace(/([A-Z])/g, ' $1').trim();
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
@@ -155,7 +95,7 @@ export function GameScreen({ gameId, sessionKey, autoStart, difficulty, onBack, 
         </View>
         <View style={styles.gameContainer}>
           <GameComponent
-            key={sessionKey ?? gameId}
+            key={sessionKey ?? normalizedGameId}
             autoStart={autoStart}
             difficulty={difficulty}
             onReportResult={(p: GameReportPayload) => void handleGameReport(p)}

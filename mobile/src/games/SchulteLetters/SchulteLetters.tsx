@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
+import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { GameIdlePanel } from '../../ui/GameIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
+import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
 
 const GAME_ID = 'SchulteLetters';
 
@@ -16,8 +19,6 @@ type GameReportPayload = {
   accuracy?: number;
   details?: Record<string, any>;
 };
-
-export type Difficulty = 'easy' | 'medium' | 'hard';
 
 type Props = {
   gridSize?: number;
@@ -63,8 +64,13 @@ export default function SchulteLetters({
   onReportResult 
 }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(difficulty);
-  const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
+  const {
+    gameProgress,
+    setGameProgress,
+    selectedDifficulty,
+    setSelectedDifficulty,
+    progressLoaded,
+  } = useGameProgress(GAME_ID, difficulty);
   const [grid, setGrid] = useState<string[]>([]);
   const [nextIndex, setNextIndex] = useState(0);
   const [mistakes, setMistakes] = useState(0);
@@ -73,8 +79,6 @@ export default function SchulteLetters({
   const startedAtRef = useRef<number>(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
-
-  const [progressLoaded, setProgressLoaded] = useState(false);
 
   // Cleanup on unmount - prevent reporting results after back button
   useEffect(() => {
@@ -110,22 +114,7 @@ export default function SchulteLetters({
   ));
   const actualGridSize = cellSize * gridSize + cellGap * (gridSize - 1) + gridPadding * 2;
 
-  useEffect(() => {
-    loadGameProgress(GAME_ID).then((progress) => {
-      setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
-      setProgressLoaded(true);
-    });
-  }, []);
-
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase, progressLoaded]);
+  useAutoStart(autoStart, phase, progressLoaded, start);
 
   function start() {
     reportedRef.current = false;
@@ -194,37 +183,52 @@ export default function SchulteLetters({
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
-          <View style={styles.progressInfo}>
-            <Text style={styles.levelLabel}>Level {gameProgress.level}</Text>
-            <Text style={styles.starsDisplay}>
-              {'★'.repeat(levelToStars(gameProgress.level))}
-              {'☆'.repeat(5 - levelToStars(gameProgress.level))}
-            </Text>
-          </View>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-            <Text style={styles.startBtnText}>Start Game</Text>
-          </Pressable>
-        </View>
+        <GameIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          level={gameProgress.level}
+          stars={levelToStars(gameProgress.level)}
+          onStart={start}
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          progressInfoStyle={styles.progressInfo}
+          levelLabelStyle={styles.levelLabel}
+          starsStyle={styles.starsDisplay}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        />
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{nextLetter}</Text>
-              <Text style={styles.statLabel}>Next</Text>
-            </View>
-            <View style={[styles.statBox, styles.progressBox]}>
-              <Text style={styles.statValue}>{tapped.size}/{total}</Text>
-              <Text style={styles.statLabel}>Progress</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={[styles.statValue, mistakes > 0 && styles.errorValue]}>{mistakes}</Text>
-              <Text style={styles.statLabel}>Errors</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'next',
+                value: nextLetter,
+                label: 'Next',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'progress',
+                value: `${tapped.size}/${total}`,
+                label: 'Progress',
+                containerStyle: [styles.statBox, styles.progressBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'errors',
+                value: mistakes,
+                label: 'Errors',
+                containerStyle: styles.statBox,
+                valueStyle: [styles.statValue, mistakes > 0 && styles.errorValue],
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={styles.gridContainer}>
             <View

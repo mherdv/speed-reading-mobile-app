@@ -3,6 +3,8 @@ import { Dimensions, StyleSheet, Text, View } from 'react-native';
 
 import type { AttemptResult } from '../domain/types';
 import { colors, gameColors } from '../theme/colors';
+import { normalizeGameId } from '../data/gameIds';
+import { getGameTitle } from '../games/registry';
 import { LineChart } from './LineChart';
 import { CircularProgress } from './CircularProgress';
 
@@ -26,14 +28,15 @@ function groupByGame(results: AttemptResult[]): GameStats[] {
   const groups = new Map<string, AttemptResult[]>();
   
   for (const r of results) {
-    const key = r.sampleTitle;
+    const normalizedId = normalizeGameId(r.sampleId);
+    const key = normalizedId;
     const list = groups.get(key) || [];
     list.push(r);
     groups.set(key, list);
   }
   
   const stats: GameStats[] = [];
-  groups.forEach((attempts, gameName) => {
+  groups.forEach((attempts, gameId) => {
     // Sort by date (newest first)
     const sorted = attempts.sort((a, b) => 
       new Date(b.finishedAtIso).getTime() - new Date(a.finishedAtIso).getTime()
@@ -49,8 +52,8 @@ function groupByGame(results: AttemptResult[]): GameStats[] {
       : 0;
     
     stats.push({
-      gameId: sorted[0].sampleId || gameName,
-      gameName,
+      gameId,
+      gameName: getGameTitle(gameId),
       attempts: attempts.length,
       bestScore: scores.length > 0 ? Math.max(...scores) : null,
       latestScore: scores[0] ?? null,
@@ -84,7 +87,7 @@ export function ProgressCharts({ results }: Props) {
         const improvementColor = stat.improvement >= 0 ? '#4CAF50' : '#F44336';
         
         return (
-          <View key={stat.gameName} style={styles.gameCard}>
+          <View key={stat.gameId} style={styles.gameCard}>
             <View style={styles.gameHeader}>
               <View style={[styles.colorDot, { backgroundColor: color }]} />
               <Text style={styles.gameName} numberOfLines={1}>{stat.gameName}</Text>

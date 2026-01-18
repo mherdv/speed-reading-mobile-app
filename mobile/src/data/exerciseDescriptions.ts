@@ -2,8 +2,11 @@
  * Exercise descriptions and benefits for pre-exercise information screens
  */
 
+import type { GameId } from './gameIds';
+import { normalizeGameId } from './gameIds';
+
 export type ExerciseInfo = {
-  id: string;
+  id: GameId;
   name: string;
   description: string;
   benefits: string[];
@@ -12,7 +15,7 @@ export type ExerciseInfo = {
   duration: string;
 };
 
-export const exerciseDescriptions: Record<string, ExerciseInfo> = {
+export const exerciseDescriptions: Partial<Record<GameId, ExerciseInfo>> = {
   PowerReader: {
     id: 'PowerReader',
     name: 'Power Reader',
@@ -310,5 +313,6 @@ export const exerciseDescriptions: Record<string, ExerciseInfo> = {
 };
 
 export function getExerciseInfo(gameId: string): ExerciseInfo | null {
-  return exerciseDescriptions[gameId] || null;
+  const normalizedId = normalizeGameId(gameId) as GameId;
+  return exerciseDescriptions[normalizedId] || null;
 }

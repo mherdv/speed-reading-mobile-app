@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View, TextInput as TextInputType } from 'react-native';
 
-import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
+import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { getWordsByDifficulty } from '../../data/vocabulary';
+import { GameIdlePanel } from '../../ui/GameIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
+import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
 
 const GAME_ID = 'LetterJumble';
-
-export type Difficulty = 'easy' | 'medium' | 'hard';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -43,8 +44,13 @@ function shuffle(word: string): string {
 
 export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', autoStart = false, onReportResult }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(difficulty);
-  const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
+  const {
+    gameProgress,
+    setGameProgress,
+    selectedDifficulty,
+    setSelectedDifficulty,
+    progressLoaded,
+  } = useGameProgress(GAME_ID, difficulty);
 
   function pickWord(): { word: string; jumbled: string } {
     const words = getWordsForDifficulty(selectedDifficulty);
@@ -66,16 +72,6 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
   const cancelledRef = useRef(false);
   const inputRef = useRef<TextInputType>(null);
 
-  const [progressLoaded, setProgressLoaded] = useState(false);
-
-  useEffect(() => {
-    loadGameProgress(GAME_ID).then((progress) => {
-      setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
-      setProgressLoaded(true);
-    });
-  }, []);
-
   useEffect(() => {
     if (phase !== 'running') return;
     const endAt = startedAtRef.current + durationMs;
@@ -95,14 +91,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
     };
   }, [phase, durationMs]);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase, progressLoaded]);
+  useAutoStart(autoStart, phase, progressLoaded, start);
 
   function start() {
     reportedRef.current = false;
@@ -190,37 +179,52 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
-          <View style={styles.progressInfo}>
-            <Text style={styles.levelLabel}>Level {gameProgress.level}</Text>
-            <Text style={styles.starsDisplay}>
-              {'★'.repeat(levelToStars(gameProgress.level))}
-              {'☆'.repeat(5 - levelToStars(gameProgress.level))}
-            </Text>
-          </View>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-            <Text style={styles.startBtnText}>Start Game</Text>
-          </Pressable>
-        </View>
+        <GameIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          level={gameProgress.level}
+          stars={levelToStars(gameProgress.level)}
+          onStart={start}
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          progressInfoStyle={styles.progressInfo}
+          levelLabelStyle={styles.levelLabel}
+          starsStyle={styles.starsDisplay}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        />
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Solved</Text>
-            </View>
-            <View style={[styles.statBox, styles.timerBox]}>
-              <Text style={styles.statValue}>{Math.ceil(timeLeftMs / 1000)}</Text>
-              <Text style={styles.statLabel}>Seconds</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{attempts}</Text>
-              <Text style={styles.statLabel}>Attempts</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'solved',
+                value: score,
+                label: 'Solved',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'time',
+                value: Math.ceil(timeLeftMs / 1000),
+                label: 'Seconds',
+                containerStyle: [styles.statBox, styles.timerBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'attempts',
+                value: attempts,
+                label: 'Attempts',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={styles.jumbleCard}>
             <Text style={styles.jumbleLetters}>{current.jumbled.toUpperCase()}</Text>

@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { useAutoStart } from '../gameHooks';
+import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
 
 const GAME_ID = 'ComprehensionTest';
 
@@ -65,14 +68,7 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
     };
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase]);
+  useAutoStart(autoStart, phase, true, start);
 
   function start(force = false) {
     if (!force && phase !== 'idle') return;
@@ -161,12 +157,15 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
       </View>
 
       {phase === 'idle' && (
-        <View style={styles.idleContent}>
-          <Text style={styles.descriptionText}>{GAME_DESCRIPTIONS[GAME_ID]}</Text>
-          <Pressable testID="start-button" style={styles.startBtn} onPress={() => start()}>
-            <Text style={styles.startBtnText}>Start Test</Text>
-          </Pressable>
-        </View>
+        <SimpleIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          onStart={() => start()}
+          startLabel="Start Test"
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        />
       )}
 
       {phase === 'reading' && (
@@ -183,16 +182,27 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
 
       {phase === 'questions' && currentQ && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={[styles.statBox, styles.questionBox]}>
-              <Text style={styles.statValue}>{questionIndex + 1}/{questions.length}</Text>
-              <Text style={styles.statLabel}>Question</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'question',
+                value: `${questionIndex + 1}/${questions.length}`,
+                label: 'Question',
+                containerStyle: [styles.statBox, styles.questionBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={styles.questionCard}>
             <Text testID="question-text" style={styles.questionText}>{currentQ.question}</Text>

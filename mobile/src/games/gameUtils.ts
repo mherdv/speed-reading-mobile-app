@@ -1,25 +1,27 @@
 import { useCallback, useRef } from 'react';
 import { logEvent } from '../analytics';
+import { normalizeGameId } from '../data/gameIds';
 
 export function useAnalytics(gameId: string) {
   const startRef = useRef<number | null>(null);
+  const normalizedGameId = normalizeGameId(gameId);
 
   const start = useCallback(() => {
     startRef.current = Date.now();
-    void logEvent({ id: `${gameId}:${Date.now()}`, name: 'game_start', ts: new Date().toISOString(), payload: { gameId } });
-  }, [gameId]);
+    void logEvent({ id: `${normalizedGameId}:${Date.now()}`, name: 'game_start', ts: new Date().toISOString(), payload: { gameId: normalizedGameId } });
+  }, [normalizedGameId]);
 
   const log = useCallback((name: string, payload?: any) => {
-    void logEvent({ id: `${gameId}:${name}:${Date.now()}`, name, ts: new Date().toISOString(), payload: { gameId, ...payload } });
-  }, [gameId]);
+    void logEvent({ id: `${normalizedGameId}:${name}:${Date.now()}`, name, ts: new Date().toISOString(), payload: { gameId: normalizedGameId, ...payload } });
+  }, [normalizedGameId]);
 
   const end = useCallback((extra?: any) => {
     const startedAt = startRef.current ?? Date.now();
     const finishedAt = Date.now();
     const elapsedMs = finishedAt - startedAt;
-    void logEvent({ id: `${gameId}:end:${Date.now()}`, name: 'game_end', ts: new Date().toISOString(), payload: { gameId, elapsedMs, ...(extra ?? {}) } });
+    void logEvent({ id: `${normalizedGameId}:end:${Date.now()}`, name: 'game_end', ts: new Date().toISOString(), payload: { gameId: normalizedGameId, elapsedMs, ...(extra ?? {}) } });
     return { startedAtIso: new Date(startedAt).toISOString(), finishedAtIso: new Date(finishedAt).toISOString(), elapsedMs };
-  }, [gameId]);
+  }, [normalizedGameId]);
 
   return { start, log, end };
 }

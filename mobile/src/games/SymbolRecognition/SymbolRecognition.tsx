@@ -1,5 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAutoStart } from '../gameHooks';
+import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
+
+const GAME_ID = 'SymbolRecognition';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -49,14 +55,7 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
     };
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase]);
+  useAutoStart(autoStart, phase, true, start);
 
   const current = seq[Math.min(index, seq.length - 1)] ?? '';
 
@@ -142,28 +141,48 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
       </View>
 
       {phase === 'idle' && (
-        <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-          <Text style={styles.startBtnText}>Start Game</Text>
-        </Pressable>
+        <SimpleIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          onStart={start}
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        />
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
           <Text testID="score" style={styles.hiddenText}>Score: {score}</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={[styles.statBox, styles.timerBox]}>
-              <Text style={styles.statValue}>{(timeLeft / 1000).toFixed(1)}s</Text>
-              <Text style={styles.statLabel}>Time</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{target}</Text>
-              <Text style={styles.statLabel}>Target</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'time',
+                value: `${(timeLeft / 1000).toFixed(1)}s`,
+                label: 'Time',
+                containerStyle: [styles.statBox, styles.timerBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'target',
+                value: target,
+                label: 'Target',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={[
             styles.symbolCard,
@@ -206,6 +225,13 @@ const styles = StyleSheet.create({
   header: { marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
   subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  idleContent: { flex: 1 },
+  descriptionText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
   targetHighlight: { color: '#EC4899', fontWeight: '700' },
   startBtn: { backgroundColor: '#EC4899', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },

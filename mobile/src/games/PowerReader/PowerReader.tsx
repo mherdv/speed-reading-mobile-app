@@ -2,11 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars, type GameProgress } from '../../data/progressStore';
+import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { getRandomArticle, type Article } from '../../data/articles';
 import { colors } from '../../theme/colors';
 import { loadResults } from '../../data/resultsStore';
+import { useAutoStart, useGameProgress } from '../gameHooks';
+import { StatsRow } from '../../ui/StatsRow';
 
 const GAME_ID = 'PowerReader';
 
@@ -60,49 +62,36 @@ export default function PowerReader({
   chunkSize: chunkSizeProp, 
   intervalMs: intervalMsProp, 
   autoStart = false,
-  onReportResult 
+  onReportResult,
+  difficulty = 'medium',
 }: Props & { difficulty?: Difficulty }) {
   // Get a random article on component mount
   const [currentArticle] = useState(() => getDefaultArticle());
   const text = textProp ?? currentArticle.text;
   
   const [phase, setPhase] = useState<Phase>('idle');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium');
+  const {
+    gameProgress,
+    setGameProgress,
+    selectedDifficulty,
+    setSelectedDifficulty,
+    progressLoaded,
+  } = useGameProgress(GAME_ID, difficulty);
   const [selectedIntensity, setSelectedIntensity] = useState<Intensity>('intermediate');
   const [targetWpm, setTargetWpm] = useState(300); // Target WPM instead of multiplier
-  const [gameProgress, setGameProgress] = useState<GameProgress>({ level: 1, streak: 0, totalPlays: 0 });
   const [bestWpm, setBestWpm] = useState(0);
   
-  const [progressLoaded, setProgressLoaded] = useState(false);
-
-  // Load progress on mount
   useEffect(() => {
-    async function loadData() {
-      const [progress, results] = await Promise.all([
-        loadGameProgress(GAME_ID),
-        loadResults(),
-      ]);
-      setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
-      
-      // Calculate best WPM from PowerReader results
+    async function loadBestWpm() {
+      const results = await loadResults();
       const powerReaderResults = results.filter(r => r.sampleId === GAME_ID);
       const maxWpm = powerReaderResults.reduce((max, r) => Math.max(max, r.wpm || r.score || 0), 0);
       setBestWpm(maxWpm);
-      
-      setProgressLoaded(true);
     }
-    loadData();
+    loadBestWpm();
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase, progressLoaded]);
+  useAutoStart(autoStart, phase, progressLoaded, start);
   
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const intensityConfig = INTENSITY_CONFIG[selectedIntensity];
@@ -303,16 +292,27 @@ export default function PowerReader({
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={[styles.statBox, styles.progressBox]}>
-              <Text style={styles.statValue}>{chunkIndex + 1}/{chunks.length}</Text>
-              <Text style={styles.statLabel}>Chunk</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{(elapsed / 1000).toFixed(1)}s</Text>
-              <Text style={styles.statLabel}>Time</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'chunk',
+                value: `${chunkIndex + 1}/${chunks.length}`,
+                label: 'Chunk',
+                containerStyle: [styles.statBox, styles.progressBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'time',
+                value: `${(elapsed / 1000).toFixed(1)}s`,
+                label: 'Time',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View style={styles.speedControlRow}>
             <Pressable 

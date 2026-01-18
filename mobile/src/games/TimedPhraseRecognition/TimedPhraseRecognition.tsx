@@ -1,5 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAutoStart } from '../gameHooks';
+import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
+
+const GAME_ID = 'TimedPhraseRecognition';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -72,14 +78,7 @@ export default function TimedPhraseRecognition({ phrases = DEFAULT_PHRASES, disp
     };
   }, []);
 
-  // Auto-start when autoStart prop is true
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (autoStart && phase === 'idle' && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      start();
-    }
-  }, [autoStart, phase]);
+  useAutoStart(autoStart, phase, true, start);
 
   function pickPhrase(): { phrase: string; options: string[] } {
     const shuffled = shuffle(phrases);
@@ -184,23 +183,39 @@ export default function TimedPhraseRecognition({ phrases = DEFAULT_PHRASES, disp
       </View>
 
       {phase === 'idle' && (
-        <Pressable testID="start-button" style={styles.startBtn} onPress={start}>
-          <Text style={styles.startBtnText}>Start Game</Text>
-        </Pressable>
+        <SimpleIdlePanel
+          description={GAME_DESCRIPTIONS[GAME_ID]}
+          onStart={start}
+          containerStyle={styles.idleContent}
+          descriptionStyle={styles.descriptionText}
+          buttonStyle={styles.startBtn}
+          buttonTextStyle={styles.startBtnText}
+        />
       )}
 
       {phase === 'show' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={[styles.statBox, styles.roundBox]}>
-              <Text style={styles.statValue}>{round + 1}/{totalRounds}</Text>
-              <Text style={styles.statLabel}>Round</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'round',
+                value: `${round + 1}/${totalRounds}`,
+                label: 'Round',
+                containerStyle: [styles.statBox, styles.roundBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <View testID="phrase-flash" style={styles.phraseCard}>
             <Text testID="phrase" style={styles.phrase}>{currentPhrase}</Text>
@@ -212,16 +227,27 @@ export default function TimedPhraseRecognition({ phrases = DEFAULT_PHRASES, disp
 
       {phase === 'choose' && (
         <View style={styles.gameArea}>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={[styles.statBox, styles.roundBox]}>
-              <Text style={styles.statValue}>{round + 1}/{totalRounds}</Text>
-              <Text style={styles.statLabel}>Round</Text>
-            </View>
-          </View>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'round',
+                value: `${round + 1}/${totalRounds}`,
+                label: 'Round',
+                containerStyle: [styles.statBox, styles.roundBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
 
           <Text style={styles.chooseTitle}>Which phrase did you see?</Text>
 
@@ -267,6 +293,13 @@ const styles = StyleSheet.create({
   header: { marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
   subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  idleContent: { flex: 1 },
+  descriptionText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
   startBtn: { backgroundColor: '#0284C7', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
