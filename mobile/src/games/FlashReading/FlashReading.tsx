@@ -354,6 +354,7 @@ const styles = StyleSheet.create({
   difficultyRow: {
     flexDirection: 'row',
     marginBottom: 8,
+    minWidth: 360
   },
   difficultyBtn: {
     flex: 1,
