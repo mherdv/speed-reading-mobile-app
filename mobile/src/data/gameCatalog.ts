@@ -352,14 +352,14 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     category: 'memory',
     tier: 'skill-lab',
     rules: [
-      'Watch a sequence of words shown one at a time.',
+      'Watch words shown one at a time; each stream stops unpredictably after 3–10 words.',
       'After the stream ends, choose the word that appeared last.',
       'The pace rises by 25 WPM after 4 correct in a row; a miss resets the streak and 3 consecutive misses end the session.',
     ],
     difficulty: {
-      easy: option('Easy', '4-word stream · starts at 180 WPM'),
-      medium: option('Medium', '6-word stream · starts at 280 WPM'),
-      hard: option('Hard', '8-word stream · starts at 380 WPM'),
+      easy: option('Easy', 'Common words · starts at 180 WPM'),
+      medium: option('Medium', 'Academic words · starts at 280 WPM'),
+      hard: option('Hard', 'Advanced words · starts at 380 WPM'),
     },
     keywords: ['last word', 'stream', 'flash', 'serial recall', 'wpm'],
   },

@@ -61,7 +61,7 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Choose a briefly displayed word from several options. This optional task records recognition speed and accuracy without making claims about subvocalization.',
 
   LastWordRecall:
-    'Follow a paced stream of words, then identify the final word. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
+    'Follow a paced stream that stops unpredictably after 3–10 words, then identify the final word. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
 
   WordMismatchGrid:
     'Find the word that differs in a grid of similar choices. This is an optional visual-discrimination task, not a comprehension exercise.',

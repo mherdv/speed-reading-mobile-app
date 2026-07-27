@@ -7,6 +7,7 @@ import {
   getFlashWordPool,
   shuffleItems,
   uniqueStrings,
+  type RandomSource,
 } from '../../data/flashPracticeContent';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
@@ -31,6 +32,8 @@ import {
 
 const GAME_ID = 'LastWordRecall';
 const CORRECT_ANSWERS_TO_INCREASE = 4;
+const MIN_STREAM_WORDS = 3;
+const MAX_STREAM_WORDS = 10;
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -46,6 +49,7 @@ type Props = {
   wordDisplayMs?: number;
   totalRounds?: number;
   sequenceLength?: number;
+  random?: RandomSource;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
@@ -54,33 +58,48 @@ type Props = {
 type Phase = 'idle' | 'flashing' | 'choose' | 'ended';
 type FinishReason = 'three-misses' | 'manual' | 'round-limit';
 
-function getConfig(difficulty: Difficulty): FlashPaceBounds & {
-  baseWpm: number;
-  sequenceLength: number;
-} {
+function getConfig(
+  difficulty: Difficulty
+): FlashPaceBounds & { baseWpm: number } {
   switch (difficulty) {
     case 'easy':
       return {
         baseWpm: 180,
         minWpm: 120,
         maxWpm: 300,
-        sequenceLength: 4,
       };
     case 'medium':
       return {
         baseWpm: 280,
         minWpm: 180,
         maxWpm: 420,
-        sequenceLength: 6,
       };
     case 'hard':
       return {
         baseWpm: 380,
         minWpm: 260,
         maxWpm: 540,
-        sequenceLength: 8,
       };
   }
+}
+
+function clampStreamLength(length: number): number {
+  if (!Number.isFinite(length)) return MIN_STREAM_WORDS;
+  return Math.min(
+    MAX_STREAM_WORDS,
+    Math.max(MIN_STREAM_WORDS, Math.round(length))
+  );
+}
+
+function createRandomStreamLength(random: RandomSource): number {
+  const sample = random();
+  const value = Number.isFinite(sample)
+    ? Math.min(0.999999999, Math.max(0, sample))
+    : 0;
+  return (
+    MIN_STREAM_WORDS +
+    Math.floor(value * (MAX_STREAM_WORDS - MIN_STREAM_WORDS + 1))
+  );
 }
 
 export default function LastWordRecall({
@@ -88,12 +107,16 @@ export default function LastWordRecall({
   wordDisplayMs,
   totalRounds,
   sequenceLength: sequenceLengthProp,
+  random = Math.random,
   difficulty = 'easy',
   autoStart = false,
   onReportResult,
 }: Props) {
   const config = getConfig(difficulty);
-  const sequenceLength = sequenceLengthProp ?? config.sequenceLength;
+  const fixedSequenceLength =
+    sequenceLengthProp == null
+      ? null
+      : clampStreamLength(sequenceLengthProp);
   const defaultPool = getFlashWordPool(difficulty);
   const wordPool =
     wordsProp && wordsProp.length > 0
@@ -127,6 +150,7 @@ export default function LastWordRecall({
   const shownIndexRef = useRef(0);
   const answerRef = useRef('');
   const previousAnswerRef = useRef('');
+  const streamLengthsRef = useRef<number[]>([]);
   const paceRef = useRef<FlashPaceState>(
     createFlashPaceState(defaultWpm)
   );
@@ -181,11 +205,14 @@ export default function LastWordRecall({
   }
 
   function startRound() {
+    const sequenceLength =
+      fixedSequenceLength ?? createRandomStreamLength(random);
     const sequence = createVariedSequence(
       wordPool,
       sequenceLength,
       previousAnswerRef.current
     );
+    streamLengthsRef.current.push(sequenceLength);
     sequenceRef.current = sequence;
     shownIndexRef.current = 0;
     const answer = sequence[sequence.length - 1] ?? wordPool[0] ?? 'focus';
@@ -209,6 +236,7 @@ export default function LastWordRecall({
     scoreRef.current = 0;
     correctRef.current = 0;
     roundRef.current = 0;
+    streamLengthsRef.current = [];
     initialWpmRef.current = startingWpm;
     paceRef.current = createFlashPaceState(startingWpm);
     setRound(0);
@@ -284,7 +312,12 @@ export default function LastWordRecall({
         correctAnswersToIncrease: CORRECT_ANSWERS_TO_INCREASE,
         finishReason: reason,
         difficulty,
-        sequenceLength,
+        sequenceLength: fixedSequenceLength,
+        streamLengths: [...streamLengthsRef.current],
+        streamLengthRange: {
+          min: fixedSequenceLength ?? MIN_STREAM_WORDS,
+          max: fixedSequenceLength ?? MAX_STREAM_WORDS,
+        },
         initialWpm: initialWpmRef.current,
         finalWpm: paceRef.current.wpm,
         paceChanges: paceRef.current.changes,
@@ -350,7 +383,10 @@ export default function LastWordRecall({
           containerStyle={styles.idleContent}
         >
           <Text style={styles.sequenceHint}>
-            {sequenceLength} words per stream · +25 WPM after{' '}
+            {fixedSequenceLength == null
+              ? 'Stops unpredictably after 3–10 words'
+              : `${fixedSequenceLength} words per stream`}{' '}
+            · +25 WPM after{' '}
             {CORRECT_ANSWERS_TO_INCREASE} correct · 3 misses end
           </Text>
           <FlashPaceControl
@@ -369,7 +405,7 @@ export default function LastWordRecall({
           {stats}
           <View testID="word-stream" style={styles.wordCard}>
             <Text style={styles.streamCounter}>
-              {shownIndex + 1} / {sequenceLength}
+              Word {shownIndex + 1}
             </Text>
             <Text testID="stream-word" style={styles.word}>
               {shownWord}

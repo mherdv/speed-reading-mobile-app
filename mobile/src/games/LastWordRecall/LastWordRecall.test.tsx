@@ -36,6 +36,50 @@ describe('LastWordRecall', () => {
     expect(getByTestId('last-word-option-3')).toBeTruthy();
   });
 
+  it('stops unpredictably after a random 3–10 words', () => {
+    const onReportResult = jest.fn();
+    const randomValues = [0, 0.999999];
+    let randomIndex = 0;
+    const random = () => randomValues[randomIndex++] ?? 0;
+    const view = render(
+      <LastWordRecall
+        words={WORDS}
+        wordDisplayMs={20}
+        totalRounds={2}
+        random={random}
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+    act(() => {
+      jest.advanceTimersByTime(70);
+    });
+    expect(view.getByTestId('last-word-options')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('last-word-option-0'));
+    act(() => {
+      jest.advanceTimersByTime(70);
+    });
+    expect(view.queryByTestId('last-word-options')).toBeNull();
+
+    act(() => {
+      jest.advanceTimersByTime(140);
+    });
+    expect(view.getByTestId('last-word-options')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('last-word-option-0'));
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          sequenceLength: null,
+          streamLengths: [3, 10],
+          streamLengthRange: { min: 3, max: 10 },
+        }),
+      })
+    );
+  });
+
   it('finishes, reports once, and supports replay', () => {
     const onReportResult = jest.fn();
     const { getByTestId } = render(
@@ -97,25 +141,31 @@ describe('LastWordRecall', () => {
     const view = render(
       <LastWordRecall
         words={WORDS}
-        sequenceLength={1}
+        sequenceLength={3}
         onReportResult={onReportResult}
       />
     );
 
     fireEvent.press(view.getByTestId('start-button'));
     for (let attempt = 0; attempt < 4; attempt += 1) {
+      act(() => {
+        jest.advanceTimersByTime(700);
+      });
       const answer = view.getByTestId('stream-word').props.children as string;
       act(() => {
-        jest.advanceTimersByTime(340);
+        jest.advanceTimersByTime(400);
       });
       fireEvent.press(view.getByLabelText(answer));
     }
     expect(view.getByText('205')).toBeTruthy();
 
     for (let miss = 0; miss < 3; miss += 1) {
+      act(() => {
+        jest.advanceTimersByTime(700);
+      });
       const answer = view.getByTestId('stream-word').props.children as string;
       act(() => {
-        jest.advanceTimersByTime(310);
+        jest.advanceTimersByTime(400);
       });
       const wrongIndex = [0, 1, 2, 3].find(
         (index) =>
