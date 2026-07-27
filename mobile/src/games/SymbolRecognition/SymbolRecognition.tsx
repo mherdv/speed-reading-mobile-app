@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useAutoStart } from '../gameHooks';
+import { useAutoStart, type Difficulty } from '../gameHooks';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { updateProgress } from '../../data/progressStore';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 
@@ -13,28 +14,91 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
   target?: string;
   stream?: string[];
   durationMs?: number;
+  difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
 type Phase = 'idle' | 'running' | 'ended';
 
-const SYMBOLS = ['!', '@', '#', '$', '%', '^', '&', '*', '+', '='];
+type SymbolRecognitionChallenge = {
+  durationMs: number;
+  symbols: readonly string[];
+  distractorSimilarity: 'low' | 'medium' | 'high';
+  stimulusCount: number;
+  displayCadenceMs: number;
+  defaultTarget: string;
+};
 
-function generateStream(): string[] {
-  return Array.from({ length: 50 }, () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)]);
+const SYMBOL_RECOGNITION_CHALLENGES: Record<
+  Difficulty,
+  SymbolRecognitionChallenge
+> = {
+  easy: {
+    durationMs: 30_000,
+    symbols: ['★', '@', '+', '%'],
+    distractorSimilarity: 'low',
+    stimulusCount: 30,
+    displayCadenceMs: 1_600,
+    defaultTarget: '★',
+  },
+  medium: {
+    durationMs: 30_000,
+    symbols: ['!', '@', '#', '$', '%', '^', '&', '*', '+', '='],
+    distractorSimilarity: 'medium',
+    stimulusCount: 50,
+    displayCadenceMs: 1_100,
+    defaultTarget: '@',
+  },
+  hard: {
+    durationMs: 30_000,
+    symbols: ['●', '○', '◉', '◎', '◌', '⊙'],
+    distractorSimilarity: 'high',
+    stimulusCount: 70,
+    displayCadenceMs: 700,
+    defaultTarget: '◉',
+  },
+};
+
+export function getSymbolRecognitionChallenge(
+  difficulty: Difficulty
+): SymbolRecognitionChallenge {
+  return SYMBOL_RECOGNITION_CHALLENGES[difficulty];
 }
 
-export default function SymbolRecognition({ target = '@', stream, durationMs = 20000, autoStart = false, onReportResult }: Props) {
+function generateStream(
+  target: string,
+  challenge: SymbolRecognitionChallenge
+): string[] {
+  const distractors = challenge.symbols.filter((symbol) => symbol !== target);
+  return Array.from({ length: challenge.stimulusCount }, (_, index) => {
+    if (index % 5 === 1) return target;
+    return distractors[Math.floor(Math.random() * distractors.length)] ?? target;
+  });
+}
+
+export default function SymbolRecognition({
+  target: targetProp,
+  stream,
+  durationMs: durationMsProp,
+  difficulty = 'medium',
+  autoStart = false,
+  onReportResult,
+}: Props) {
+  const challenge = getSymbolRecognitionChallenge(difficulty);
+  const target = targetProp ?? challenge.defaultTarget;
+  const durationMs = durationMsProp ?? challenge.durationMs;
   const [phase, setPhase] = useState<Phase>('idle');
-  const [seq, setSeq] = useState<string[]>(() => stream ?? generateStream());
+  const [seq, setSeq] = useState<string[]>(() =>
+    stream ?? generateStream(target, challenge)
+  );
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
@@ -47,11 +111,18 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
   const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
+  const timedOutRef = useRef(0);
+  const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cadenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
+      if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+      if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
+      if (replayTimeoutRef.current) clearTimeout(replayTimeoutRef.current);
     };
   }, []);
 
@@ -59,13 +130,30 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
 
   const current = seq[Math.min(index, seq.length - 1)] ?? '';
 
+  useEffect(() => {
+    if (phase !== 'running') return;
+    if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
+    cadenceTimeoutRef.current = setTimeout(
+      handleStimulusTimeout,
+      challenge.displayCadenceMs
+    );
+    return () => {
+      if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
+    };
+  }, [challenge.displayCadenceMs, index, phase]);
+
   function start() {
-    if (phase !== 'idle') return;
+    cancelledRef.current = false;
+    if (phase !== 'idle' && phase !== 'ended') return;
     reportedRef.current = false;
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
+    if (replayTimeoutRef.current) clearTimeout(replayTimeoutRef.current);
     scoreRef.current = 0;
     attemptsRef.current = 0;
+    timedOutRef.current = 0;
     // Generate fresh stream
-    setSeq(stream ?? generateStream());
+    setSeq(stream ?? generateStream(target, challenge));
     setPhase('running');
     setScore(0);
     setIndex(0);
@@ -89,23 +177,33 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
 
     const now = Date.now();
     const elapsedMs = now - startRef.current;
     const accuracy = attemptsRef.current > 0 ? Math.min(1, scoreRef.current / (10 * attemptsRef.current)) : 0;
 
+    setPhase('ended');
+    void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
+      () => undefined
+    );
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
       score: scoreRef.current,
       accuracy,
-      details: { target, total: seq.length, attempts: attemptsRef.current },
+      details: {
+        target,
+        total: seq.length,
+        attempts: attemptsRef.current,
+        timedOut: timedOutRef.current,
+        difficulty,
+        symbolSetSize: challenge.symbols.length,
+        distractorSimilarity: challenge.distractorSimilarity,
+        displayCadenceMs: challenge.displayCadenceMs,
+      },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
   }
 
   function evaluate(isMatchPressed: boolean) {
@@ -124,13 +222,25 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
       setFeedback('wrong');
     }
 
-    setTimeout(() => setFeedback(null), 200);
-    setIndex((i) => Math.min(seq.length - 1, i + 1));
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 200);
+    setIndex((i) => (i + 1) % Math.max(1, seq.length));
+  }
+
+  function handleStimulusTimeout() {
+    if (phase !== 'running') return;
+    attemptsRef.current += 1;
+    timedOutRef.current += 1;
+    setAttempts(attemptsRef.current);
+    setFeedback('wrong');
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 200);
+    setIndex((i) => (i + 1) % Math.max(1, seq.length));
   }
 
   function playAgain() {
     setPhase('idle');
-    setTimeout(start, 50);
+    replayTimeoutRef.current = setTimeout(start, 50);
   }
 
   return (
@@ -193,10 +303,10 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
           </View>
 
           <View style={styles.buttonsRow}>
-            <Pressable testID="match" style={[styles.choiceBtn, styles.matchBtn]} onPress={() => evaluate(true)}>
+            <Pressable accessibilityRole="button" testID="match" style={[styles.choiceBtn, styles.matchBtn]} onPress={() => evaluate(true)}>
               <Text style={styles.choiceBtnText}>MATCH ✓</Text>
             </Pressable>
-            <Pressable testID="no" style={[styles.choiceBtn, styles.noBtn]} onPress={() => evaluate(false)}>
+            <Pressable accessibilityRole="button" testID="no" style={[styles.choiceBtn, styles.noBtn]} onPress={() => evaluate(false)}>
               <Text style={styles.choiceBtnText}>NO ✗</Text>
             </Pressable>
           </View>
@@ -211,7 +321,7 @@ export default function SymbolRecognition({ target = '@', stream, durationMs = 2
           <Text style={styles.endMeta}>
             Accuracy: {attempts > 0 ? Math.round((score / (10 * attempts)) * 100) : 0}%
           </Text>
-          <Pressable style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>

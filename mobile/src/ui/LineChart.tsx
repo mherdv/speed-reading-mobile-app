@@ -25,6 +25,7 @@ type Props = {
   showXAxis?: boolean;
   /** Number of Y-axis ticks */
   yAxisTicks?: number;
+  metricLabel?: string;
 };
 
 export function LineChart({
@@ -39,6 +40,7 @@ export function LineChart({
   showYAxis = true,
   showXAxis = true,
   yAxisTicks = 4,
+  metricLabel = 'value',
 }: Props) {
   if (data.length === 0) return null;
 
@@ -82,8 +84,14 @@ export function LineChart({
   const xLabels = labels || data.map((_, i) => `${i + 1}`);
 
   return (
-    <View style={[styles.container, { width, height }]}>
-      <Svg width={width} height={height}>
+    <View
+      accessibilityRole="summary"
+      accessibilityLabel={`${metricLabel} trend with ${data.length} data points. ${data
+        .map((value, index) => `Attempt ${index + 1}: ${value}`)
+        .join('. ')}`}
+      style={[styles.container, { width }]}
+    >
+      <Svg testID="line-chart-svg" width={width} height={height}>
         <Defs>
           <LinearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
             <Stop offset="0%" stopColor={gradientColor} stopOpacity="0.3" />
@@ -200,6 +208,9 @@ export function LineChart({
           strokeWidth={1}
         />
       </Svg>
+      <Text testID="chart-data-summary" style={styles.dataSummary}>
+        Data: {data.map((value, index) => `${index + 1}: ${value}`).join(' · ')}
+      </Text>
     </View>
   );
 }
@@ -207,5 +218,11 @@ export function LineChart({
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
+  },
+  dataSummary: {
+    marginTop: 4,
+    color: '#625F70',
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

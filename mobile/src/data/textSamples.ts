@@ -3,13 +3,21 @@ import type { TextSample } from '../domain/types';
 export const TEXT_SAMPLES: TextSample[] = [
   {
     id: 'sample-1',
+    version: 1,
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Warm-up: Focus & Pace',
+    language: 'en',
+    genre: 'practical',
+    complexityBand: 'baseline-brief',
+    source: 'Original editorial content',
+    license: 'Original content for this application',
+    accessibilityNotes: 'Plain-language connected text with no image-dependent information.',
     text:
-      'Speed reading is a skill that combines attention, practice, and pacing. '
-      + 'For most people, the fastest gains come from reducing distractions and learning to keep a steady rhythm. '
+      'Efficient reading combines attention, practice, pacing, and a clear understanding check. '
+      + 'A useful starting point is to reduce distractions and choose a pace you can sustain. '
       + 'Start with short sessions. Read with a clear goal: understand the main point, then recall two supporting details. '
       + 'If you feel yourself drifting, pause, take one breath, and restart with a slightly slower pace. '
-      + 'Over time, your “comfortable speed” increases, and you can push faster without losing accuracy. '
+      + 'Across several sessions, compare whether your comfortable speed changes while recall stays accurate. '
       + 'A practical warm-up is to read for one minute, stop, and write down what you remember without looking back. '
       + 'If you can recall the idea and at least one example, your pace is appropriate. '
       + 'If you recall almost nothing, slow down just enough to stay engaged, then try again. '
@@ -19,16 +27,53 @@ export const TEXT_SAMPLES: TextSample[] = [
       choices: ['Raw speed', 'Comprehension', 'Skipping lines', 'Reading aloud'],
       correctIndex: 1,
     },
+    questions: [
+      {
+        id: 'sample-1-main',
+        prompt: 'What should you prioritize first?',
+        choices: ['Raw speed', 'Comprehension', 'Skipping lines', 'Reading aloud'],
+        correctIndex: 1,
+        type: 'main-idea',
+        rationale: 'The passage repeatedly makes useful pace depend on retained meaning.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'sample-1-detail',
+        prompt: 'What does the passage recommend when recall is almost empty?',
+        choices: ['Add distractions', 'Stop practicing', 'Slow down enough to stay engaged', 'Skip the understanding check'],
+        correctIndex: 2,
+        type: 'detail-evidence',
+        rationale: 'The passage explicitly recommends a slightly slower, engaged retry.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'sample-1-purpose',
+        prompt: 'Why does the author compare several sessions?',
+        choices: ['To see whether comfortable speed changes while recall remains accurate', 'To reward one unusually fast attempt', 'To remove supporting details', 'To replace reading with memory drills'],
+        correctIndex: 0,
+        type: 'inference-purpose',
+        rationale: 'Several sessions show whether pace changes consistently without losing recall.',
+        answerDependency: 'passage-required',
+      },
+    ],
   },
   {
     id: 'sample-2',
+    version: 1,
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Previewing: Read the Map',
+    language: 'en',
+    genre: 'practical',
+    complexityBand: 'baseline-brief',
+    source: 'Original editorial content',
+    license: 'Original content for this application',
+    accessibilityNotes: 'Plain-language connected text with no image-dependent information.',
     text:
       'Previewing is a fast way to build a “map” of what you are about to read. '
       + 'Before you start, spend 20–40 seconds scanning the title, headings, subheadings, and any bold terms. '
       + 'Look for repeated words and note the structure: is it a list, a problem-and-solution, or an argument with evidence? '
       + 'Then ask yourself one question you want the text to answer. '
-      + 'When you read the full passage, your attention has a target, which reduces rereading and increases comprehension. '
+      + 'When you read the full passage, your attention now has a specific target. '
       + 'Previewing also helps you spot what to ignore. Not every sentence is equally important. '
       + 'If you know the section is giving background, you can read it faster. '
       + 'If you know a section contains a definition or key constraint, you can slow down briefly and read precisely. '
@@ -43,62 +88,130 @@ export const TEXT_SAMPLES: TextSample[] = [
       ],
       correctIndex: 1,
     },
+    questions: [
+      {
+        id: 'sample-2-main',
+        prompt: 'What is the main purpose of previewing?',
+        choices: ['To memorize every detail before reading', 'To build a structure and goal for reading', 'To increase font size automatically', 'To avoid reading the full passage'],
+        correctIndex: 1,
+        type: 'main-idea',
+        rationale: 'The passage defines previewing as building a map and a question before full reading.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'sample-2-detail',
+        prompt: 'Which part should receive slower, more precise reading?',
+        choices: ['Repeated background only', 'Every sentence equally', 'The title after finishing', 'A definition or key constraint'],
+        correctIndex: 3,
+        type: 'detail-evidence',
+        rationale: 'The passage names definitions and key constraints as places to slow down.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'sample-2-purpose',
+        prompt: 'How does the preview question affect the full reading?',
+        choices: ['It gives attention a specific target', 'It guarantees every detail is remembered', 'It removes the need to read', 'It hides the text structure'],
+        correctIndex: 0,
+        type: 'inference-purpose',
+        rationale: 'The author says the question gives attention a target during full reading.',
+        answerDependency: 'passage-required',
+      },
+    ],
   },
   {
     id: 'sample-3',
-    title: 'Chunking: Group Words Together',
+    version: 1,
+    comparisonBand: 'general-practice-brief-v1',
+    title: 'Repeated Reading: Use Familiarity',
+    language: 'en',
+    genre: 'argument',
+    complexityBand: 'baseline-brief',
+    source: 'Original editorial content',
+    license: 'Original content for this application',
+    accessibilityNotes: 'Plain-language connected text with no image-dependent information.',
     text:
-      'Many readers move their eyes word-by-word, which is slow and tiring. '
-      + 'Chunking trains you to take in small groups of words in a single glance. '
-      + 'Try reading in phrases, like “in the morning” or “as a result,” instead of splitting them into individual words. '
-      + 'Start with short, meaningful groups, then gradually widen the chunk size. '
-      + 'A helpful trick is to soften your focus slightly and keep your eyes moving forward. '
-      + 'If comprehension drops, reduce chunk size and rebuild accuracy first. '
-      + 'Chunking is not about guessing. It is about recognizing familiar patterns quickly. '
-      + 'When you see “on the other hand,” you can process it as one unit. '
-      + 'The more patterns you recognize, the fewer eye fixations you need per line, and the smoother reading becomes. '
-      + 'A good checkpoint is to pause after a paragraph and explain it as if teaching a friend.',
+      'Reading a short passage more than once changes the job your attention must do. '
+      + 'The first pass is for building a clear mental map of the ideas. '
+      + 'On the second pass, names, transitions, and sentence structures are already familiar. '
+      + 'That familiarity lets you focus on smoother phrasing and connections between ideas. '
+      + 'Time both passes, but do not treat a faster second pass as success by itself. '
+      + 'After the passage disappears, state its main idea and answer a detail question. '
+      + 'If recall remains clear, the new pace may be useful. '
+      + 'If recall weakens, repeat at a more comfortable pace and look for the relationship between each sentence. '
+      + 'Use short, meaningful passages so the comparison stays focused. '
+      + 'The aim is fluent understanding, not racing through words you no longer remember.',
     question: {
-      prompt: 'What does “chunking” mean here?',
+      prompt: 'What makes a faster second pass useful?',
       choices: [
-        'Reading only the first sentence',
-        'Grouping words into phrases per glance',
-        'Skipping paragraphs entirely',
-        'Reading with your eyes closed',
+        'It uses a much longer passage',
+        'The reader still recalls the meaning',
+        'It removes every difficult sentence',
+        'The timer is hidden',
       ],
       correctIndex: 1,
     },
+    questions: [
+      {
+        id: 'sample-3-main',
+        prompt: 'What makes a faster second pass useful?',
+        choices: ['It uses a much longer passage', 'The reader still recalls the meaning', 'It removes every difficult sentence', 'The timer is hidden'],
+        correctIndex: 1,
+        type: 'main-idea',
+        rationale: 'The passage accepts a faster reread only when recall remains clear.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'sample-3-detail',
+        prompt: 'What is the first pass meant to build?',
+        choices: ['A clear mental map of the ideas', 'A list of unfamiliar fonts', 'A race against another reader', 'A set of skipped sentences'],
+        correctIndex: 0,
+        type: 'detail-evidence',
+        rationale: 'The passage explicitly assigns the mental map to the first pass.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'sample-3-purpose',
+        prompt: 'Why should the passage be short and meaningful?',
+        choices: ['To guarantee the second pass is faster', 'To avoid checking recall', 'To keep the comparison focused', 'To make every sentence familiar in advance'],
+        correctIndex: 2,
+        type: 'inference-purpose',
+        rationale: 'The passage says short, meaningful material keeps the comparison focused.',
+        answerDependency: 'passage-required',
+      },
+    ],
   },
   {
     id: 'sample-4',
-    title: 'Regression Control: Fewer Back-Jumps',
+    comparisonBand: 'general-practice-brief-v1',
+    title: 'Targeted Rereading: Return with a Question',
     text:
-      'Regressions are the small back-jumps your eyes make when attention slips or the text feels uncertain. '
-      + 'A few regressions are normal, but frequent backtracking can cut your speed in half. '
-      + 'To reduce regressions, keep a gentle forward momentum: commit to finishing the sentence before deciding to reread. '
-      + 'When a line feels confusing, mark the key noun and verb, then continue. '
-      + 'After the paragraph, do a quick recap in one sentence. '
-      + 'This builds confidence and lowers the urge to immediately jump backward. '
-      + 'If you truly missed a key point, do a targeted reread: return to the one sentence that contains the definition or claim. '
-      + 'Avoid “wandering rereads” where you scan multiple lines hoping clarity appears. '
-      + 'Targeted rereads are faster and train you to locate the important information. '
-      + 'With practice, you will feel less anxious about missing details, which naturally reduces backtracking.',
+      'Rereading is useful when it has a clear purpose. '
+      + 'When a sentence feels uncertain, first finish the paragraph and try to name what is missing. '
+      + 'You may need the definition of a term, the cause of an event, or the evidence for a claim. '
+      + 'Turn that gap into a specific question before moving your eyes backward. '
+      + 'Then return to the smallest section likely to contain the answer. '
+      + 'This is different from drifting across several earlier lines without knowing what you need. '
+      + 'After the targeted reread, answer your question in your own words and continue. '
+      + 'Some difficult arguments deserve several careful passes, so rereading is not a failure. '
+      + 'The efficiency comes from choosing the right section and checking that it resolved the confusion. '
+      + 'A precise return can save time while protecting understanding.',
     question: {
-      prompt: 'What is a helpful strategy to reduce regressions?',
+      prompt: 'What should guide a targeted reread?',
       choices: [
-        'Reread every line twice',
-        'Stop after every word',
-        'Finish the sentence before deciding to reread',
-        'Only read the last sentence',
+        'A specific question about what is missing',
+        'A rule to reread every line twice',
+        'The longest paragraph on the page',
+        'A goal of skipping the difficult idea',
       ],
-      correctIndex: 2,
+      correctIndex: 0,
     },
   },
   {
     id: 'sample-5',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Pointer Pace: Guide Your Eyes',
     text:
-      'A simple pointer (your finger or a pen) can improve speed by guiding eye movement. '
+      'A simple pointer, such as a finger or pen, can act as a visible pace cue. '
       + 'Move the pointer smoothly under the line at a comfortable pace. '
       + 'Your eyes naturally follow motion, which reduces hesitation and encourages consistent scanning. '
       + 'Start slower than you think you need, then increase speed by small steps. '
@@ -121,51 +234,59 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-6',
-    title: 'Metronome Rhythm: Steady Reading',
+    comparisonBand: 'general-practice-brief-v1',
+    title: 'Retrieval: Close the Text',
     text:
-      'A metronome-like rhythm helps you maintain a consistent pace. '
-      + 'Instead of speeding up and slowing down randomly, you keep a steady beat: one beat per phrase or per line. '
-      + 'This reduces mental friction because your brain can anticipate the next movement. '
-      + 'If the passage becomes harder, do not stop; reduce the beat slightly while keeping it regular. '
-      + 'Consistency matters more than maximum speed during training. '
-      + 'Once the rhythm feels easy, increase the tempo by a small amount. '
-      + 'One way to practice is to set a timer for two minutes and aim for an even pace the entire time. '
-      + 'At the end, write a one-sentence summary. If you can summarize accurately, your pace was sustainable. '
-      + 'If you cannot, lower tempo and repeat. '
-      + 'Sustainable speed is the foundation; sprinting without comprehension is just noise.',
+      'It is easy to mistake recognition for memory when the passage remains visible. '
+      + 'To check what you actually learned, close or hide the text after a short section. '
+      + 'State the main idea without looking, then add one supporting detail. '
+      + 'Next, reopen the passage and compare your answer with the author’s claim. '
+      + 'Do not score yourself only on matching exact words. '
+      + 'A useful response preserves the relationship between ideas in your own language. '
+      + 'Immediate feedback matters because it corrects missing or distorted details before they become familiar. '
+      + 'If retrieval is difficult, shorten the section or slow the next reading pass. '
+      + 'If retrieval is accurate, gradually work with longer or denser material. '
+      + 'This cycle keeps understanding visible while you practice reading efficiently.',
     question: {
-      prompt: 'What matters most during rhythm training?',
-      choices: ['Maximum speed', 'Consistency of pace', 'Reading aloud', 'Skipping every other line'],
-      correctIndex: 1,
-    },
-  },
-  {
-    id: 'sample-7',
-    title: 'Peripheral Awareness: Wider Attention',
-    text:
-      'Peripheral awareness is the ability to notice words near your focal point without staring at each one. '
-      + 'You are not trying to read the entire line with your peripheral vision. '
-      + 'Instead, you practice holding your focus in the middle while lightly noticing nearby words. '
-      + 'Over time, this can help you form larger chunks and reduce fixation count. '
-      + 'A practical cue: keep your head still, relax your eyes, and aim your attention slightly ahead of the current word group. '
-      + 'If you feel tension around the eyes, take a break and restart gently. '
-      + 'A simple drill is to place your gaze near the center of a line and try to “notice” the first and last word without moving your eyes. '
-      + 'You do not need to be perfect; the point is to widen attention. '
-      + 'As your awareness expands, you may find you can read with fewer stops per line. '
-      + 'Always verify by checking comprehension, not by assuming it improved.',
-    question: {
-      prompt: 'What is the goal of peripheral awareness training?',
+      prompt: 'Why should the passage be hidden during retrieval?',
       choices: [
-        'Reading only with peripheral vision',
-        'Noticing nearby words to support larger chunks',
-        'Never blinking while reading',
-        'Memorizing the passage instantly',
+        'To make the font smaller',
+        'To reveal what the reader can recall without cues',
+        'To prevent feedback',
+        'To avoid forming a main idea',
       ],
       correctIndex: 1,
     },
   },
   {
+    id: 'sample-7',
+    comparisonBand: 'general-practice-brief-v1',
+    title: 'Main Idea: Separate Claim from Support',
+    text:
+      'A main idea tells what the whole paragraph is trying to establish. '
+      + 'Supporting details explain, illustrate, or provide evidence for that central point. '
+      + 'Readers often remember a vivid example while missing the claim the example was meant to support. '
+      + 'To avoid that mistake, ask what the details have in common and why the author included them. '
+      + 'Transition words can help: “for example” usually introduces support, while “therefore” may signal a conclusion. '
+      + 'After reading, express the main idea as one complete sentence. '
+      + 'It should be broad enough to cover the paragraph but specific enough to exclude unrelated topics. '
+      + 'Then name one detail and explain how it supports your sentence. '
+      + 'If the connection is weak, revise the main idea rather than collecting more isolated facts. '
+      + 'This habit gives faster reading a clear target: the structure of meaning.',
+    question: {
+      prompt: 'How can you test whether a main idea fits?',
+      choices: [
+        'Check whether the supporting details connect to it',
+        'Choose the most vivid example',
+        'Copy the longest sentence',
+        'Ignore transition words',
+      ],
+      correctIndex: 0,
+    },
+  },
+  {
     id: 'sample-8',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Comprehension: One-Sentence Summary',
     text:
       'Speed without understanding is not useful. '
@@ -191,6 +312,7 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-9',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Skimming: Find the Backbone',
     text:
       'Skimming is a targeted strategy for finding the backbone of a text. '
@@ -211,6 +333,7 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-10',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Deep Read: Slow Down Strategically',
     text:
       'Not every paragraph deserves the same speed. '
@@ -233,8 +356,10 @@ export const TEXT_SAMPLES: TextSample[] = [
       ],
       correctIndex: 1,
     },
-  },  {
+  },
+  {
     id: 'sample-11',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Vocabulary: Context Clues',
     text:
       'Encountering unfamiliar words can slow reading significantly. '
@@ -260,6 +385,7 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-12',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Active Reading: Ask Questions',
     text:
       'Passive reading is when your eyes move but your mind wanders. '
@@ -285,6 +411,7 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-13',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Note-Taking: Capture Key Ideas',
     text:
       'Taking notes while reading can significantly improve retention. '
@@ -310,6 +437,7 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-14',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Focus: Minimize Distractions',
     text:
       'Reading speed depends heavily on focus. '
@@ -335,6 +463,7 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-15',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Retention: Space Your Practice',
     text:
       'Memory research shows that spacing practice over time improves retention. '
@@ -360,56 +489,59 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-16',
-    title: 'Eye Movement: Reduce Fixations',
+    comparisonBand: 'general-practice-brief-v1',
+    title: 'Pace: Protect the Accuracy Boundary',
     text:
-      'Your eyes do not move smoothly across a line of text. '
-      + 'Instead, they make small jumps called saccades and pause at points called fixations. '
-      + 'Each fixation lasts about 200 to 250 milliseconds. '
-      + 'Reducing the number of fixations per line increases reading speed. '
-      + 'You can do this by widening your visual span and practicing chunking. '
-      + 'Another technique is to start your first fixation a bit after the beginning of the line and end before the last word. '
-      + 'Your peripheral vision can pick up the edges. '
-      + 'Avoid fixating on every word; instead, land on meaningful clusters. '
-      + 'With practice, you may reduce fixations from six or seven per line to three or four. '
-      + 'Always balance speed gains with comprehension checks.',
+      'Reading pace and comprehension must be evaluated together. '
+      + 'A higher words-per-minute result is not an improvement when the reader can no longer explain the passage. '
+      + 'Start with a pace that produces an accurate main idea and supporting detail. '
+      + 'On the next attempt, increase speed only a little. '
+      + 'Use the same kind of recall check each time so the comparison remains meaningful. '
+      + 'When accuracy drops, return to the last pace that preserved understanding. '
+      + 'Different texts need different boundaries: a familiar story may allow a quicker pace than a new technical argument. '
+      + 'Fatigue, distractions, and vocabulary also move the boundary from day to day. '
+      + 'Record both pace and comprehension instead of treating one number as a complete score. '
+      + 'The useful target is the fastest sustainable pace for the current purpose and material.',
     question: {
-      prompt: 'What are fixations in the context of reading?',
+      prompt: 'When does a higher WPM count as useful improvement?',
       choices: [
-        'Errors in understanding',
-        'Pauses where the eyes rest on text',
-        'Movements of the head',
-        'Blinks during reading',
+        'Whenever the number is larger',
+        'When comprehension remains accurate',
+        'Only when the text is very easy',
+        'When the recall check is removed',
       ],
       correctIndex: 1,
     },
   },
   {
     id: 'sample-17',
-    title: 'Subvocalization: When to Reduce It',
+    comparisonBand: 'general-practice-brief-v1',
+    title: 'Layout: Remove Unnecessary Friction',
     text:
-      'Subvocalization is the habit of silently pronouncing words as you read. '
-      + 'Almost everyone does it to some degree. '
-      + 'While subvocalization can aid comprehension, especially for complex material, it also limits speed. '
-      + 'You cannot speak faster than about 300 words per minute, so heavy subvocalization caps your reading rate. '
-      + 'To reduce subvocalization, try humming or chewing gum while reading. '
-      + 'Another method is to focus on meaning rather than the sound of words. '
-      + 'When reading familiar or straightforward text, allow your eyes to move faster than your inner voice. '
-      + 'For difficult material, some subvocalization may actually help understanding. '
-      + 'The goal is not to eliminate it entirely but to use it strategically. '
-      + 'With practice, you can modulate subvocalization based on text difficulty.',
+      'A difficult reading layout can consume attention before the ideas do. '
+      + 'Very small type, weak contrast, crowded lines, and constant notifications all add friction. '
+      + 'Before a longer session, choose a comfortable text size and a line width that does not force your eyes to search for the next line. '
+      + 'Use enough line spacing to keep neighboring rows distinct. '
+      + 'Increase contrast when glare or dim light makes letters harder to identify. '
+      + 'Silence interruptions and keep only the material you need on screen. '
+      + 'These changes do not teach comprehension by themselves, but they make it easier to give the text steady attention. '
+      + 'If a setting creates eye strain, headaches, or repeated loss of place, change it instead of forcing the session. '
+      + 'A readable layout should feel quiet and predictable. '
+      + 'That leaves more effort available for understanding and remembering the author’s ideas.',
     question: {
-      prompt: 'Why does subvocalization limit reading speed?',
+      prompt: 'What is the purpose of improving the reading layout?',
       choices: [
-        'It makes the text harder to see',
-        'You cannot speak faster than about 300 words per minute',
-        'It improves comprehension too much',
-        'It causes eye strain',
+        'To remove every difficult idea',
+        'To reduce visual and attentional friction',
+        'To replace comprehension practice',
+        'To make every line as long as possible',
       ],
       correctIndex: 1,
     },
   },
   {
     id: 'sample-18',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Text Structure: Recognize Patterns',
     text:
       'Most texts follow predictable structures. '
@@ -435,6 +567,7 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-19',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Practice: Consistency Over Intensity',
     text:
       'Like any skill, reading speed improves with consistent practice. '
@@ -460,6 +593,7 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
   {
     id: 'sample-20',
+    comparisonBand: 'general-practice-brief-v1',
     title: 'Assessment: Measure Your Progress',
     text:
       'Regular assessment helps you track improvement and identify weaknesses. '
@@ -482,4 +616,42 @@ export const TEXT_SAMPLES: TextSample[] = [
       ],
       correctIndex: 1,
     },
-  },];
+  },
+];
+
+export const BASELINE_TEXT_SAMPLES = TEXT_SAMPLES.slice(0, 3);
+
+export function validateBaselineTextSamples(
+  samples: readonly TextSample[] = BASELINE_TEXT_SAMPLES
+): string[] {
+  const errors: string[] = [];
+  if (new Set(samples.map((sample) => sample.id)).size < 3) {
+    errors.push('Baseline requires at least three distinct passage IDs');
+  }
+  for (const sample of samples) {
+    if (typeof sample.version !== 'number') {
+      errors.push(`${sample.id}: baseline content version required`);
+    }
+    if (!sample.comparisonBand.trim()) {
+      errors.push(`${sample.id}: authored comparison band required`);
+    }
+    if ((sample.questions?.length ?? 0) < 3) {
+      errors.push(`${sample.id}: at least three dependent questions required`);
+    }
+    for (const question of sample.questions ?? []) {
+      if (!question.rationale.trim()) {
+        errors.push(`${sample.id}/${question.id}: rationale required`);
+      }
+      if (question.answerDependency !== 'passage-required') {
+        errors.push(`${sample.id}/${question.id}: passage dependency required`);
+      }
+      if (
+        question.correctIndex < 0 ||
+        question.correctIndex >= question.choices.length
+      ) {
+        errors.push(`${sample.id}/${question.id}: invalid correct answer`);
+      }
+    }
+  }
+  return errors;
+}

@@ -1,6 +1,37 @@
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  within,
+} from '@testing-library/react-native';
 import MemoryRecall from './MemoryRecall';
+
+type MemoryRecallView = ReturnType<typeof render>;
+
+function readShownSequence(view: MemoryRecallView): number[] {
+  return String(view.getByTestId('sequence').props.children)
+    .split(' ')
+    .map(Number);
+}
+
+function submitCurrentSequence(
+  view: MemoryRecallView,
+  displayMs: number,
+  correct: boolean
+) {
+  const shown = readShownSequence(view);
+  act(() => {
+    jest.advanceTimersByTime(displayMs + 10);
+  });
+
+  const answer = correct
+    ? shown
+    : [(shown[0]! + 1) % 10, ...shown.slice(1)];
+  answer.forEach((digit) => {
+    fireEvent.press(view.getByTestId(`digit-${digit}`));
+  });
+}
 
 describe('MemoryRecall', () => {
   beforeEach(() => {
@@ -40,6 +71,32 @@ describe('MemoryRecall', () => {
     expect(getByTestId('digit-keypad')).toBeTruthy();
   });
 
+  it('uses a phone-style three-column keypad with zero centered on the last row', () => {
+    const { getByTestId } = render(
+      <MemoryRecall startingLength={3} displayMs={50} />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    act(() => {
+      jest.advanceTimersByTime(60);
+    });
+
+    expect(within(getByTestId('keypad-row-1')).getByTestId('digit-1')).toBeTruthy();
+    expect(within(getByTestId('keypad-row-1')).getByTestId('digit-2')).toBeTruthy();
+    expect(within(getByTestId('keypad-row-1')).getByTestId('digit-3')).toBeTruthy();
+    expect(within(getByTestId('keypad-row-2')).getByTestId('digit-4')).toBeTruthy();
+    expect(within(getByTestId('keypad-row-2')).getByTestId('digit-5')).toBeTruthy();
+    expect(within(getByTestId('keypad-row-2')).getByTestId('digit-6')).toBeTruthy();
+    expect(within(getByTestId('keypad-row-3')).getByTestId('digit-7')).toBeTruthy();
+    expect(within(getByTestId('keypad-row-3')).getByTestId('digit-8')).toBeTruthy();
+    expect(within(getByTestId('keypad-row-3')).getByTestId('digit-9')).toBeTruthy();
+
+    const lastRow = within(getByTestId('keypad-row-4'));
+    expect(lastRow.getByTestId('keypad-spacer')).toBeTruthy();
+    expect(lastRow.getByTestId('digit-0')).toBeTruthy();
+    expect(lastRow.getByTestId('delete-btn')).toBeTruthy();
+  });
+
   it('allows digit input during recall phase', () => {
     const { getByTestId, queryByTestId } = render(
       <MemoryRecall startingLength={2} displayMs={50} />
@@ -55,28 +112,67 @@ describe('MemoryRecall', () => {
     expect(queryByTestId('input-display')).toBeTruthy();
   });
 
-  it('calls onReportResult when game ends', () => {
+  it('subtracts 10 points, reduces sequence length, and continues after a miss', () => {
+    const view = render(
+      <MemoryRecall startingLength={2} displayMs={30} />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+    submitCurrentSequence(view, 30, true);
+
+    expect(view.getByTestId('memory-score')).toHaveTextContent('20');
+    expect(view.getByTestId('memory-level')).toHaveTextContent('3');
+    expect(view.getByTestId('memory-strikes')).toHaveTextContent('0/3');
+
+    submitCurrentSequence(view, 30, false);
+
+    expect(view.queryByTestId('end')).toBeNull();
+    expect(view.getByTestId('memory-score')).toHaveTextContent('10');
+    expect(view.getByTestId('memory-level')).toHaveTextContent('2');
+    expect(view.getByTestId('memory-strikes')).toHaveTextContent('1/3');
+    expect(view.getByText('Wrong · −10 points · one digit shorter')).toBeTruthy();
+  });
+
+  it('resets the consecutive-failure streak after a correct sequence', () => {
+    const view = render(
+      <MemoryRecall startingLength={2} displayMs={30} />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+    submitCurrentSequence(view, 30, false);
+    expect(view.getByTestId('memory-strikes')).toHaveTextContent('1/3');
+
+    submitCurrentSequence(view, 30, true);
+    expect(view.getByTestId('memory-strikes')).toHaveTextContent('0/3');
+    expect(view.queryByTestId('end')).toBeNull();
+  });
+
+  it('ends and reports only after three consecutive failures', () => {
     const onReportResult = jest.fn();
-    const { getByTestId, queryByTestId } = render(
+    const view = render(
       <MemoryRecall startingLength={2} displayMs={30} onReportResult={onReportResult} />
     );
 
-    fireEvent.press(getByTestId('start-button'));
+    fireEvent.press(view.getByTestId('start-button'));
 
-    act(() => {
-      jest.advanceTimersByTime(40);
-    });
+    submitCurrentSequence(view, 30, false);
+    expect(view.queryByTestId('end')).toBeNull();
 
-    // Enter wrong answer - game auto-submits when input length matches sequence length
-    fireEvent.press(getByTestId('digit-0'));
-    fireEvent.press(getByTestId('digit-0'));
-    // No need to press submit - game auto-checks when input length matches
+    submitCurrentSequence(view, 30, false);
+    expect(view.queryByTestId('end')).toBeNull();
 
-    act(() => {
-      jest.advanceTimersByTime(1600);
-    });
-    
-    // Game should have ended and reported results
-    expect(queryByTestId('end')).toBeTruthy();
+    submitCurrentSequence(view, 30, false);
+    expect(view.getByTestId('end')).toBeTruthy();
+    expect(onReportResult).toHaveBeenCalledTimes(1);
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accuracy: 0,
+        details: expect.objectContaining({
+          failures: 3,
+          endingFailureStreak: 3,
+          failurePenalty: 10,
+        }),
+      })
+    );
   });
 });

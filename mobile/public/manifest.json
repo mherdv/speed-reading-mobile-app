@@ -1,0 +1,29 @@
+{
+  "id": "/",
+  "name": "SpeedRead",
+  "short_name": "SpeedRead",
+  "description": "Reading-first practice for pace, comprehension, evidence, vocabulary, and focused scanning.",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#F7F7FB",
+  "theme_color": "#6D3FE8",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -127,18 +127,87 @@ describe('TimedWordRecognition', () => {
 
     fireEvent.press(getByTestId('start-button'));
 
-    // Word should still be showing after 500ms on easy (1000ms display)
+    // Easy starts at 120 WPM, so a one-word flash lasts 500ms.
     act(() => {
-      jest.advanceTimersByTime(500);
+      jest.advanceTimersByTime(300);
     });
 
     expect(getByTestId('word-flash')).toBeTruthy();
 
-    // After 1100ms it should be in choose phase
+    // After 550ms it should be in choose phase.
     act(() => {
-      jest.advanceTimersByTime(600);
+      jest.advanceTimersByTime(250);
     });
 
     expect(getByTestId('options-container')).toBeTruthy();
+  });
+
+  it('raises the live WPM after eight consecutive correct answers', () => {
+    const { getByLabelText, getByTestId, getByText } = render(
+      <TimedWordRecognition
+        words={['apple', 'bread', 'chair', 'dream', 'earth']}
+        difficulty="easy"
+        totalRounds={9}
+      />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    for (let round = 0; round < 8; round += 1) {
+      const answer = getByTestId('word').props.children as string;
+      act(() => {
+        jest.advanceTimersByTime(510);
+      });
+      fireEvent.press(getByLabelText(answer));
+    }
+
+    expect(getByText('145')).toBeTruthy();
+  });
+
+  it('ends only after three consecutive misses and reports actual attempts', () => {
+    const onReportResult = jest.fn();
+    const words = ['apple', 'bread', 'chair', 'dream'];
+    const view = render(
+      <TimedWordRecognition
+        words={words}
+        displayMs={10}
+        onReportResult={onReportResult}
+      />
+    );
+
+    const answer = (correct: boolean) => {
+      const shown = view.getByTestId('word').props.children as string;
+      act(() => {
+        jest.advanceTimersByTime(15);
+      });
+      if (correct) {
+        fireEvent.press(view.getByLabelText(shown));
+        return;
+      }
+      const wrongIndex = [0, 1, 2, 3].find(
+        (index) =>
+          view.getByTestId(`option-${index}`).props.accessibilityLabel !== shown
+      );
+      fireEvent.press(view.getByTestId(`option-${wrongIndex ?? 0}`));
+    };
+
+    fireEvent.press(view.getByTestId('start-button'));
+    answer(false);
+    answer(true);
+    answer(false);
+    answer(false);
+    expect(view.queryByTestId('end')).toBeNull();
+    answer(false);
+
+    expect(view.getByTestId('end')).toBeTruthy();
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accuracy: 0.2,
+        details: expect.objectContaining({
+          rounds: 5,
+          endingFailureStreak: 3,
+          finishReason: 'three-misses',
+        }),
+      })
+    );
   });
 });

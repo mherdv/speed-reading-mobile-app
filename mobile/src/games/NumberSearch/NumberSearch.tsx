@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useAutoStart } from '../gameHooks';
+import { useAutoStart, type Difficulty } from '../gameHooks';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
+import { updateProgress } from '../../data/progressStore';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'NumberSearch';
 
@@ -13,12 +15,13 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
   durationMs?: number;
   gridSize?: number;
+  difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
@@ -50,7 +53,17 @@ function buildGrid(size: number): { grid: number[][]; target: number; targetPos:
   return { grid, target, targetPos: { row: targetRow, col: targetCol } };
 }
 
-export default function NumberSearch({ durationMs = 45000, gridSize = 5, autoStart = false, onReportResult }: Props) {
+export default function NumberSearch({
+  durationMs: durationMsProp,
+  gridSize: gridSizeProp,
+  difficulty = 'medium',
+  autoStart = false,
+  onReportResult,
+}: Props) {
+  const durationMs =
+    durationMsProp ?? (difficulty === 'easy' ? 45000 : difficulty === 'medium' ? 35000 : 25000);
+  const gridSize =
+    gridSizeProp ?? (difficulty === 'easy' ? 4 : difficulty === 'medium' ? 5 : 6);
   const [phase, setPhase] = useState<Phase>('idle');
   const [gridData, setGridData] = useState(() => buildGrid(gridSize));
   const [score, setScore] = useState(0);
@@ -86,6 +99,7 @@ export default function NumberSearch({ durationMs = 45000, gridSize = 5, autoSta
   useAutoStart(autoStart, phase, true, start);
 
   function start() {
+    cancelledRef.current = false;
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
@@ -107,18 +121,23 @@ export default function NumberSearch({ durationMs = 45000, gridSize = 5, autoSta
     const elapsedMs = now - startedAtRef.current;
     const accuracy = attemptsRef.current > 0 ? scoreRef.current / attemptsRef.current : 0;
     
+    setPhase('ended');
+    void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
+      () => undefined
+    );
     onReportResult?.({
       startedAtIso: new Date(startedAtRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
       score: scoreRef.current,
       accuracy,
-      details: { rounds: attemptsRef.current, correct: scoreRef.current },
+      details: {
+        rounds: attemptsRef.current,
+        correct: scoreRef.current,
+        difficulty,
+        gridSize,
+      },
     });
-    
-    if (!onReportResult) {
-      setPhase('ended');
-    }
   }
 
   function onCellPress(row: number, col: number) {
@@ -210,7 +229,7 @@ export default function NumberSearch({ durationMs = 45000, gridSize = 5, autoSta
             {gridData.grid.map((row, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
                 {row.map((num, colIdx) => (
-                  <Pressable
+                  <Pressable accessibilityRole="button"
                     key={`${rowIdx}-${colIdx}`}
                     testID={`cell-${rowIdx}-${colIdx}`}
                     style={styles.cell}
@@ -233,7 +252,7 @@ export default function NumberSearch({ durationMs = 45000, gridSize = 5, autoSta
           <Text style={styles.endMeta}>
             Accuracy: {attempts > 0 ? Math.round((score / attempts) * 100) : 0}%
           </Text>
-          <Pressable style={styles.playAgainBtn} onPress={start}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={start}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>
@@ -255,7 +274,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   startBtn: {
-    backgroundColor: '#14B8A6',
+    backgroundColor: colors.interactiveTeal,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -266,7 +285,7 @@ const styles = StyleSheet.create({
   statBox: { alignItems: 'center', backgroundColor: '#CCFBF1', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
   timerBox: { backgroundColor: '#99F6E4' },
   statValue: { fontSize: 16, fontWeight: '700', color: '#0F766E' },
-  statLabel: { fontSize: 10, color: '#14B8A6' },
+  statLabel: { fontSize: 10, color: colors.interactiveTeal },
   targetCard: {
     backgroundColor: '#F0FDFA',
     borderRadius: 8,
@@ -278,7 +297,7 @@ const styles = StyleSheet.create({
   },
   targetCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
   targetWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
-  targetLabel: { fontSize: 12, color: '#0D9488' },
+  targetLabel: { fontSize: 12, color: colors.interactiveTeal },
   targetNumber: { fontSize: 28, fontWeight: '800', color: '#134E4A' },
   grid: { backgroundColor: '#F0FDFA', borderRadius: 8, padding: 4 },
   gridRow: { flexDirection: 'row', justifyContent: 'center' },
@@ -297,8 +316,8 @@ const styles = StyleSheet.create({
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 32, fontWeight: '800', color: '#14B8A6', marginVertical: 8 },
+  endScore: { fontSize: 32, fontWeight: '800', color: colors.interactiveTeal, marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#14B8A6', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  playAgainBtn: { marginTop: 16, backgroundColor: colors.interactiveTeal, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

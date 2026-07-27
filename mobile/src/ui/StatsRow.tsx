@@ -5,6 +5,7 @@ export type StatItem = {
   key: string;
   value: React.ReactNode;
   label: string;
+  testID?: string;
   containerStyle?: StyleProp<ViewStyle>;
   valueStyle?: StyleProp<TextStyle>;
   labelStyle?: StyleProp<TextStyle>;
@@ -21,7 +22,7 @@ export function StatsRow({ items, style, testID }: Props) {
     <View style={[styles.row, style]} testID={testID}>
       {items.map((item) => (
         <View key={item.key} style={item.containerStyle}>
-          <Text style={item.valueStyle}>{item.value}</Text>
+          <Text testID={item.testID} style={item.valueStyle}>{item.value}</Text>
           <Text style={item.labelStyle}>{item.label}</Text>
         </View>
       ))}

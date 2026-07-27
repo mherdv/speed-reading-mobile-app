@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { loadGameProgress, updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { borderRadius, colors, shadows, spacing } from '../../theme/colors';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
@@ -17,7 +18,7 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
@@ -32,11 +33,11 @@ type Phase = 'idle' | 'running' | 'ended';
 function getDifficultyConfig(difficulty: Difficulty) {
   switch (difficulty) {
     case 'easy':
-      return { gridSize: 4 };
+      return { gridSize: 3 };
     case 'medium':
-      return { gridSize: 5 };
+      return { gridSize: 4 };
     case 'hard':
-      return { gridSize: 7 };
+      return { gridSize: 5 };
   }
 }
 
@@ -55,18 +56,17 @@ function generateGrid(size: number): number[] {
   return shuffleArray(nums);
 }
 
-export default function SchulteNumbers({ 
-  gridSize: gridSizeProp, 
+export default function SchulteNumbers({
+  gridSize: gridSizeProp,
   difficulty = 'medium',
   autoStart = false,
-  onReportResult 
+  onReportResult
 }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
   const {
     gameProgress,
     setGameProgress,
     selectedDifficulty,
-    setSelectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
   const [grid, setGrid] = useState<number[]>([]);
@@ -74,6 +74,7 @@ export default function SchulteNumbers({
   const [nextNumber, setNextNumber] = useState(1);
   const [mistakes, setMistakes] = useState(0);
   const [tapped, setTapped] = useState<Set<number>>(new Set());
+  const [elapsedMs, setElapsedMs] = useState(0);
 
   const startedAtRef = useRef<number>(0);
   const reportedRef = useRef(false);
@@ -81,21 +82,21 @@ export default function SchulteNumbers({
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   // Use activeGridSize during game, currentConfig for idle screen
-  const gridSize = phase === 'running' || phase === 'ended' 
-    ? activeGridSize 
+  const gridSize = phase === 'running' || phase === 'ended'
+    ? activeGridSize
     : (gridSizeProp ?? currentConfig.gridSize);
   const total = gridSize * gridSize;
 
   // Use dynamic dimensions for responsive layout
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  
+
   // Calculate available space for the grid dynamically
   const headerHeight = 50;
   const statsHeight = 60;
   const containerPadding = 24;
   const backButtonArea = 80;
   const availableHeight = screenHeight - headerHeight - statsHeight - containerPadding - backButtonArea;
-  const availableWidth = screenWidth - containerPadding;
+  const availableWidth = screenWidth - containerPadding - 32;
 
   // Calculate cell size - ensure square cells that fit within available space
   const cellGap = CELL_GAP; // Gap between cells
@@ -114,10 +115,11 @@ export default function SchulteNumbers({
       cancelledRef.current = true;
     };
   }, []);
-  
+
   useAutoStart(autoStart, phase, progressLoaded, start);
 
   function start() {
+    cancelledRef.current = false;
     // Reset all state completely for fresh restart
     reportedRef.current = false;
     const currentGridSize = gridSizeProp ?? getDifficultyConfig(selectedDifficulty).gridSize;
@@ -127,6 +129,7 @@ export default function SchulteNumbers({
     setNextNumber(1);
     setMistakes(0);
     setTapped(new Set());
+    setElapsedMs(0);
     startedAtRef.current = Date.now();
     setPhase('running');
   }
@@ -135,38 +138,45 @@ export default function SchulteNumbers({
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
-    
+
     const now = Date.now();
     const elapsedMs = now - startedAtRef.current;
+    setElapsedMs(elapsedMs);
     const attempts = total + mistakes;
     const accuracy = attempts > 0 ? total / attempts : 1;
-    
+    const itemsPerMinute = Math.round(
+      (total / Math.max(elapsedMs, 1)) * 60000 * accuracy
+    );
+
     // Update progress - success if accuracy >= 70%
     const success = accuracy >= 0.7;
-    updateProgress(GAME_ID, success, total).then(({ progress }) => {
+    updateProgress(GAME_ID, success, itemsPerMinute).then(({ progress }) => {
+      if (cancelledRef.current) return;
       setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
     });
 
     onReportResult?.({
       startedAtIso: new Date(startedAtRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
-      score: total,
+      score: itemsPerMinute,
       accuracy,
-      details: { gridSize, mistakes, timeMs: elapsedMs, difficulty: selectedDifficulty },
+      details: {
+        gridSize,
+        mistakes,
+        itemsPerMinute,
+        difficulty: selectedDifficulty,
+      },
     });
-    
+
     // Only show ended phase if no onReportResult (standalone mode)
     // Otherwise, navigation will handle showing results
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function onTap(num: number) {
     if (phase !== 'running') return;
-    
+
     if (num === nextNumber) {
       setTapped(prev => new Set(prev).add(num));
       if (num === total) {
@@ -182,7 +192,7 @@ export default function SchulteNumbers({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Schulte Table</Text>
+        <Text style={styles.title}>Schulte Numbers</Text>
         <Text style={styles.subtitle}>Tap numbers 1 to {total} in order</Text>
       </View>
 
@@ -192,13 +202,8 @@ export default function SchulteNumbers({
           level={gameProgress.level}
           stars={levelToStars(gameProgress.level)}
           onStart={start}
+          startLabel="Start number search"
           containerStyle={styles.idleContent}
-          descriptionStyle={styles.descriptionText}
-          progressInfoStyle={styles.progressInfo}
-          levelLabelStyle={styles.levelLabel}
-          starsStyle={styles.starsDisplay}
-          buttonStyle={styles.startBtn}
-          buttonTextStyle={styles.startBtnText}
         />
       )}
 
@@ -251,12 +256,19 @@ export default function SchulteNumbers({
                     const isDone = tapped.has(num);
                     return (
                       <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          num === nextNumber
+                            ? `Number ${num}, next target`
+                            : `Number ${num}`
+                        }
+                        accessibilityState={{ disabled: isDone }}
                         key={colIndex}
                         testID={`cell-${num}`}
                         style={[
                           styles.cell,
-                          { 
-                            width: cellSize, 
+                          {
+                            width: cellSize,
                             height: cellSize,
                             marginRight: colIndex < gridSize - 1 ? cellGap : 0,
                           },
@@ -280,10 +292,10 @@ export default function SchulteNumbers({
 
       {phase === 'ended' && (
         <View testID="end" style={styles.endCard}>
-          <Text style={styles.endEmoji}>🏆</Text>
+          <Text style={styles.endEmoji}>123</Text>
           <Text style={styles.endTitle}>Completed!</Text>
           <Text style={styles.endTime}>
-            {Math.floor((Date.now() - startedAtRef.current) / 1000)}s
+            {(elapsedMs / 1000).toFixed(1)}s
           </Text>
           <Text style={styles.endMeta}>
             {mistakes === 0 ? 'Perfect! No mistakes' : `${mistakes} mistake${mistakes > 1 ? 's' : ''}`}
@@ -296,32 +308,16 @@ export default function SchulteNumbers({
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={async () => { 
-            // Complete reset - reload progress to get correct difficulty
-            const progress = await loadGameProgress(GAME_ID);
-            const correctDifficulty = levelToDifficulty(progress.level);
-            setGameProgress(progress);
-            setSelectedDifficulty(correctDifficulty);
-            setPhase('idle'); 
-            setGrid([]);
-            setNextNumber(1);
-            setMistakes(0);
-            setTapped(new Set());
-            // Generate grid with the correct difficulty
-            const correctGridSize = gridSizeProp ?? getDifficultyConfig(correctDifficulty).gridSize;
-            setTimeout(() => {
-              reportedRef.current = false;
-              const newGrid = generateGrid(correctGridSize);
-              setActiveGridSize(correctGridSize);
-              setGrid(newGrid);
-              setNextNumber(1);
-              setMistakes(0);
-              setTapped(new Set());
-              startedAtRef.current = Date.now();
-              setPhase('running');
-            }, 100); 
-          }}>
-            <Text style={styles.playAgainText}>Play Again</Text>
+          <Pressable
+            accessibilityRole="button"
+            testID="play-again"
+            style={({ pressed }) => [
+              styles.playAgainBtn,
+              pressed && styles.pressed,
+            ]}
+            onPress={start}
+          >
+            <Text style={styles.playAgainText}>Play again</Text>
           </Pressable>
         </View>
       )}
@@ -331,75 +327,119 @@ export default function SchulteNumbers({
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12 },
-  header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  header: { marginBottom: spacing.sm },
+  title: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+  },
   idleContent: { flex: 1 },
-  descriptionText: {
-    fontSize: 15,
-    color: '#4B5563',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
-  progressInfo: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  levelLabel: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  starsDisplay: {
-    fontSize: 24,
-    letterSpacing: 4,
-  },
-  startBtn: {
-    backgroundColor: '#10B981',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
-  statBox: { alignItems: 'center', backgroundColor: '#D1FAE5', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
-  progressBox: { backgroundColor: '#A7F3D0' },
-  statValue: { fontSize: 16, fontWeight: '700', color: '#065F46' },
-  errorValue: { color: '#DC2626' },
-  statLabel: { fontSize: 10, color: '#047857' },
+  statsRow: { gap: spacing.sm, marginBottom: spacing.sm },
+  statBox: {
+    flex: 1,
+    minHeight: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceTonal,
+  },
+  progressBox: { backgroundColor: colors.cardBackground },
+  statValue: {
+    color: colors.primaryDark,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  errorValue: { color: colors.error },
+  statLabel: { color: colors.textSecondary, fontSize: 10, marginTop: 1 },
   gridContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   grid: {
-    backgroundColor: '#F0FDF4',
-    borderRadius: 8,
     justifyContent: 'center',
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surfaceTonal,
   },
   gridRow: {
     flexDirection: 'row',
   },
   cell: {
-    backgroundColor: 'white',
-    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#D1FAE5',
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
   },
-  cellDone: { backgroundColor: '#10B981', borderColor: '#10B981' },
-  cellText: { fontWeight: '700', color: '#065F46' },
-  cellTextDone: { color: 'white' },
-  endCard: { alignItems: 'center', paddingVertical: 20 },
-  endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endTime: { fontSize: 32, fontWeight: '800', color: '#10B981', marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
-  levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: '#F59E0B' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#10B981', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
-  playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
+  cellDone: {
+    borderColor: colors.info,
+    backgroundColor: colors.info,
+  },
+  cellText: { color: colors.textPrimary, fontWeight: '800' },
+  cellTextDone: { color: colors.white },
+  endCard: {
+    alignItems: 'center',
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.cardBackground,
+    ...shadows.small,
+  },
+  endEmoji: {
+    color: colors.info,
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 3,
+    marginBottom: spacing.sm,
+  },
+  endTitle: {
+    color: colors.textPrimary,
+    fontSize: 21,
+    fontWeight: '800',
+  },
+  endTime: {
+    color: colors.info,
+    fontSize: 32,
+    fontWeight: '800',
+    marginVertical: spacing.sm,
+  },
+  endMeta: { color: colors.textSecondary, fontSize: 14 },
+  endDifficulty: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    textTransform: 'capitalize',
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  levelText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  starsText: { color: colors.starActive, fontSize: 16 },
+  playAgainBtn: {
+    minWidth: 160,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.primary,
+  },
+  playAgainText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+  pressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
 });

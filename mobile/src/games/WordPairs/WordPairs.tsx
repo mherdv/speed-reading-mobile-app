@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { WORD_PAIRS as VOCABULARY_WORD_PAIRS } from '../../data/vocabulary';
-import { useAutoStart } from '../gameHooks';
+import { useAutoStart, type Difficulty } from '../gameHooks';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
+import { updateProgress } from '../../data/progressStore';
 
 const GAME_ID = 'WordPairs';
 
@@ -14,19 +14,70 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
   durationMs?: number;
+  difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
 type Phase = 'idle' | 'running' | 'ended';
 
-// Use the extensive word pairs from vocabulary database
-const WORD_PAIRS = VOCABULARY_WORD_PAIRS;
+type WordPairChallenge = {
+  familiarity: 'common' | 'less-common' | 'advanced';
+  distractorSimilarity: 'low' | 'medium' | 'high';
+  optionCount: 2 | 3 | 4;
+  items: readonly {
+    word: string;
+    correct: string;
+    distractors: readonly string[];
+  }[];
+};
+
+const WORD_PAIR_CHALLENGES: Record<Difficulty, WordPairChallenge> = {
+  easy: {
+    familiarity: 'common',
+    distractorSimilarity: 'low',
+    optionCount: 2,
+    items: [
+      { word: 'hot', correct: 'cold', distractors: ['open'] },
+      { word: 'open', correct: 'closed', distractors: ['early'] },
+      { word: 'early', correct: 'late', distractors: ['above'] },
+      { word: 'above', correct: 'below', distractors: ['hot'] },
+    ],
+  },
+  medium: {
+    familiarity: 'less-common',
+    distractorSimilarity: 'medium',
+    optionCount: 3,
+    items: [
+      { word: 'scarce', correct: 'abundant', distractors: ['limited', 'rare'] },
+      { word: 'rigid', correct: 'flexible', distractors: ['firm', 'fixed'] },
+      { word: 'ancient', correct: 'modern', distractors: ['historic', 'aged'] },
+      { word: 'expand', correct: 'contract', distractors: ['extend', 'enlarge'] },
+    ],
+  },
+  hard: {
+    familiarity: 'advanced',
+    distractorSimilarity: 'high',
+    optionCount: 4,
+    items: [
+      { word: 'optimistic', correct: 'pessimistic', distractors: ['realistic', 'idealistic', 'opportunistic'] },
+      { word: 'transparent', correct: 'opaque', distractors: ['translucent', 'reflective', 'colorless'] },
+      { word: 'voluntary', correct: 'compulsory', distractors: ['optional', 'willing', 'spontaneous'] },
+      { word: 'temporary', correct: 'permanent', distractors: ['brief', 'provisional', 'seasonal'] },
+    ],
+  },
+};
+
+export function getWordPairChallenge(
+  difficulty: Difficulty
+): WordPairChallenge {
+  return WORD_PAIR_CHALLENGES[difficulty];
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -37,25 +88,32 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-function buildRound(): { word: string; options: string[]; correctIndex: number } {
-  const pair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
-  const word = pair[0];
-  const correct = pair[1];
+function buildRound(
+  challenge: WordPairChallenge
+): { word: string; options: string[]; correctIndex: number } {
+  const item =
+    challenge.items[Math.floor(Math.random() * challenge.items.length)];
+  const word = item.word;
+  const correct = item.correct;
+  const distractors = item.distractors.slice(0, challenge.optionCount - 1);
   
-  const distractors = WORD_PAIRS
-    .filter(p => p[1] !== correct)
-    .map(p => p[1])
-    .slice(0, 3);
-  
-  const options = shuffle([correct, ...distractors.slice(0, 3)]);
+  const options = shuffle([correct, ...distractors]);
   const correctIndex = options.indexOf(correct);
   
   return { word, options, correctIndex };
 }
 
-export default function WordPairs({ durationMs = 30000, autoStart = false, onReportResult }: Props) {
+export default function WordPairs({
+  durationMs: durationMsProp,
+  difficulty = 'medium',
+  autoStart = false,
+  onReportResult,
+}: Props) {
+  const durationMs =
+    durationMsProp ?? 30_000;
+  const challenge = getWordPairChallenge(difficulty);
   const [phase, setPhase] = useState<Phase>('idle');
-  const [round, setRound] = useState(() => buildRound());
+  const [round, setRound] = useState(() => buildRound(challenge));
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [timeLeftMs, setTimeLeftMs] = useState(durationMs);
@@ -89,13 +147,14 @@ export default function WordPairs({ durationMs = 30000, autoStart = false, onRep
   useAutoStart(autoStart, phase, true, start);
 
   function start() {
+    cancelledRef.current = false;
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
     setScore(0);
     setAttempts(0);
     setTimeLeftMs(durationMs);
-    setRound(buildRound());
+    setRound(buildRound(challenge));
     setFeedback(null);
     startedAtRef.current = Date.now();
     setPhase('running');
@@ -110,18 +169,22 @@ export default function WordPairs({ durationMs = 30000, autoStart = false, onRep
     const elapsedMs = now - startedAtRef.current;
     const accuracy = attemptsRef.current > 0 ? scoreRef.current / attemptsRef.current : 0;
     
+    setPhase('ended');
+    void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
+      () => undefined
+    );
     onReportResult?.({
       startedAtIso: new Date(startedAtRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
       score: scoreRef.current,
       accuracy,
-      details: { rounds: attemptsRef.current, correct: scoreRef.current },
+      details: {
+        rounds: attemptsRef.current,
+        correct: scoreRef.current,
+        difficulty,
+      },
     });
-    
-    if (!onReportResult) {
-      setPhase('ended');
-    }
   }
 
   function onSelect(index: number) {
@@ -140,7 +203,7 @@ export default function WordPairs({ durationMs = 30000, autoStart = false, onRep
     
     
       setFeedback(null);
-      setRound(buildRound());
+      setRound(buildRound(challenge));
   }
 
   return (
@@ -200,7 +263,7 @@ export default function WordPairs({ durationMs = 30000, autoStart = false, onRep
 
           <View style={styles.optionsGrid}>
             {round.options.map((opt, idx) => (
-              <Pressable
+              <Pressable accessibilityRole="button"
                 key={`${opt}-${idx}`}
                 testID={`option-${idx}`}
                 style={styles.optionBtn}
@@ -221,7 +284,7 @@ export default function WordPairs({ durationMs = 30000, autoStart = false, onRep
           <Text style={styles.endMeta}>
             Accuracy: {attempts > 0 ? Math.round((score / attempts) * 100) : 0}%
           </Text>
-          <Pressable style={styles.playAgainBtn} onPress={start}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={start}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>

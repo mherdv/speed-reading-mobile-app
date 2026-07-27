@@ -56,4 +56,102 @@ describe('PatternScanning', () => {
 
     expect(getByTestId('play-again')).toBeTruthy();
   });
+
+  it('reports partial target coverage below 100%', () => {
+    const onReportResult = jest.fn();
+    const { getByTestId } = render(
+      <PatternScanning
+        grid={[
+          ['★', '★'],
+          ['●', '●'],
+        ]}
+        targetPattern="★"
+        durationMs={100}
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    fireEvent.press(getByTestId('cell-0-0'));
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accuracy: 0.5,
+        details: expect.objectContaining({
+          totalTargets: 2,
+          found: 1,
+          missed: 1,
+          errors: 0,
+        }),
+      })
+    );
+  });
+
+  it('penalizes wrong selections even after every target is found', () => {
+    const onReportResult = jest.fn();
+    const { getByTestId } = render(
+      <PatternScanning
+        grid={[
+          ['★', '●'],
+          ['★', '●'],
+        ]}
+        targetPattern="★"
+        durationMs={100}
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    fireEvent.press(getByTestId('cell-0-1'));
+    fireEvent.press(getByTestId('cell-0-0'));
+    fireEvent.press(getByTestId('cell-1-0'));
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accuracy: 2 / 3,
+        details: expect.objectContaining({
+          totalTargets: 2,
+          found: 2,
+          missed: 0,
+          errors: 1,
+        }),
+      })
+    );
+  });
+
+  it('awards perfect accuracy only for complete error-free selection', () => {
+    const onReportResult = jest.fn();
+    const { getByTestId } = render(
+      <PatternScanning
+        grid={[['★', '●']]}
+        targetPattern="★"
+        durationMs={100}
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    fireEvent.press(getByTestId('cell-0-0'));
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accuracy: 1,
+        details: expect.objectContaining({
+          totalTargets: 1,
+          found: 1,
+          missed: 0,
+          errors: 0,
+        }),
+      })
+    );
+  });
 });

@@ -11,11 +11,11 @@ export function useAnalytics(gameId: string) {
     void logEvent({ id: `${normalizedGameId}:${Date.now()}`, name: 'game_start', ts: new Date().toISOString(), payload: { gameId: normalizedGameId } });
   }, [normalizedGameId]);
 
-  const log = useCallback((name: string, payload?: any) => {
+  const log = useCallback((name: string, payload?: Record<string, unknown>) => {
     void logEvent({ id: `${normalizedGameId}:${name}:${Date.now()}`, name, ts: new Date().toISOString(), payload: { gameId: normalizedGameId, ...payload } });
   }, [normalizedGameId]);
 
-  const end = useCallback((extra?: any) => {
+  const end = useCallback((extra?: Record<string, unknown>) => {
     const startedAt = startRef.current ?? Date.now();
     const finishedAt = Date.now();
     const elapsedMs = finishedAt - startedAt;

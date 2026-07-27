@@ -77,4 +77,46 @@ describe('TimedPhraseRecognition', () => {
       jest.advanceTimersByTime(600);
     });
   });
+
+  it('continues after ordinary misses and ends on the third consecutive miss', () => {
+    const onReportResult = jest.fn();
+    const phrases = [
+      'A bright path',
+      'A calm river',
+      'A clear signal',
+      'A quiet room',
+    ];
+    const view = render(
+      <TimedPhraseRecognition
+        phrases={phrases}
+        displayMs={10}
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+    for (let miss = 0; miss < 3; miss += 1) {
+      const answer = view.getByTestId('phrase').props.children as string;
+      act(() => {
+        jest.advanceTimersByTime(15);
+      });
+      const wrongIndex = [0, 1, 2, 3].find(
+        (index) =>
+          view.getByTestId(`option-${index}`).props.accessibilityLabel !== answer
+      );
+      fireEvent.press(view.getByTestId(`option-${wrongIndex ?? 0}`));
+      if (miss < 2) expect(view.queryByTestId('end')).toBeNull();
+    }
+
+    expect(view.getByTestId('end')).toBeTruthy();
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          rounds: 3,
+          endingFailureStreak: 3,
+          finishReason: 'three-misses',
+        }),
+      })
+    );
+  });
 });

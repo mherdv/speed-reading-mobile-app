@@ -6,7 +6,7 @@ export type AnalyticsEvent = {
   id: string;
   name: string;
   ts: string;
-  payload?: any;
+  payload?: Record<string, unknown>;
 };
 
 export async function logEvent(event: AnalyticsEvent): Promise<void> {

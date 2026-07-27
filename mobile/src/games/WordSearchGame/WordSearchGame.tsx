@@ -1,8 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Dimensions } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import {
+  createVariedSequence,
+  getFlashWordPool,
+  uniqueStrings,
+} from '../../data/flashPracticeContent';
+import { borderRadius, colors, shadows, spacing } from '../../theme/colors';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
@@ -15,7 +21,7 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
@@ -27,42 +33,104 @@ type Props = {
 
 type Phase = 'idle' | 'running' | 'ended';
 
-const WORDS = ['READ', 'BOOK', 'FAST', 'MIND', 'WORD', 'TEXT', 'SCAN', 'FIND', 'LOOK', 'SEEK', 'SPEED', 'FOCUS', 'LEARN', 'STUDY'];
+const INITIAL_WORD = 'READ';
+
+type Direction = readonly [rowDelta: number, columnDelta: number];
+
+const FORWARD_DIRECTIONS: readonly Direction[] = [
+  [0, 1],
+  [1, 0],
+];
+const ORTHOGONAL_DIRECTIONS: readonly Direction[] = [
+  ...FORWARD_DIRECTIONS,
+  [0, -1],
+  [-1, 0],
+];
+const ALL_DIRECTIONS: readonly Direction[] = [
+  ...ORTHOGONAL_DIRECTIONS,
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+];
 
 function getDifficultyConfig(difficulty: Difficulty) {
   switch (difficulty) {
     case 'easy':
-      return { gridSize: 6, durationMs: 90000 };
+      return { gridSize: 6, durationMs: 90000, directions: FORWARD_DIRECTIONS };
     case 'medium':
-      return { gridSize: 8, durationMs: 60000 };
+      return { gridSize: 7, durationMs: 60000, directions: ORTHOGONAL_DIRECTIONS };
     case 'hard':
-      return { gridSize: 10, durationMs: 45000 };
+      return { gridSize: 9, durationMs: 45000, directions: ALL_DIRECTIONS };
   }
+}
+
+export function getWordSearchPool(difficulty: Difficulty): string[] {
+  const gridSize = getDifficultyConfig(difficulty).gridSize;
+  const levels: Difficulty[] =
+    difficulty === 'easy'
+      ? ['easy']
+      : difficulty === 'medium'
+        ? ['easy', 'medium']
+        : ['medium', 'hard'];
+  return uniqueStrings(
+    levels.flatMap((level) => getFlashWordPool(level))
+  )
+    .filter((word) => word.length >= 4 && word.length <= gridSize)
+    .map((word) => word.toLocaleUpperCase());
 }
 
 function randomLetter(): string {
   return String.fromCharCode(65 + Math.floor(Math.random() * 26));
 }
 
-function buildGrid(size: number, word: string): { grid: string[][]; wordPositions: Set<string> } {
+function buildGrid(
+  size: number,
+  word: string,
+  directions: readonly Direction[]
+): { grid: string[][]; wordPositions: string[] } {
   const grid: string[][] = Array.from({ length: size }, () =>
     Array.from({ length: size }, () => randomLetter())
   );
-  
-  const wordPositions = new Set<string>();
-  const row = Math.floor(Math.random() * size);
-  const maxCol = size - word.length;
-  const col = Math.floor(Math.random() * (maxCol + 1));
-  
-  for (let i = 0; i < word.length; i++) {
-    grid[row][col + i] = word[i];
-    wordPositions.add(`${row}-${col + i}`);
+
+  const validPlacements: Array<{
+    row: number;
+    col: number;
+    direction: Direction;
+  }> = [];
+
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      for (const direction of directions) {
+        const [rowDelta, columnDelta] = direction;
+        const endRow = row + rowDelta * (word.length - 1);
+        const endCol = col + columnDelta * (word.length - 1);
+        if (
+          endRow >= 0 &&
+          endRow < size &&
+          endCol >= 0 &&
+          endCol < size
+        ) {
+          validPlacements.push({ row, col, direction });
+        }
+      }
+    }
   }
-  
+
+  const placement =
+    validPlacements[Math.floor(Math.random() * validPlacements.length)];
+  const [rowDelta, columnDelta] = placement.direction;
+  const wordPositions: string[] = [];
+
+  for (let i = 0; i < word.length; i++) {
+    const row = placement.row + rowDelta * i;
+    const col = placement.col + columnDelta * i;
+    grid[row][col] = word[i];
+    wordPositions.push(`${row}-${col}`);
+  }
+
   return { grid, wordPositions };
 }
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function WordSearch({ 
   durationMs: durationMsProp, 
@@ -77,22 +145,30 @@ export default function WordSearch({
     selectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
-  const [targetWord, setTargetWord] = useState(() => WORDS[0]);
-  const [gridData, setGridData] = useState(() => buildGrid(8, WORDS[0]));
-  const [foundCells, setFoundCells] = useState<Set<string>>(new Set());
-  const [score, setScore] = useState(0);
+  const [targetWord, setTargetWord] = useState(INITIAL_WORD);
+  const [gridData, setGridData] = useState(() =>
+    buildGrid(6, INITIAL_WORD, FORWARD_DIRECTIONS)
+  );
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [wordsFound, setWordsFound] = useState(0);
+  const [mistakes, setMistakes] = useState(0);
   const [timeLeftMs, setTimeLeftMs] = useState(0);
 
   const startedAtRef = useRef<number>(0);
-  const scoreRef = useRef(0);
   const wordsFoundRef = useRef(0);
+  const correctTapsRef = useRef(0);
+  const mistakesRef = useRef(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const wordDeckRef = useRef<string[]>([]);
+  const wordIndexRef = useRef(0);
+  const previousWordRef = useRef('');
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const gridSize = currentConfig.gridSize;
   const currentDurationMs = durationMsProp ?? currentConfig.durationMs;
+  const availableWords = getWordSearchPool(selectedDifficulty);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   useEffect(() => {
     if (phase !== 'running') return;
@@ -108,23 +184,54 @@ export default function WordSearch({
     }, 100);
     
     return () => {
-      cancelledRef.current = true;
       clearInterval(interval);
     };
   }, [phase, currentDurationMs]);
 
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
+
   useAutoStart(autoStart, phase, progressLoaded, start);
 
+  function takeNextWord(): string {
+    if (wordIndexRef.current >= wordDeckRef.current.length) {
+      wordDeckRef.current = createVariedSequence(
+        availableWords,
+        Math.max(availableWords.length, 40),
+        previousWordRef.current
+      );
+      wordIndexRef.current = 0;
+    }
+    const word =
+      wordDeckRef.current[wordIndexRef.current] ??
+      availableWords[0] ??
+      INITIAL_WORD;
+    wordIndexRef.current += 1;
+    previousWordRef.current = word;
+    return word;
+  }
+
   function start() {
+    cancelledRef.current = false;
     reportedRef.current = false;
-    scoreRef.current = 0;
     wordsFoundRef.current = 0;
-    const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+    correctTapsRef.current = 0;
+    mistakesRef.current = 0;
+    wordDeckRef.current = createVariedSequence(
+      availableWords,
+      Math.max(availableWords.length, 40),
+      previousWordRef.current
+    );
+    wordIndexRef.current = 0;
+    const word = takeNextWord();
     setTargetWord(word);
-    setGridData(buildGrid(gridSize, word));
-    setFoundCells(new Set());
-    setScore(0);
+    setGridData(buildGrid(gridSize, word, currentConfig.directions));
+    setSelectedCells(new Set());
     setWordsFound(0);
+    setMistakes(0);
     setTimeLeftMs(currentDurationMs);
     startedAtRef.current = Date.now();
     setPhase('running');
@@ -137,64 +244,82 @@ export default function WordSearch({
     
     const now = Date.now();
     const elapsedMs = now - startedAtRef.current;
-    const accuracy = 1; // Always successful in this game
-    
-    updateProgress(GAME_ID, accuracy >= 0.7).then(({ progress }) => setGameProgress(progress));
+    const totalTaps = correctTapsRef.current + mistakesRef.current;
+    const accuracy =
+      totalTaps > 0 ? correctTapsRef.current / totalTaps : 0;
+    const success = wordsFoundRef.current > 0 && accuracy >= 0.7;
+
+    updateProgress(GAME_ID, success, wordsFoundRef.current).then(({ progress }) => {
+      if (!cancelledRef.current) setGameProgress(progress);
+    });
     
     onReportResult?.({
       startedAtIso: new Date(startedAtRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
-      score: scoreRef.current,
+      score: wordsFoundRef.current,
       accuracy,
       details: { 
         wordsFound: wordsFoundRef.current,
+        correctTaps: correctTapsRef.current,
+        mistakes: mistakesRef.current,
         difficulty: selectedDifficulty,
         gridSize,
+        availableWordCount: availableWords.length,
       },
     });
-    
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function onCellPress(row: number, col: number) {
     if (phase !== 'running') return;
     
     const key = `${row}-${col}`;
-    
-    // If this cell is part of the target word, found it!
-    if (gridData.wordPositions.has(key)) {
-      scoreRef.current += 10;
-      wordsFoundRef.current += 1;
-      setScore(scoreRef.current);
-      setWordsFound(wordsFoundRef.current);
-      
-      // Mark all word cells as found
-      setFoundCells(new Set(gridData.wordPositions));
-      
-      // Next word after a brief delay
-      
-        const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+    const expectedKey = gridData.wordPositions[selectedCells.size];
+
+    if (key === expectedKey) {
+      correctTapsRef.current += 1;
+      const nextSelectedCells = new Set(selectedCells).add(key);
+
+      if (nextSelectedCells.size === targetWord.length) {
+        wordsFoundRef.current += 1;
+        setWordsFound(wordsFoundRef.current);
+
+        const word = takeNextWord();
         setTargetWord(word);
-        setGridData(buildGrid(gridSize, word));
-        setFoundCells(new Set());
+        setGridData(buildGrid(gridSize, word, currentConfig.directions));
+        setSelectedCells(new Set());
+      } else {
+        setSelectedCells(nextSelectedCells);
+      }
+    } else {
+      mistakesRef.current += 1;
+      setMistakes(mistakesRef.current);
+      setSelectedCells(new Set());
     }
   }
 
-  // Calculate cell size based on grid
-  const cellSize = Math.min(
-    (SCREEN_WIDTH - 40) / gridSize,
-    (SCREEN_HEIGHT - 300) / gridSize,
-    36
+  const availableGridWidth = screenWidth - 64;
+  const availableGridHeight = screenHeight - 360;
+  const cellSize = Math.max(
+    28,
+    Math.floor(
+      Math.min(
+        (availableGridWidth - 8) / gridSize - 2,
+        (availableGridHeight - 8) / gridSize - 2,
+        48
+      )
+    )
   );
+  const renderedGridSize = (cellSize + 2) * gridSize + 8;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Word Search</Text>
-        <Text style={styles.subtitle}>Tap any letter of the hidden word</Text>
+        <Text style={styles.subtitle}>
+          Trace every letter in order · words may run in any direction
+        </Text>
       </View>
 
       {phase === 'idle' && (
@@ -203,13 +328,8 @@ export default function WordSearch({
           level={gameProgress.level}
           stars={levelToStars(gameProgress.level)}
           onStart={start}
+          startLabel="Start word search"
           containerStyle={styles.idleContent}
-          descriptionStyle={styles.descriptionText}
-          progressInfoStyle={styles.progressInfo}
-          levelLabelStyle={styles.levelLabel}
-          starsStyle={styles.starsDisplay}
-          buttonStyle={styles.startBtn}
-          buttonTextStyle={styles.startBtnText}
         />
       )}
 
@@ -221,7 +341,8 @@ export default function WordSearch({
               {
                 key: 'found',
                 value: wordsFound,
-                label: 'Found',
+                label: 'Words',
+                testID: 'words-found-value',
                 containerStyle: styles.statBox,
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,
@@ -230,50 +351,74 @@ export default function WordSearch({
                 key: 'time',
                 value: Math.ceil(timeLeftMs / 1000),
                 label: 'Seconds',
-                containerStyle: [styles.statBox, styles.timerBox],
+                containerStyle: styles.statBox,
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,
               },
               {
-                key: 'score',
-                value: score,
-                label: 'Score',
+                key: 'errors',
+                value: mistakes,
+                label: 'Errors',
                 containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
+                valueStyle: [
+                  styles.statValue,
+                  mistakes > 0 && styles.errorValue,
+                ],
                 labelStyle: styles.statLabel,
               },
             ]}
           />
 
           <View style={styles.targetCard}>
-            <Text style={styles.targetLabel}>Find this word:</Text>
-            <Text style={styles.targetWord}>{targetWord}</Text>
+            <Text style={styles.targetLabel}>Find and trace</Text>
+            <Text testID="target-word" style={styles.targetWord}>
+              {targetWord}
+            </Text>
+            <Text style={styles.targetProgress}>
+              {selectedCells.size}/{targetWord.length} letters selected
+            </Text>
           </View>
 
           <View style={styles.gridContainer}>
-            <View style={[styles.grid, { width: cellSize * gridSize + 8 }]}>
+            <View
+              testID="word-search-grid"
+              style={[
+                styles.grid,
+                { width: renderedGridSize, height: renderedGridSize },
+              ]}
+            >
               {gridData.grid.map((row, rowIdx) => (
                 <View key={rowIdx} style={styles.gridRow}>
                   {row.map((letter, colIdx) => {
                     const key = `${rowIdx}-${colIdx}`;
-                    const isFound = foundCells.has(key);
-                    const isWordPart = gridData.wordPositions.has(key);
+                    const targetIndex = gridData.wordPositions.indexOf(key);
+                    const isWordPart = targetIndex >= 0;
+                    const isSelected = selectedCells.has(key);
+                    const accessibilityLabel = isWordPart
+                      ? `${letter}, target position ${targetIndex + 1}`
+                      : `${letter}, distractor`;
+
                     return (
                       <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={accessibilityLabel}
+                        accessibilityState={{ selected: isSelected }}
                         key={key}
                         testID={`cell-${rowIdx}-${colIdx}`}
                         style={[
-                          styles.cell, 
+                          styles.cell,
                           { width: cellSize, height: cellSize },
-                          isFound && styles.cellFound
+                          isSelected && styles.cellSelected,
                         ]}
                         onPress={() => onCellPress(rowIdx, colIdx)}
                       >
-                        <Text style={[
-                          styles.cellText, 
-                          { fontSize: cellSize * 0.45 },
-                          isFound && styles.cellTextFound
-                        ]}>
+                        <Text
+                          style={[
+                            styles.cellText,
+                            { fontSize: cellSize * 0.42 },
+                            isSelected && styles.cellTextSelected,
+                          ]}
+                        >
                           {letter}
                         </Text>
                       </Pressable>
@@ -288,19 +433,36 @@ export default function WordSearch({
 
       {phase === 'ended' && (
         <View testID="end" style={styles.endCard}>
-          <Text style={styles.endEmoji}>🔍</Text>
-          <Text style={styles.endTitle}>Time's Up!</Text>
-          <Text style={styles.endScore}>{wordsFound} Words</Text>
-          <Text style={styles.endMeta}>Score: {score}</Text>
-          <Text style={styles.endDifficulty}>Difficulty: {selectedDifficulty}</Text>
+          <Text style={styles.endEmoji}>⌕</Text>
+          <Text style={styles.endTitle}>Search complete</Text>
+          <Text style={styles.endScore}>
+            {wordsFound} {wordsFound === 1 ? 'word' : 'words'}
+          </Text>
+          <Text style={styles.endMeta}>
+            {mistakes === 0
+              ? 'No incorrect taps'
+              : `${mistakes} incorrect ${mistakes === 1 ? 'tap' : 'taps'}`}
+          </Text>
+          <Text style={styles.endDifficulty}>
+            Difficulty: {selectedDifficulty}
+          </Text>
           <View style={styles.progressRow}>
             <Text style={styles.levelText}>Level {gameProgress.level}</Text>
             <Text style={styles.starsText}>
               {'★'.repeat(levelToStars(gameProgress.level))}
+              {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={() => { setPhase('idle'); setTimeout(start, 50); }}>
-            <Text style={styles.playAgainText}>Play Again</Text>
+          <Pressable
+            accessibilityRole="button"
+            testID="play-again"
+            style={({ pressed }) => [
+              styles.playAgainBtn,
+              pressed && styles.pressed,
+            ]}
+            onPress={start}
+          >
+            <Text style={styles.playAgainText}>Play again</Text>
           </Pressable>
         </View>
       )}
@@ -310,80 +472,146 @@ export default function WordSearch({
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12 },
-  header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  header: { marginBottom: spacing.sm },
+  title: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+  },
   idleContent: { flex: 1 },
-  descriptionText: {
-    fontSize: 15,
-    color: '#4B5563',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
-  progressInfo: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  levelLabel: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  starsDisplay: {
-    fontSize: 24,
-    letterSpacing: 4,
-  },
-  startBtn: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
-  statBox: { alignItems: 'center', backgroundColor: '#DBEAFE', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
-  timerBox: { backgroundColor: '#BFDBFE' },
-  statValue: { fontSize: 16, fontWeight: '700', color: '#1E40AF' },
-  statLabel: { fontSize: 10, color: '#3B82F6' },
-  targetCard: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 8,
-    padding: 10,
-    alignItems: 'center',
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
+  statsRow: {
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  targetLabel: { fontSize: 12, color: '#3B82F6' },
-  targetWord: { fontSize: 22, fontWeight: '800', color: '#1E3A8A', letterSpacing: 3 },
-  gridContainer: { alignItems: 'center' },
-  grid: { backgroundColor: '#F0F9FF', borderRadius: 8, padding: 4 },
+  statBox: {
+    flex: 1,
+    minHeight: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceTonal,
+  },
+  statValue: {
+    color: colors.primaryDark,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  errorValue: { color: colors.error },
+  statLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    marginTop: 1,
+  },
+  targetCard: {
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    paddingVertical: 10,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
+    ...shadows.small,
+  },
+  targetLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  targetWord: {
+    color: colors.primaryDark,
+    fontSize: 23,
+    fontWeight: '800',
+    letterSpacing: 4,
+    marginTop: 2,
+  },
+  targetProgress: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  gridContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  grid: {
+    justifyContent: 'center',
+    padding: 4,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surfaceTonal,
+  },
   gridRow: { flexDirection: 'row', justifyContent: 'center' },
   cell: {
     margin: 1,
-    backgroundColor: 'white',
-    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
   },
-  cellFound: { backgroundColor: '#10B981', borderColor: '#10B981' },
-  cellText: { fontWeight: '600', color: '#374151' },
-  cellTextFound: { color: 'white' },
-  endCard: { alignItems: 'center', paddingVertical: 20 },
-  endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 32, fontWeight: '800', color: '#3B82F6', marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
-  levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: '#F59E0B' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#3B82F6', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
-  playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
+  cellSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  cellText: { color: colors.textPrimary, fontWeight: '700' },
+  cellTextSelected: { color: colors.white },
+  endCard: {
+    alignItems: 'center',
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.cardBackground,
+    ...shadows.small,
+  },
+  endEmoji: { color: colors.primary, fontSize: 44, marginBottom: 4 },
+  endTitle: {
+    color: colors.textPrimary,
+    fontSize: 21,
+    fontWeight: '800',
+  },
+  endScore: {
+    color: colors.primaryDark,
+    fontSize: 32,
+    fontWeight: '800',
+    marginVertical: spacing.sm,
+  },
+  endMeta: { color: colors.textSecondary, fontSize: 14 },
+  endDifficulty: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    textTransform: 'capitalize',
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  levelText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  starsText: { color: colors.starActive, fontSize: 16 },
+  playAgainBtn: {
+    minWidth: 160,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.primary,
+  },
+  playAgainText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+  pressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
 });

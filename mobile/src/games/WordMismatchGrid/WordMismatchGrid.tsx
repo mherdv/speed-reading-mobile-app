@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
-import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
+import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'WordMismatchGrid';
 
@@ -17,7 +18,7 @@ type GameReportPayload = {
   details?: {
     wordCount?: number;
     wpm?: number;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 };
 
@@ -159,7 +160,6 @@ export default function WordMismatchGrid({
     gameProgress,
     setGameProgress,
     selectedDifficulty,
-    setSelectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
   const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
@@ -182,6 +182,7 @@ export default function WordMismatchGrid({
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const currentDurationMs = durationMsProp ?? currentConfig.durationMs;
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
 
   useEffect(() => {
@@ -209,7 +210,9 @@ export default function WordMismatchGrid({
   }, [phase, startedAtMs, currentDurationMs]);
 
   function start() {
-    if (phase !== 'idle') return;
+    clearTrackedTimeouts();
+    cancelledRef.current = false;
+    if (phase !== 'idle' && phase !== 'ended') return;
     // Reset all refs to initial values
     reportedRef.current = false;
     scoreRef.current = 0;
@@ -230,6 +233,7 @@ export default function WordMismatchGrid({
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    clearTrackedTimeouts();
 
     const started = startedAtMs ?? nowMs;
     const elapsedMs = Math.max(0, nowMs - started);
@@ -244,7 +248,6 @@ export default function WordMismatchGrid({
     const success = accuracy >= 0.7;
     updateProgress(GAME_ID, success, finalScore).then(({ progress }) => {
       setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
     });
 
     onReportResult?.({
@@ -262,10 +265,7 @@ export default function WordMismatchGrid({
         durationMs: currentDurationMs,
       },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function onSelectCard(cardId: number) {
@@ -356,6 +356,7 @@ export default function WordMismatchGrid({
             items={[
               {
                 key: 'score',
+                testID: 'score',
                 value: score,
                 label: 'Score',
                 containerStyle: styles.statBox,
@@ -389,7 +390,7 @@ export default function WordMismatchGrid({
             {round.cards.map((card) => {
               const isSelected = selectedCards.has(card.id);
               return (
-                  <Pressable
+                  <Pressable accessibilityRole="button"
                     key={`${roundIndex}-${card.id}`}
                     testID={`card-${card.id}`}
                     style={[
@@ -412,7 +413,7 @@ export default function WordMismatchGrid({
             })}
           </View>
 
-          <Pressable style={styles.submitBtn} onPress={submitRound}>
+          <Pressable accessibilityRole="button" style={styles.submitBtn} onPress={submitRound}>
             <Text style={styles.submitBtnText}>Submit ({selectedCards.size} selected)</Text>
           </Pressable>
         </View>
@@ -432,7 +433,11 @@ export default function WordMismatchGrid({
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={() => { setPhase('idle'); setTimeout(start, 50); }}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={() => {
+            clearTrackedTimeouts();
+            setPhase('idle');
+            scheduleTimeout(start, 50);
+          }}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>
@@ -483,7 +488,7 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
   },
   startButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warningForeground,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -547,7 +552,7 @@ const styles = StyleSheet.create({
     maxWidth: '48%',
   },
   cardSelected: {
-    borderColor: '#F59E0B',
+    borderColor: colors.warningForeground,
     backgroundColor: '#FFFBEB',
   },
   cardWord: {
@@ -574,7 +579,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warningForeground,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -585,7 +590,7 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     marginTop: 12,
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warningForeground,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -611,7 +616,7 @@ const styles = StyleSheet.create({
   endScore: {
     fontSize: 48,
     fontWeight: '800',
-    color: '#F59E0B',
+    color: colors.warningForeground,
     marginVertical: 8,
   },
   endMeta: {
@@ -620,7 +625,7 @@ const styles = StyleSheet.create({
   },
   endDifficulty: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     marginTop: 4,
   },
   progressRow: {
@@ -636,11 +641,11 @@ const styles = StyleSheet.create({
   },
   starsText: {
     fontSize: 16,
-    color: '#F59E0B',
+    color: colors.warningForeground,
   },
   playAgainBtn: {
     marginTop: 16,
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warningForeground,
     paddingVertical: 10,
     paddingHorizontal: 24,
     borderRadius: 8,

@@ -3,6 +3,7 @@ import {
   loadGameProgress,
   saveGameProgress,
   updateProgress,
+  updateTwoSessionDifficultySuggestion,
   clearProgress,
   levelToDifficulty,
   difficultyToLevel,
@@ -16,10 +17,26 @@ describe('progressStore', () => {
     await AsyncStorage.clear();
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   describe('loadGameProgress', () => {
     it('returns default progress for new game', async () => {
       const progress = await loadGameProgress('TestGame');
       expect(progress).toEqual({
+        level: 1,
+        streak: 0,
+        totalPlays: 0,
+      });
+    });
+
+    it('uses default progress when local storage is unavailable', async () => {
+      jest.spyOn(AsyncStorage, 'getItem').mockRejectedValueOnce(
+        new Error('storage unavailable')
+      );
+
+      await expect(loadGameProgress('TestGame')).resolves.toEqual({
         level: 1,
         streak: 0,
         totalPlays: 0,
@@ -133,6 +150,99 @@ describe('progressStore', () => {
       expect(progress.lastPlayedAt).toBeDefined();
       expect(progress.lastPlayedAt! >= before).toBe(true);
       expect(progress.lastPlayedAt! <= after).toBe(true);
+    });
+
+    it.each([
+      'FlashReading',
+      'NumberRecognition',
+      'NumberSearch',
+      'SymbolRecognition',
+      'TimedPhraseRecognition',
+      'WordPairs',
+    ])(
+      'moves %s across the persisted Easy-to-Medium threshold for its next session',
+      async (gameId) => {
+        await saveGameProgress(gameId, {
+          level: 5,
+          streak: 4,
+          totalPlays: 24,
+        });
+
+        const { progress, levelChanged } = await updateProgress(
+          gameId,
+          true,
+          100
+        );
+
+        expect(levelChanged).toBe(true);
+        expect(progress.level).toBe(6);
+        expect(levelToDifficulty(progress.level)).toBe('medium');
+        await expect(loadGameProgress(gameId)).resolves.toEqual(
+          expect.objectContaining({ level: 6, totalPlays: 25 })
+        );
+      }
+    );
+  });
+
+  describe('two-session reading-skill suggestion', () => {
+    it('suggests the next band only after two threshold sessions', async () => {
+      const first = await updateTwoSessionDifficultySuggestion(
+        'EvidenceHunt',
+        'easy',
+        true,
+        85
+      );
+      expect(first.suggestedDifficulty).toBe('easy');
+      const second = await updateTwoSessionDifficultySuggestion(
+        'EvidenceHunt',
+        'easy',
+        true,
+        90
+      );
+      expect(second.suggestedDifficulty).toBe('medium');
+      expect(second.progress.level).toBe(6);
+    });
+
+    it('resets the qualifying run after a below-threshold session', async () => {
+      await updateTwoSessionDifficultySuggestion(
+        'ContextBuilder',
+        'easy',
+        true
+      );
+      await updateTwoSessionDifficultySuggestion(
+        'ContextBuilder',
+        'easy',
+        false
+      );
+      const third = await updateTwoSessionDifficultySuggestion(
+        'ContextBuilder',
+        'easy',
+        true
+      );
+      expect(third.suggestedDifficulty).toBe('easy');
+    });
+
+    it('does not combine qualifying sessions played at different difficulties', async () => {
+      const easy = await updateTwoSessionDifficultySuggestion(
+        'ContextBuilder',
+        'easy',
+        true
+      );
+      expect(easy.progress.streak).toBe(1);
+      const medium = await updateTwoSessionDifficultySuggestion(
+        'ContextBuilder',
+        'medium',
+        true
+      );
+      expect(medium.suggestedDifficulty).toBe('easy');
+      expect(medium.progress.streak).toBe(1);
+      expect(medium.progress.adaptiveQualificationDifficulty).toBe('medium');
+      const secondMedium = await updateTwoSessionDifficultySuggestion(
+        'ContextBuilder',
+        'medium',
+        true
+      );
+      expect(secondMedium.suggestedDifficulty).toBe('hard');
     });
   });
 

@@ -1,11 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
-import { useAutoStart } from '../gameHooks';
+import { updateProgress } from '../../data/progressStore';
+import { useAutoStart, useTrackedTimeouts, type Difficulty } from '../gameHooks';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'MemoryRecall';
+const FAILURE_PENALTY = 10;
+const MAX_CONSECUTIVE_FAILURES = 3;
+const MIN_SEQUENCE_LENGTH = 1;
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -13,12 +18,13 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
   startingLength?: number;
   displayMs?: number;
+  difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
@@ -29,21 +35,37 @@ function generateSequence(length: number): number[] {
   return Array.from({ length }, () => Math.floor(Math.random() * 10));
 }
 
-export default function MemoryRecall({ startingLength = 3, displayMs = 1500, autoStart = false, onReportResult }: Props) {
+export default function MemoryRecall({
+  startingLength: startingLengthProp,
+  displayMs: displayMsProp,
+  difficulty = 'medium',
+  autoStart = false,
+  onReportResult,
+}: Props) {
+  const startingLength =
+    startingLengthProp ?? (difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5);
+  const displayMs =
+    displayMsProp ?? (difficulty === 'easy' ? 1500 : difficulty === 'medium' ? 1100 : 800);
   const [phase, setPhase] = useState<Phase>('idle');
   const [level, setLevel] = useState(startingLength);
   const [sequence, setSequence] = useState<number[]>([]);
   const [input, setInput] = useState<number[]>([]);
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [failureStreak, setFailureStreak] = useState(0);
 
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
+  const correctSequencesRef = useRef(0);
+  const failuresRef = useRef(0);
+  const consecutiveFailuresRef = useRef(0);
   const levelRef = useRef(startingLength);
+  const maxLevelRef = useRef(startingLength);
   const sequenceRef = useRef<number[]>([]);
   const showTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(() => {
     return () => {
@@ -54,25 +76,44 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
 
   useAutoStart(autoStart, phase, true, start);
 
-  function start() {
-    if (phase !== 'idle') return;
-    reportedRef.current = false;
-    scoreRef.current = 0;
-    levelRef.current = startingLength;
-    setPhase('show');
-    setLevel(startingLength);
-    setScore(0);
+  function showSequence(
+    nextLevel: number,
+    nextFeedback: 'correct' | 'wrong' | null = null
+  ) {
+    levelRef.current = nextLevel;
+    maxLevelRef.current = Math.max(maxLevelRef.current, nextLevel);
+    setLevel(nextLevel);
     setInput([]);
-    setFeedback(null);
-    startRef.current = Date.now();
+    setFeedback(nextFeedback);
 
-    const seq = generateSequence(startingLength);
-    sequenceRef.current = seq;
-    setSequence(seq);
+    const nextSequence = generateSequence(nextLevel);
+    sequenceRef.current = nextSequence;
+    setSequence(nextSequence);
+    setPhase('show');
 
     showTimeoutRef.current = setTimeout(() => {
+      if (cancelledRef.current) return;
+      setFeedback(null);
       setPhase('recall');
     }, displayMs);
+  }
+
+  function start() {
+    clearTrackedTimeouts();
+    cancelledRef.current = false;
+    if (phase !== 'idle' && phase !== 'ended') return;
+    reportedRef.current = false;
+    scoreRef.current = 0;
+    correctSequencesRef.current = 0;
+    failuresRef.current = 0;
+    consecutiveFailuresRef.current = 0;
+    levelRef.current = startingLength;
+    maxLevelRef.current = startingLength;
+    setScore(0);
+    setFailureStreak(0);
+    startRef.current = Date.now();
+
+    showSequence(startingLength);
   }
 
   function pressDigit(digit: number) {
@@ -85,28 +126,32 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
       const correct = newInput.every((d, i) => d === sequenceRef.current[i]);
 
       if (correct) {
+        correctSequencesRef.current += 1;
+        consecutiveFailuresRef.current = 0;
+        setFailureStreak(0);
         scoreRef.current += levelRef.current * 10;
         setScore(scoreRef.current);
-        setFeedback('correct');
-
-        
-          setFeedback(null);
-          levelRef.current += 1;
-          setLevel(levelRef.current);
-          setInput([]);
-
-          const seq = generateSequence(levelRef.current);
-          sequenceRef.current = seq;
-          setSequence(seq);
-          setPhase('show');
-
-          showTimeoutRef.current = setTimeout(() => {
-            setPhase('recall');
-          }, displayMs);
+        showSequence(levelRef.current + 1, 'correct');
       } else {
-        setFeedback('wrong');
-        
+        failuresRef.current += 1;
+        consecutiveFailuresRef.current += 1;
+        setFailureStreak(consecutiveFailuresRef.current);
+        scoreRef.current = Math.max(0, scoreRef.current - FAILURE_PENALTY);
+        setScore(scoreRef.current);
+
+        if (
+          consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES
+        ) {
+          setFeedback('wrong');
           finish();
+          return;
+        }
+
+        const reducedLevel = Math.max(
+          MIN_SEQUENCE_LENGTH,
+          levelRef.current - 1
+        );
+        showSequence(reducedLevel, 'wrong');
       }
     }
   }
@@ -115,30 +160,46 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    clearTrackedTimeouts();
 
     const now = Date.now();
     const elapsedMs = now - startRef.current;
+    const attempts = correctSequencesRef.current + failuresRef.current;
+    const accuracy =
+      attempts > 0 ? correctSequencesRef.current / attempts : 0;
+
+    void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current);
 
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
       score: scoreRef.current,
-      accuracy: 1,
-      details: { maxLevel: levelRef.current },
+      accuracy,
+      details: {
+        maxLevel: maxLevelRef.current,
+        finalLevel: levelRef.current,
+        correctSequences: correctSequencesRef.current,
+        failures: failuresRef.current,
+        endingFailureStreak: consecutiveFailuresRef.current,
+        failurePenalty: FAILURE_PENALTY,
+        difficulty,
+      },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function playAgain() {
+    clearTrackedTimeouts();
     setPhase('idle');
-    setTimeout(start, 50);
+    scheduleTimeout(start, 50);
   }
 
-  const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+  const digitRows = [
+    [1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 9],
+  ] as const;
 
   return (
     <View style={styles.container}>
@@ -167,6 +228,7 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
                 key: 'score',
                 value: score,
                 label: 'Score',
+                testID: 'memory-score',
                 containerStyle: styles.statBox,
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,
@@ -175,9 +237,19 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
                 key: 'level',
                 value: level,
                 label: 'Level',
+                testID: 'memory-level',
                 containerStyle: [styles.statBox, styles.levelBox],
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,
+              },
+              {
+                key: 'strikes',
+                value: `${failureStreak}/${MAX_CONSECUTIVE_FAILURES}`,
+                label: 'Strikes',
+                testID: 'memory-strikes',
+                containerStyle: [styles.statBox, styles.strikeBox],
+                valueStyle: [styles.statValue, styles.strikeValue],
+                labelStyle: [styles.statLabel, styles.strikeLabel],
               },
             ]}
           />
@@ -187,6 +259,16 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
           </View>
 
           <Text style={styles.instruction}>Memorize this sequence!</Text>
+          {feedback === 'correct' && (
+            <Text accessibilityLiveRegion="polite" style={styles.correctNotice}>
+              Correct · streak reset · one digit longer
+            </Text>
+          )}
+          {feedback === 'wrong' && (
+            <Text accessibilityLiveRegion="polite" style={styles.wrongNotice}>
+              Wrong · −{FAILURE_PENALTY} points · one digit shorter
+            </Text>
+          )}
         </View>
       )}
 
@@ -199,6 +281,7 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
                 key: 'score',
                 value: score,
                 label: 'Score',
+                testID: 'memory-score',
                 containerStyle: styles.statBox,
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,
@@ -207,9 +290,19 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
                 key: 'level',
                 value: level,
                 label: 'Level',
+                testID: 'memory-level',
                 containerStyle: [styles.statBox, styles.levelBox],
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,
+              },
+              {
+                key: 'strikes',
+                value: `${failureStreak}/${MAX_CONSECUTIVE_FAILURES}`,
+                label: 'Strikes',
+                testID: 'memory-strikes',
+                containerStyle: [styles.statBox, styles.strikeBox],
+                valueStyle: [styles.statValue, styles.strikeValue],
+                labelStyle: [styles.statLabel, styles.strikeLabel],
               },
             ]}
           />
@@ -225,19 +318,86 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
           </View>
 
           <View testID="digit-keypad" style={styles.keypad}>
-            {digits.map((d) => (
-              <Pressable
-                key={d}
-                testID={`digit-${d}`}
-                style={styles.digitBtn}
-                onPress={() => pressDigit(d)}
+            {digitRows.map((row, rowIndex) => (
+              <View
+                key={rowIndex}
+                testID={`keypad-row-${rowIndex + 1}`}
+                style={styles.keypadRow}
               >
-                <Text style={styles.digitText}>{d}</Text>
-              </Pressable>
+                {row.map((digit) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={digit}
+                    testID={`digit-${digit}`}
+                    accessibilityLabel={`Digit ${digit}`}
+                    style={({ pressed }) => [
+                      styles.digitBtn,
+                      pressed && styles.digitBtnPressed,
+                    ]}
+                    onPress={() => pressDigit(digit)}
+                  >
+                    {({ pressed }) => (
+                      <Text
+                        style={[
+                          styles.digitText,
+                          pressed && styles.digitTextPressed,
+                        ]}
+                      >
+                        {digit}
+                      </Text>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
             ))}
-            <Pressable testID="submit-btn" style={styles.submitKeyBtn} onPress={() => {}}>
-              <Text style={styles.digitText}>✓</Text>
-            </Pressable>
+            <View testID="keypad-row-4" style={styles.keypadRow}>
+              <View testID="keypad-spacer" style={styles.keypadSpacer} />
+              <Pressable
+                accessibilityRole="button"
+                testID="digit-0"
+                accessibilityLabel="Digit 0"
+                style={({ pressed }) => [
+                  styles.digitBtn,
+                  pressed && styles.digitBtnPressed,
+                ]}
+                onPress={() => pressDigit(0)}
+              >
+                {({ pressed }) => (
+                  <Text
+                    style={[
+                      styles.digitText,
+                      pressed && styles.digitTextPressed,
+                    ]}
+                  >
+                    0
+                  </Text>
+                )}
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                testID="delete-btn"
+                accessibilityLabel="Delete last digit"
+                accessibilityState={{ disabled: input.length === 0 }}
+                style={({ pressed }) => [
+                  styles.deleteBtn,
+                  input.length === 0 && styles.deleteBtnDisabled,
+                  pressed && input.length > 0 && styles.digitBtnPressed,
+                ]}
+                onPress={() => setInput((current) => current.slice(0, -1))}
+                disabled={input.length === 0}
+              >
+                {({ pressed }) => (
+                  <Text
+                    style={[
+                      styles.deleteText,
+                      pressed && input.length > 0 && styles.digitTextPressed,
+                    ]}
+                  >
+                    ⌫
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           </View>
         </View>
       )}
@@ -248,7 +408,7 @@ export default function MemoryRecall({ startingLength = 3, displayMs = 1500, aut
           <Text style={styles.endTitle}>Game Over!</Text>
           <Text style={styles.endScore}>{score}</Text>
           <Text style={styles.endMeta}>Max Level: {level} digits</Text>
-          <Pressable style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>
@@ -271,14 +431,17 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     paddingHorizontal: 8,
   },
-  startBtn: { backgroundColor: '#8B5CF6', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  startBtn: { backgroundColor: colors.interactivePrimary, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
   statBox: { alignItems: 'center', backgroundColor: '#EDE9FE', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
   levelBox: { backgroundColor: '#DDD6FE' },
+  strikeBox: { backgroundColor: colors.warningSurface },
   statValue: { fontSize: 18, fontWeight: '700', color: '#5B21B6' },
   statLabel: { fontSize: 10, color: '#6D28D9' },
+  strikeValue: { color: colors.warningForeground },
+  strikeLabel: { color: colors.warningForeground },
   sequenceCard: {
     backgroundColor: '#F5F3FF',
     borderRadius: 12,
@@ -290,6 +453,20 @@ const styles = StyleSheet.create({
   },
   sequence: { fontSize: 32, fontWeight: '800', color: '#5B21B6', letterSpacing: 8 },
   instruction: { textAlign: 'center', color: '#6B7280', fontSize: 12 },
+  correctNotice: {
+    marginTop: 8,
+    color: colors.successForeground,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  wrongNotice: {
+    marginTop: 8,
+    color: colors.errorForeground,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   inputCard: {
     backgroundColor: '#F5F3FF',
     borderRadius: 12,
@@ -303,29 +480,65 @@ const styles = StyleSheet.create({
   cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
   cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
   inputDisplay: { fontSize: 24, fontWeight: '700', color: '#5B21B6', textAlign: 'center', letterSpacing: 4 },
-  keypad: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
+  keypad: {
+    width: '100%',
+    maxWidth: 300,
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  keypadRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   digitBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#8B5CF6',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: colors.surfaceTonal,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  submitKeyBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#10B981',
+  digitBtnPressed: {
+    backgroundColor: colors.interactivePrimary,
+  },
+  keypadSpacer: {
+    width: 68,
+    height: 68,
+  },
+  deleteBtn: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: colors.surfaceTonal,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  digitText: { color: 'white', fontSize: 24, fontWeight: '700' },
+  deleteBtnDisabled: {
+    opacity: 0.35,
+  },
+  digitText: {
+    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '600',
+  },
+  deleteText: {
+    color: colors.primaryDark,
+    fontSize: 25,
+    fontWeight: '700',
+  },
+  digitTextPressed: {
+    color: colors.onInteractive,
+  },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#8B5CF6', marginVertical: 8 },
+  endScore: { fontSize: 48, fontWeight: '800', color: colors.interactivePrimary, marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#8B5CF6', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  playAgainBtn: { marginTop: 16, backgroundColor: colors.interactivePrimary, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

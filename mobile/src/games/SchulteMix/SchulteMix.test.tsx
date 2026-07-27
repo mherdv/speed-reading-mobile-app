@@ -3,6 +3,12 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import SchulteMix from './SchulteMix';
 
+type TestNode = {
+  props: {
+    testID?: unknown;
+  };
+};
+
 describe('SchulteMix', () => {
   it('shows start button initially', () => {
     const { getByTestId } = render(<SchulteMix />);
@@ -48,5 +54,26 @@ describe('SchulteMix', () => {
     expect(StyleSheet.flatten(row0.props.style).marginBottom).toBe(4);
     expect(StyleSheet.flatten(row1.props.style).marginBottom).toBe(4);
     expect(StyleSheet.flatten(row2.props.style).marginBottom).toBeUndefined();
+  });
+
+  it.each([
+    ['easy', 9],
+    ['medium', 16],
+    ['hard', 25],
+  ] as const)('uses the controlled %s grid size', (difficulty, cellCount) => {
+    const { getByTestId } = render(<SchulteMix difficulty={difficulty} />);
+
+    fireEvent.press(getByTestId('start-button'));
+    const grid = getByTestId('schulte-mix-grid');
+    const cells = grid.findAll(
+      (node: TestNode) =>
+        typeof node.props.testID === 'string' &&
+        node.props.testID.startsWith('cell-')
+    );
+    const uniqueCellIds = new Set(
+      cells.map((node: TestNode) => node.props.testID)
+    );
+
+    expect(uniqueCellIds.size).toBe(cellCount);
   });
 });

@@ -1,8 +1,9 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+
 import EyeMovementTraining from './EyeMovementTraining';
 
-describe('EyeMovementTraining', () => {
+describe('Eye Reset', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2020-01-01T00:00:00.000Z'));
@@ -12,46 +13,82 @@ describe('EyeMovementTraining', () => {
     jest.useRealTimers();
   });
 
-  it('starts in idle phase and shows start button', () => {
-    const { getByTestId } = render(<EyeMovementTraining />);
+  it('starts with an honest comfort description', () => {
+    const { getByTestId, getByText } = render(<EyeMovementTraining />);
+
     expect(getByTestId('start-button')).toBeTruthy();
+    expect(getByText('Comfort, not correction')).toBeTruthy();
+    expect(getByText(/does not improve eyesight/i)).toBeTruthy();
   });
 
-  it('shows dot positions after pressing start', () => {
+  it('moves from gentle blinks into the look-away break', () => {
     const { getByTestId } = render(
-      <EyeMovementTraining positions={5} rounds={3} intervalMs={500} />
+      <EyeMovementTraining blinkGoal={2} breakSeconds={2} />
     );
 
     fireEvent.press(getByTestId('start-button'));
-    expect(getByTestId('dot-track')).toBeTruthy();
-  });
+    expect(getByTestId('blink-stage')).toBeTruthy();
 
-  it('ends after all rounds complete', () => {
-    const onReportResult = jest.fn();
-    const { getByTestId } = render(
-      <EyeMovementTraining positions={3} rounds={2} intervalMs={100} onReportResult={onReportResult} />
-    );
+    fireEvent.press(getByTestId('record-blink'));
+    expect(getByTestId('blink-count')).toHaveTextContent('1');
+    fireEvent.press(getByTestId('record-blink'));
+    expect(getByTestId('look-away-ready')).toBeTruthy();
 
-    fireEvent.press(getByTestId('start-button'));
+    fireEvent.press(getByTestId('begin-look-away'));
+    expect(getByTestId('look-away-stage')).toBeTruthy();
 
     act(() => {
-      jest.advanceTimersByTime(300);
+      jest.advanceTimersByTime(2000);
     });
+    expect(getByTestId('comfort-check')).toBeTruthy();
+  });
 
-    expect(onReportResult).toHaveBeenCalled();
+  it('reports the completed comfort break once', () => {
+    const onReportResult = jest.fn();
+    const { getByTestId } = render(
+      <EyeMovementTraining
+        blinkGoal={1}
+        breakSeconds={1}
+        difficulty="easy"
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    fireEvent.press(getByTestId('record-blink'));
+    fireEvent.press(getByTestId('begin-look-away'));
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    fireEvent.press(getByTestId('comfort-comfortable'));
+
+    expect(onReportResult).toHaveBeenCalledTimes(1);
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        score: 1,
+        details: expect.objectContaining({
+          activityType: 'eye-comfort',
+          breakSeconds: 1,
+          comfort: 'comfortable',
+          difficulty: 'easy',
+        }),
+      })
+    );
     expect(getByTestId('end-screen')).toBeTruthy();
   });
 
-  it('shows play again button on end screen', () => {
+  it('offers another reset after completion', () => {
     const { getByTestId } = render(
-      <EyeMovementTraining positions={3} rounds={1} intervalMs={50} />
+      <EyeMovementTraining blinkGoal={1} breakSeconds={1} />
     );
 
     fireEvent.press(getByTestId('start-button'));
-
+    fireEvent.press(getByTestId('record-blink'));
+    fireEvent.press(getByTestId('begin-look-away'));
     act(() => {
-      jest.advanceTimersByTime(100);
+      jest.advanceTimersByTime(1000);
     });
+    fireEvent.press(getByTestId('comfort-same'));
 
     expect(getByTestId('play-again')).toBeTruthy();
   });

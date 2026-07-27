@@ -19,7 +19,9 @@ describe('SchulteLetters', () => {
 
   it('completes when all letters tapped in order', () => {
     const onReportResult = jest.fn();
-    const { getByTestId } = render(<SchulteLetters gridSize={2} onReportResult={onReportResult} />);
+    const { getByTestId, getByText, queryByTestId } = render(
+      <SchulteLetters gridSize={2} onReportResult={onReportResult} />
+    );
     
     fireEvent.press(getByTestId('start-button'));
     
@@ -29,7 +31,12 @@ describe('SchulteLetters', () => {
     fireEvent.press(getByTestId('cell-D'));
     
     expect(getByTestId('end')).toBeTruthy();
-    expect(onReportResult).toHaveBeenCalled();
+    expect(onReportResult).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(getByText('Play again'));
+
+    expect(queryByTestId('end')).toBeNull();
+    expect(getByTestId('cell-A')).toBeTruthy();
   });
 
   it('uses consistent grid padding and row gaps (no extra bottom gap)', () => {
@@ -47,5 +54,16 @@ describe('SchulteLetters', () => {
     expect(StyleSheet.flatten(row0.props.style).marginBottom).toBe(4);
     expect(StyleSheet.flatten(row1.props.style).marginBottom).toBe(4);
     expect(StyleSheet.flatten(row2.props.style).marginBottom).toBeUndefined();
+  });
+
+  it('keeps hard mode within the 26-letter alphabet', () => {
+    const { getByTestId, queryByTestId } = render(
+      <SchulteLetters difficulty="hard" />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+
+    expect(getByTestId('cell-Y')).toBeTruthy();
+    expect(queryByTestId('cell-undefined')).toBeNull();
   });
 });

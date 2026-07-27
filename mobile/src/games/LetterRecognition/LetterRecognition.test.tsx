@@ -101,7 +101,7 @@ describe('LetterRecognition (Grid Format)', () => {
         accuracy: expect.any(Number),
         details: expect.objectContaining({
           rounds: expect.any(Number),
-          difficulty: 'easy', // Default is now easy (level 1)
+          difficulty: 'medium',
         }),
       })
     );

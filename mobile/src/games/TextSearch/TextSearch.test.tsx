@@ -50,7 +50,17 @@ describe('TextSearch', () => {
     fireEvent.press(getByTestId('start-button'));
     fireEvent.press(getByTestId('word-0'));
 
-    expect(onReportResult).toHaveBeenCalled();
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        score: 100,
+        accuracy: 1,
+        details: expect.objectContaining({
+          activityType: 'scanning',
+          totalTargets: 1,
+          found: 1,
+        }),
+      })
+    );
     expect(getByTestId('end-screen')).toBeTruthy();
   });
 
@@ -63,5 +73,35 @@ describe('TextSearch', () => {
     fireEvent.press(getByTestId('word-0'));
 
     expect(getByTestId('play-again')).toBeTruthy();
+  });
+
+  it('counts a wrong tap and cannot report 100% after all targets are found', () => {
+    const onReportResult = jest.fn();
+    const { getByTestId } = render(
+      <TextSearch
+        paragraph="cat dog cat"
+        targetWord="cat"
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    fireEvent.press(getByTestId('word-1'));
+    expect(getByTestId('text-search-error-feedback')).toBeTruthy();
+    fireEvent.press(getByTestId('word-0'));
+    fireEvent.press(getByTestId('word-2'));
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        score: 67,
+        accuracy: 2 / 3,
+        details: expect.objectContaining({
+          totalTargets: 2,
+          found: 2,
+          errors: 1,
+          missed: 0,
+        }),
+      })
+    );
   });
 });

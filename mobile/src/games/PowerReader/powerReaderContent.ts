@@ -23,6 +23,20 @@ export type FreeBooksPage = {
   totalCount: number;
 };
 
+type GutendexBook = {
+  id: number;
+  title: string;
+  authors?: Array<{ name?: string }>;
+  subjects?: string[];
+  formats?: Record<string, string>;
+};
+
+type GutendexResponse = {
+  count?: number;
+  next?: string | null;
+  results?: GutendexBook[];
+};
+
 export async function fetchFreeBooksPage(
   page = 1,
   count = 12,
@@ -30,12 +44,12 @@ export async function fetchFreeBooksPage(
 ): Promise<FreeBooksPage> {
   const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : '';
   const url = `${GUTENDEX_API}?languages=en&mime_type=text/plain&sort=popular&page=${page}${searchParam}`;
-  const data = await fetchJson(url);
+  const data = await fetchJson<GutendexResponse>(url);
   const results = data?.results ?? [];
   const totalCount = Number(data?.count ?? results.length);
   const nextPage = parseNextPage(data?.next);
 
-  const items = results.slice(0, count).map((book: any) => {
+  const items = results.slice(0, count).map<PowerReaderArticle>((book) => {
     const author = (book.authors ?? [])[0]?.name ?? 'Unknown author';
     const subjects = Array.isArray(book.subjects) ? book.subjects.slice(0, 2).join(' • ') : '';
     const description = subjects ? `${author} · ${subjects}` : author;
@@ -146,12 +160,12 @@ function estimateDifficulty(text: string): 'easy' | 'medium' | 'hard' {
   return 'hard';
 }
 
-async function fetchJson(url: string): Promise<any> {
+async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
   }
-  return response.json();
+  return response.json() as Promise<T>;
 }
 
 async function fetchText(url: string): Promise<string> {

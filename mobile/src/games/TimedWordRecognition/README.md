@@ -1,37 +1,34 @@
-# Timed Word Recognition
+# Word Flash
 
-A speed reading exercise that tests rapid word recognition and visual memory.
+An optional rapid word-recognition drill. Its score and presentation WPM describe
+this task only; they do not prove faster connected-text reading.
 
 ## How to Play
 
-1. Select a difficulty level (Easy, Medium, or Hard)
-2. Press **Start Game** to begin
-3. A single word will flash on screen for a brief moment
-4. After the word disappears, select the correct word from 4 options
-5. Continue through 10 rounds to complete the game
+1. Select Adaptive, Easy, Medium, or Hard and choose a starting WPM.
+2. Press **Start Game**.
+3. A single word flashes briefly.
+4. After it disappears, select the exact word from four options.
+5. Eight correct answers in a row raise the pace by 25 WPM.
+6. A miss resets the correct streak. Three consecutive misses end the session.
+7. You can also finish voluntarily after completing an attempt.
 
 ## Difficulty Levels
 
-| Difficulty | Display Time |
-|------------|-------------|
-| Easy       | 1.0 second  |
-| Medium     | 0.5 second  |
-| Hard       | 0.25 second |
+| Difficulty | Content | Starting pace |
+| --- | --- | --- |
+| Easy | Common words | 120 WPM |
+| Medium | Academic words | 220 WPM |
+| Hard | Advanced words | 320 WPM |
 
 ## Scoring
 
 - **+10 points** for each correct answer
-- No penalty for incorrect answers
-- Final score shows points and accuracy percentage
+- No point penalty for an incorrect answer; it counts toward the three-miss stop rule
+- Results include actual attempts, accuracy, ending failure streak, and initial/final presentation WPM
 
-## Cognitive Benefits
+## Related drills
 
-- Improves rapid word recognition
-- Enhances visual short-term memory
-- Develops quick decision-making
-- Builds confidence for speed reading
-
-## Similar Games
-
-- **Timed Phrase Recognition** - Same concept but with phrases instead of single words
-- **Flash Reading** - Reading passages shown briefly
+- **Phrase Flash** — the same recognition loop with generated phrases
+- **Flash Recall** — type a briefly shown word instead of choosing it
+- **Last Word** — recall the final item in a serial word stream

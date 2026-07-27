@@ -19,7 +19,9 @@ describe('SchulteNumbers', () => {
 
   it('completes when all numbers tapped in order', () => {
     const onReportResult = jest.fn();
-    const { getByTestId } = render(<SchulteNumbers gridSize={2} onReportResult={onReportResult} />);
+    const { getByTestId, getByText, queryByTestId } = render(
+      <SchulteNumbers gridSize={2} onReportResult={onReportResult} />
+    );
     
     fireEvent.press(getByTestId('start-button'));
     
@@ -29,7 +31,12 @@ describe('SchulteNumbers', () => {
     fireEvent.press(getByTestId('cell-4'));
     
     expect(getByTestId('end')).toBeTruthy();
-    expect(onReportResult).toHaveBeenCalled();
+    expect(onReportResult).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(getByText('Play again'));
+
+    expect(queryByTestId('end')).toBeNull();
+    expect(getByTestId('cell-1')).toBeTruthy();
   });
 
   it('uses consistent grid padding and row gaps (no extra bottom gap)', () => {

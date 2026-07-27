@@ -1,14 +1,33 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { useDifficultyProgression, Difficulty } from '../../hooks/useDifficultyProgression';
+import {
+  createVariedSequence,
+  getFlashWordPool,
+} from '../../data/flashPracticeContent';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
-import { getRandomWords } from '../../data/vocabulary';
-import { useAutoStart } from '../gameHooks';
+import { updateProgress } from '../../data/progressStore';
+import { colors } from '../../theme/colors';
+import { FlashPaceControl } from '../../ui/FlashPaceControl';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
+import {
+  useAutoStart,
+  useTrackedTimeouts,
+  type Difficulty,
+} from '../gameHooks';
+import {
+  createFlashPaceState,
+  displayDurationForWpm,
+  MAX_CONSECUTIVE_FLASH_FAILURES,
+  updateFlashPace,
+  wpmForDisplayDuration,
+  type FlashPaceBounds,
+  type FlashPaceState,
+} from '../flashPacing';
 
 const GAME_ID = 'FlashReading';
+const CORRECT_ANSWERS_TO_INCREASE = 4;
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -16,7 +35,7 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 export type { Difficulty };
@@ -24,168 +43,277 @@ export type { Difficulty };
 type Props = {
   words?: string[];
   displayMs?: number;
+  totalRounds?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
 type Phase = 'idle' | 'flash' | 'recall' | 'feedback' | 'ended';
+type FinishReason = 'three-misses' | 'manual' | 'round-limit';
 
-// Use vocabulary database - get 20 random easy words as default
-const DEFAULT_WORDS = getRandomWords(20, 'easy');
-
-function getDifficultyConfig(difficulty: Difficulty) {
+function getConfig(difficulty: Difficulty): FlashPaceBounds & {
+  baseWpm: number;
+  masked: boolean;
+} {
   switch (difficulty) {
     case 'easy':
-      return { displayMs: 500, masked: false };
+      return { baseWpm: 120, minWpm: 80, maxWpm: 240, masked: false };
     case 'medium':
-      return { displayMs: 200, masked: false };
+      return { baseWpm: 220, minWpm: 140, maxWpm: 360, masked: false };
     case 'hard':
-      return { displayMs: 200, masked: true };
+      return { baseWpm: 320, minWpm: 220, maxWpm: 500, masked: true };
   }
 }
 
-export default function FlashReading({ words = DEFAULT_WORDS, displayMs: displayMsProp, difficulty = 'easy', autoStart = false, onReportResult }: Props) {
+export default function FlashReading({
+  words: wordsProp,
+  displayMs: displayMsProp,
+  totalRounds,
+  difficulty = 'easy',
+  autoStart = false,
+  onReportResult,
+}: Props) {
+  const config = getConfig(difficulty);
+  const wordPool =
+    wordsProp && wordsProp.length > 0
+      ? wordsProp
+      : getFlashWordPool(difficulty);
+  const defaultWpm =
+    displayMsProp == null
+      ? config.baseWpm
+      : wpmForDisplayDuration(displayMsProp);
   const [phase, setPhase] = useState<Phase>('idle');
-  const { 
-    difficulty: selectedDifficulty, 
-    correctStreak, 
-    failStreak, 
-    recordCorrect, 
-    recordFail, 
-    reset: resetProgression,
-    setDifficulty: setSelectedDifficulty 
-  } = useDifficultyProgression(difficulty);
+  const [startingWpm, setStartingWpm] = useState(defaultWpm);
+  const [liveWpm, setLiveWpm] = useState(defaultWpm);
   const [current, setCurrent] = useState('');
   const [input, setInput] = useState('');
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(0);
-  const [totalRounds] = useState(5);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [correctStreak, setCorrectStreak] = useState(0);
+  const [missStreak, setMissStreak] = useState(0);
+  const [finishReason, setFinishReason] =
+    useState<FinishReason>('three-misses');
 
-  const startRef = useRef<number>(0);
+  const startRef = useRef(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const roundRef = useRef(0);
   const correctRef = useRef(0);
-  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentRef = useRef('');
+  const previousWordRef = useRef('');
+  const deckRef = useRef<string[]>([]);
+  const deckIndexRef = useRef(0);
+  const paceRef = useRef<FlashPaceState>(
+    createFlashPaceState(defaultWpm)
+  );
+  const initialWpmRef = useRef(defaultWpm);
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
-  const currentConfig = getDifficultyConfig(selectedDifficulty);
-  const displayMs = displayMsProp ?? currentConfig.displayMs;
-  const isMasked = currentConfig.masked;
+  useEffect(() => {
+    const nextConfig = getConfig(difficulty);
+    const nextWpm =
+      displayMsProp == null
+        ? nextConfig.baseWpm
+        : wpmForDisplayDuration(displayMsProp);
+    setStartingWpm(nextWpm);
+    setLiveWpm(nextWpm);
+  }, [difficulty, displayMsProp]);
 
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
-      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     };
   }, []);
 
-  useAutoStart(autoStart, phase, true, start);
+  function takeNextWord() {
+    if (deckIndexRef.current >= deckRef.current.length) {
+      deckRef.current = createVariedSequence(
+        wordPool,
+        Math.max(32, wordPool.length),
+        previousWordRef.current
+      );
+      deckIndexRef.current = 0;
+    }
+    const word =
+      deckRef.current[deckIndexRef.current] ?? wordPool[0] ?? 'focus';
+    deckIndexRef.current += 1;
+    return word;
+  }
 
-  function pickWord(): string {
-    return words[Math.floor(Math.random() * words.length)];
+  function showRound() {
+    const word = takeNextWord();
+    currentRef.current = word;
+    previousWordRef.current = word;
+    setCurrent(word);
+    setInput('');
+    setFeedback(null);
+    setPhase('flash');
+    scheduleTimeout(
+      () => {
+        if (!cancelledRef.current) setPhase('recall');
+      },
+      displayMsProp ?? displayDurationForWpm(paceRef.current.wpm)
+    );
   }
 
   function start() {
-    if (phase !== 'idle') return;
+    if (phase !== 'idle' && phase !== 'ended') return;
+    clearTrackedTimeouts();
+    cancelledRef.current = false;
     reportedRef.current = false;
     scoreRef.current = 0;
     roundRef.current = 0;
     correctRef.current = 0;
-    setPhase('flash');
+    initialWpmRef.current = startingWpm;
+    paceRef.current = createFlashPaceState(startingWpm);
+    deckRef.current = createVariedSequence(
+      wordPool,
+      Math.max(32, wordPool.length),
+      previousWordRef.current
+    );
+    deckIndexRef.current = 0;
     setScore(0);
     setRound(0);
-    setInput('');
-    setFeedback(null);
+    setCorrectStreak(0);
+    setMissStreak(0);
+    setLiveWpm(startingWpm);
     startRef.current = Date.now();
-
-    const word = pickWord();
-    setCurrent(word);
-
-    flashTimeoutRef.current = setTimeout(() => {
-      setPhase('recall');
-    }, displayMs);
+    showRound();
   }
+
+  useAutoStart(autoStart, phase, true, start);
 
   function submit() {
     if (phase !== 'recall') return;
-
-    const correct = input.toLowerCase().trim() === current.toLowerCase();
+    const correct =
+      input.toLocaleLowerCase().trim() ===
+      currentRef.current.toLocaleLowerCase();
 
     if (correct) {
       scoreRef.current += 20;
       correctRef.current += 1;
       setScore(scoreRef.current);
       setFeedback('correct');
-      recordCorrect();
     } else {
       setFeedback('wrong');
-      recordFail();
     }
 
-    setPhase('feedback');
+    paceRef.current = updateFlashPace(paceRef.current, correct, {
+      ...config,
+      step: displayMsProp == null ? config.step : 0,
+      correctAnswersToIncrease: CORRECT_ANSWERS_TO_INCREASE,
+      missesToDecrease: null,
+    });
+    setLiveWpm(paceRef.current.wpm);
+    setCorrectStreak(paceRef.current.correctStreak);
+    setMissStreak(paceRef.current.missStreak);
 
-    setTimeout(() => {
-      setFeedback(null);
+    setPhase('feedback');
+    scheduleTimeout(() => {
+      if (cancelledRef.current) return;
       roundRef.current += 1;
       setRound(roundRef.current);
-
-      if (roundRef.current >= totalRounds) {
-        finish();
+      if (
+        paceRef.current.missStreak >= MAX_CONSECUTIVE_FLASH_FAILURES
+      ) {
+        finish('three-misses');
+      } else if (
+        totalRounds != null &&
+        roundRef.current >= totalRounds
+      ) {
+        finish('round-limit');
       } else {
-        setInput('');
-        const word = pickWord();
-        setCurrent(word);
-        setPhase('flash');
-
-        flashTimeoutRef.current = setTimeout(() => {
-          setPhase('recall');
-        }, displayMs);
+        showRound();
       }
-    }, 800);
+    }, 650);
   }
 
-  function finish() {
-    if (cancelledRef.current) return;
-    if (reportedRef.current) return;
+  function finish(reason: FinishReason) {
+    if (cancelledRef.current || reportedRef.current) return;
     reportedRef.current = true;
-
+    clearTrackedTimeouts();
     const now = Date.now();
     const elapsedMs = now - startRef.current;
-    const accuracy = totalRounds > 0 ? correctRef.current / totalRounds : 0;
-
+    const attempts = roundRef.current;
+    const accuracy = attempts > 0 ? correctRef.current / attempts : 0;
+    setFinishReason(reason);
+    setPhase('ended');
+    void updateProgress(
+      GAME_ID,
+      accuracy >= 0.7,
+      scoreRef.current
+    ).catch(() => undefined);
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
       score: scoreRef.current,
       accuracy,
-      details: { rounds: totalRounds, correct: correctRef.current, difficulty: selectedDifficulty },
+      details: {
+        rounds: attempts,
+        roundLimit: totalRounds ?? null,
+        correct: correctRef.current,
+        endingFailureStreak: paceRef.current.missStreak,
+        correctAnswersToIncrease: CORRECT_ANSWERS_TO_INCREASE,
+        finishReason: reason,
+        difficulty,
+        initialWpm: initialWpmRef.current,
+        finalWpm: paceRef.current.wpm,
+        paceChanges: paceRef.current.changes,
+        adaptivePacing: displayMsProp == null,
+      },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
   }
 
   function playAgain() {
-    resetProgression();
+    clearTrackedTimeouts();
     setPhase('idle');
-    setTimeout(start, 50);
+    scheduleTimeout(start, 50);
   }
+
+  const stats = (
+    <StatsRow
+      style={styles.statsRow}
+      items={[
+        {
+          key: 'score',
+          value: score,
+          label: 'Score',
+          containerStyle: styles.statBox,
+          valueStyle: styles.statValue,
+          labelStyle: styles.statLabel,
+        },
+        {
+          key: 'streak',
+          value:
+            missStreak > 0
+              ? `${missStreak}/${MAX_CONSECUTIVE_FLASH_FAILURES}`
+              : `${correctStreak}/${CORRECT_ANSWERS_TO_INCREASE}`,
+          label: missStreak > 0 ? 'Misses' : 'Correct',
+          containerStyle: styles.statBox,
+          valueStyle: styles.statValue,
+          labelStyle: styles.statLabel,
+        },
+        {
+          key: 'wpm',
+          value: liveWpm,
+          label: 'WPM',
+          containerStyle: styles.statBox,
+          valueStyle: styles.statValue,
+          labelStyle: styles.statLabel,
+        },
+      ]}
+    />
+  );
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Flash Reading</Text>
-        <Text style={styles.subtitle}>Read the word flashed quickly</Text>
-        {phase !== 'idle' && phase !== 'ended' && (
-          <Text style={styles.progressHint}>
-            Difficulty: {selectedDifficulty} • Streak: {correctStreak > 0 ? `+${correctStreak}` : failStreak > 0 ? `-${failStreak}` : '0'}
-          </Text>
-        )}
+        <Text style={styles.title}>Flash Recall</Text>
+        <Text style={styles.subtitle}>Type the briefly shown word</Text>
       </View>
 
       {phase === 'idle' && (
@@ -193,68 +321,35 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
           description={GAME_DESCRIPTIONS[GAME_ID]}
           onStart={start}
           containerStyle={styles.idleContent}
-          descriptionStyle={styles.descriptionText}
-          buttonStyle={styles.startBtn}
-          buttonTextStyle={styles.startBtnText}
         >
-          <Text style={styles.difficultyLabel}>Select Difficulty:</Text>
-          <View style={styles.difficultyRow}>
-            {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
-              <Pressable
-                key={d}
-                style={[
-                  styles.difficultyBtn,
-                  selectedDifficulty === d && styles.difficultyBtnActive,
-                ]}
-                onPress={() => setSelectedDifficulty(d)}
-              >
-                <Text
-                  style={[
-                    styles.difficultyBtnText,
-                    selectedDifficulty === d && styles.difficultyBtnTextActive,
-                  ]}
-                >
-                  {d.charAt(0).toUpperCase() + d.slice(1)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <Text style={styles.difficultyHint}>
-            {selectedDifficulty === 'easy' && 'Longer display time (0.5s)'}
-            {selectedDifficulty === 'medium' && 'Quick flash (0.2s)'}
-            {selectedDifficulty === 'hard' && 'Quick flash + bottom half masked'}
+          <Text style={styles.sessionHint}>
+            +25 WPM after {CORRECT_ANSWERS_TO_INCREASE} correct · 3 misses end
           </Text>
+          {config.masked && (
+            <Text style={styles.maskHint}>
+              Hard mode partially masks the lower word area
+            </Text>
+          )}
+          <FlashPaceControl
+            wpm={startingWpm}
+            minWpm={config.minWpm}
+            maxWpm={config.maxWpm}
+            disabled={displayMsProp != null}
+            correctAnswersToIncrease={CORRECT_ANSWERS_TO_INCREASE}
+            onChange={setStartingWpm}
+          />
         </SimpleIdlePanel>
       )}
 
       {phase === 'flash' && (
         <View style={styles.gameArea}>
-          <StatsRow
-            style={styles.statsRow}
-            items={[
-              {
-                key: 'score',
-                value: score,
-                label: 'Score',
-                containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-              {
-                key: 'round',
-                value: `${round + 1}/${totalRounds}`,
-                label: 'Round',
-                containerStyle: [styles.statBox, styles.roundBox],
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-            ]}
-          />
-
+          {stats}
           <View style={styles.flashCard}>
             <View style={styles.wordContainer}>
-              <Text testID="flash-word" style={styles.flashWord}>{current}</Text>
-              {isMasked && <View style={styles.maskOverlay} />}
+              <Text testID="flash-word" style={styles.flashWord}>
+                {current}
+              </Text>
+              {config.masked && <View style={styles.maskOverlay} />}
             </View>
           </View>
         </View>
@@ -262,52 +357,55 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
 
       {(phase === 'recall' || phase === 'feedback') && (
         <View style={styles.gameArea}>
-          <StatsRow
-            style={styles.statsRow}
-            items={[
-              {
-                key: 'score',
-                value: score,
-                label: 'Score',
-                containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-              {
-                key: 'round',
-                value: `${round + 1}/${totalRounds}`,
-                label: 'Round',
-                containerStyle: [styles.statBox, styles.roundBox],
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
+          {stats}
+          <View
+            style={[
+              styles.inputCard,
+              feedback === 'correct' && styles.correctCard,
+              feedback === 'wrong' && styles.wrongCard,
             ]}
-          />
-
-          <View style={[
-            styles.inputCard,
-            feedback === 'correct' && styles.cardCorrect,
-            feedback === 'wrong' && styles.cardWrong,
-          ]}>
+          >
             <TextInput
               testID="recall-input"
               style={styles.input}
               value={input}
               onChangeText={setInput}
               placeholder="Type the word"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
               autoFocus
               editable={phase === 'recall'}
+              onSubmitEditing={submit}
             />
+            {feedback === 'correct' && (
+              <Text style={styles.correctText}>Correct</Text>
+            )}
             {feedback === 'wrong' && (
-              <Text style={styles.correctAnswer}>Correct: {current}</Text>
+              <Text style={styles.wrongText}>Answer: {current}</Text>
             )}
           </View>
-
           {phase === 'recall' && (
-            <Pressable testID="submit-btn" style={styles.submitBtn} onPress={submit}>
-              <Text style={styles.submitBtnText}>Submit</Text>
-            </Pressable>
+            <>
+              <Pressable
+                accessibilityRole="button"
+                testID="submit-btn"
+                style={styles.submitButton}
+                onPress={submit}
+              >
+                <Text style={styles.submitButtonText}>Check answer</Text>
+              </Pressable>
+              {round > 0 && (
+                <Pressable
+                  accessibilityRole="button"
+                  testID="finish-session"
+                  style={styles.finishButton}
+                  onPress={() => finish('manual')}
+                >
+                  <Text style={styles.finishButtonText}>Finish session</Text>
+                </Pressable>
+              )}
+            </>
           )}
         </View>
       )}
@@ -315,14 +413,25 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
       {phase === 'ended' && (
         <View testID="end" style={styles.endCard}>
           <Text style={styles.endEmoji}>⚡</Text>
-          <Text style={styles.endTitle}>Complete!</Text>
-          <Text style={styles.endScore}>{score}</Text>
-          <Text style={styles.endMeta}>
-            {correctRef.current}/{totalRounds} correct ({Math.round((correctRef.current / totalRounds) * 100)}%)
+          <Text style={styles.endTitle}>
+            {finishReason === 'three-misses'
+              ? 'Three misses — session complete'
+              : 'Set complete'}
           </Text>
-          <Text style={styles.endDifficulty}>Difficulty: {selectedDifficulty}</Text>
-          <Pressable style={styles.playAgainBtn} onPress={playAgain}>
-            <Text style={styles.playAgainText}>Play Again</Text>
+          <Text style={styles.endScore}>{scoreRef.current}</Text>
+          <Text style={styles.endMeta}>
+            {correctRef.current}/{roundRef.current} correct
+          </Text>
+          <Text style={styles.endPace}>
+            {initialWpmRef.current} → {paceRef.current.wpm} WPM
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            testID="play-again"
+            style={styles.playAgainButton}
+            onPress={playAgain}
+          >
+            <Text style={styles.playAgainText}>Play again</Text>
           </Pressable>
         </View>
       )}
@@ -332,106 +441,156 @@ export default function FlashReading({ words = DEFAULT_WORDS, displayMs: display
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12 },
-  header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  progressHint: { fontSize: 11, color: '#6366F1', marginTop: 4, fontWeight: '600' },
+  header: { marginBottom: 10 },
+  title: { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
+  subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 3 },
   idleContent: { flex: 1 },
-  descriptionText: {
-    fontSize: 15,
-    color: '#4B5563',
+  sessionHint: {
+    color: colors.warningForeground,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 12,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    paddingHorizontal: 8,
   },
-  difficultyLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
+  maskHint: {
+    color: colors.warningForeground,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 12,
   },
-  difficultyRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-    minWidth: 360
-  },
-  difficultyBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    marginHorizontal: 4,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  difficultyBtnActive: {
-    borderColor: '#F97316',
-    backgroundColor: '#FFEDD5',
-  },
-  difficultyBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  difficultyBtnTextActive: {
-    color: '#9A3412',
-  },
-  difficultyHint: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  startBtn: { backgroundColor: '#F97316', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 },
-  statBox: { alignItems: 'center', backgroundColor: '#FFEDD5', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
-  roundBox: { backgroundColor: '#FED7AA' },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#9A3412' },
-  statLabel: { fontSize: 10, color: '#C2410C' },
-  flashCard: {
-    backgroundColor: '#FFF7ED',
-    borderRadius: 12,
-    padding: 32,
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 14,
+  },
+  statBox: {
+    minWidth: 78,
     alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#FDBA74',
+    backgroundColor: colors.warningSurface,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 12,
   },
-  wordContainer: {
-    position: 'relative',
+  statValue: { fontSize: 17, fontWeight: '800', color: colors.warningForeground },
+  statLabel: { fontSize: 10, color: colors.textSecondary },
+  flashCard: {
+    minHeight: 190,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 24,
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  flashWord: { fontSize: 32, fontWeight: '800', color: '#9A3412' },
+  wordContainer: { position: 'relative' },
+  flashWord: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: colors.warningForeground,
+  },
   maskOverlay: {
     position: 'absolute',
     left: -4,
     right: -4,
     bottom: -2,
-    height: 18,
-    backgroundColor: '#1F2937',
+    height: 21,
+    backgroundColor: colors.textPrimary,
   },
   inputCard: {
-    backgroundColor: '#FFF7ED',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#FDBA74',
+    backgroundColor: colors.cardBackground,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
-  cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
-  input: { fontSize: 24, fontWeight: '700', color: '#9A3412', textAlign: 'center' },
-  correctAnswer: { textAlign: 'center', color: '#DC2626', fontSize: 14, marginTop: 8 },
-  submitBtn: { backgroundColor: '#F97316', paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
-  submitBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
-  endCard: { alignItems: 'center', paddingVertical: 20 },
-  endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#F97316', marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#F97316', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
-  playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
+  correctCard: {
+    backgroundColor: colors.successSurface,
+    borderColor: colors.success,
+  },
+  wrongCard: {
+    backgroundColor: colors.errorSurface,
+    borderColor: colors.error,
+  },
+  input: {
+    minHeight: 52,
+    fontSize: 22,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  correctText: {
+    color: colors.successForeground,
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  wrongText: {
+    color: colors.errorForeground,
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  submitButton: {
+    minHeight: 50,
+    backgroundColor: colors.interactiveWarm,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+  },
+  submitButtonText: {
+    color: colors.onInteractive,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  finishButton: {
+    minHeight: 48,
+    marginTop: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
+  },
+  finishButtonText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  endCard: { alignItems: 'center', paddingVertical: 24 },
+  endEmoji: { fontSize: 38, marginBottom: 8 },
+  endTitle: { fontSize: 21, fontWeight: '800', color: colors.textPrimary },
+  endScore: {
+    fontSize: 48,
+    fontWeight: '800',
+    color: colors.warningForeground,
+    marginVertical: 8,
+  },
+  endMeta: { fontSize: 14, color: colors.textSecondary },
+  endPace: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.warningForeground,
+    marginTop: 7,
+  },
+  playAgainButton: {
+    minHeight: 48,
+    marginTop: 18,
+    backgroundColor: colors.interactiveWarm,
+    paddingVertical: 12,
+    paddingHorizontal: 26,
+    borderRadius: 14,
+    justifyContent: 'center',
+  },
+  playAgainText: {
+    color: colors.onInteractive,
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });

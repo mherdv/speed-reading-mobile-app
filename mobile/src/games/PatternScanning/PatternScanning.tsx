@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'PatternScanning';
 
@@ -14,11 +15,12 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
   gridSize?: number;
+  grid?: readonly (readonly string[])[];
   targetPattern?: string;
   durationMs?: number;
   difficulty?: Difficulty;
@@ -73,8 +75,37 @@ function generateGrid(size: number, target: string, targetDensity: number): { gr
   return { grid, targetPositions };
 }
 
+function prepareGrid(
+  size: number,
+  target: string,
+  targetDensity: number,
+  providedGrid?: readonly (readonly string[])[]
+): { grid: string[][]; targetPositions: [number, number][] } {
+  if (!providedGrid) return generateGrid(size, target, targetDensity);
+  const grid = providedGrid.map((row) => [...row]);
+  const targetPositions: [number, number][] = [];
+  grid.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      if (cell === target) targetPositions.push([rowIndex, columnIndex]);
+    });
+  });
+  return { grid, targetPositions };
+}
+
+export function calculatePatternAccuracy(
+  correctSelections: number,
+  totalTargets: number,
+  incorrectSelections: number
+): number {
+  const denominator =
+    Math.max(0, totalTargets) + Math.max(0, incorrectSelections);
+  if (denominator === 0) return 0;
+  return Math.min(1, Math.max(0, correctSelections) / denominator);
+}
+
 export default function PatternScanning({ 
   gridSize: gridSizeProp, 
+  grid: providedGrid,
   targetPattern: targetPatternProp, 
   durationMs: durationMsProp,
   difficulty = 'medium',
@@ -86,7 +117,6 @@ export default function PatternScanning({
     gameProgress,
     setGameProgress,
     selectedDifficulty,
-    setSelectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
   // Auto-select a random pattern - user no longer needs to select manually
@@ -101,15 +131,20 @@ export default function PatternScanning({
   const durationMs = durationMsProp ?? config.durationMs;
   const targetPattern = selectedPattern;
   
-  const { grid, targetPositions } = useMemo(
-    () => generateGrid(gridSize, targetPattern, config.targetDensity), 
-    [gridSize, targetPattern, config.targetDensity, phase, roundNumber]
+  const [gridData, setGridData] = useState(() =>
+    prepareGrid(
+      gridSize,
+      targetPattern,
+      config.targetDensity,
+      providedGrid
+    )
   );
   const [found, setFound] = useState<string[]>([]);
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(durationMs);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [totalFound, setTotalFound] = useState(0);
+  const [incorrect, setIncorrect] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
@@ -118,28 +153,48 @@ export default function PatternScanning({
   const scoreRef = useRef(0);
   const foundRef = useRef<string[]>([]);
   const totalFoundRef = useRef(0);
+  const totalTargetsRef = useRef(0);
+  const incorrectRef = useRef(0);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextRoundTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+      if (nextRoundTimerRef.current) clearTimeout(nextRoundTimerRef.current);
     };
   }, []);
 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
   function start() {
-    if (phase !== 'idle') return;
+    cancelledRef.current = false;
+    if (phase !== 'idle' && phase !== 'ended') return;
     // Auto-select a random pattern each game
-    setSelectedPattern(PATTERNS[Math.floor(Math.random() * PATTERNS.length)]);
+    const nextPattern =
+      targetPatternProp ??
+      PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+    const nextGrid = prepareGrid(
+      gridSize,
+      nextPattern,
+      config.targetDensity,
+      providedGrid
+    );
+    setSelectedPattern(nextPattern);
+    setGridData(nextGrid);
     reportedRef.current = false;
     scoreRef.current = 0;
     foundRef.current = [];
     totalFoundRef.current = 0;
+    totalTargetsRef.current = nextGrid.targetPositions.length;
+    incorrectRef.current = 0;
     setPhase('running');
     setScore(0);
     setFound([]);
     setTotalFound(0);
+    setIncorrect(0);
     setRoundNumber(1);
     setTimeLeft(durationMs);
     setFeedback(null);
@@ -163,14 +218,22 @@ export default function PatternScanning({
 
     const now = Date.now();
     const elapsedMs = now - startRef.current;
-    const accuracy = totalFoundRef.current > 0 ? 1 : 0;
+    const accuracy = calculatePatternAccuracy(
+      totalFoundRef.current,
+      totalTargetsRef.current,
+      incorrectRef.current
+    );
+    const missed = Math.max(
+      0,
+      totalTargetsRef.current - totalFoundRef.current
+    );
 
-    // Update progress - success if found at least some patterns
-    const success = totalFoundRef.current >= 3;
-    updateProgress(GAME_ID, success, scoreRef.current).then(({ progress }) => {
-      setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
-    });
+    updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current)
+      .then(({ progress }) => {
+        if (cancelledRef.current) return;
+        setGameProgress(progress);
+      })
+      .catch(() => undefined);
 
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
@@ -178,20 +241,35 @@ export default function PatternScanning({
       elapsedMs,
       score: scoreRef.current,
       accuracy,
-      details: { totalTargets: totalFoundRef.current, found: totalFoundRef.current },
+      details: {
+        totalTargets: totalTargetsRef.current,
+        found: totalFoundRef.current,
+        missed,
+        errors: incorrectRef.current,
+        accuracyFormula: 'found / (total targets + errors)',
+        difficulty: selectedDifficulty,
+      },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function startNextRound() {
     // Start a new round with a new pattern
-    setSelectedPattern(PATTERNS[Math.floor(Math.random() * PATTERNS.length)]);
+    const nextPattern =
+      targetPatternProp ??
+      PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+    const nextGrid = prepareGrid(
+      gridSize,
+      nextPattern,
+      config.targetDensity,
+      providedGrid
+    );
+    setSelectedPattern(nextPattern);
+    setGridData(nextGrid);
     foundRef.current = [];
     setFound([]);
     setRoundNumber(r => r + 1);
+    totalTargetsRef.current += nextGrid.targetPositions.length;
     setFeedback(null);
   }
 
@@ -200,7 +278,9 @@ export default function PatternScanning({
     const key = `${r}-${c}`;
     if (found.includes(key)) return;
 
-    const isTarget = targetPositions.some(([tr, tc]) => tr === r && tc === c);
+    const isTarget = gridData.targetPositions.some(
+      ([tr, tc]) => tr === r && tc === c
+    );
 
     if (isTarget) {
       scoreRef.current += 10;
@@ -210,13 +290,24 @@ export default function PatternScanning({
       totalFoundRef.current += 1;
       setTotalFound(totalFoundRef.current);
       setFeedback(key);
-      setTimeout(() => setFeedback(null), 200);
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = setTimeout(() => setFeedback(null), 200);
 
       // When all patterns found in current round, start a new round instead of finishing
-      if (foundRef.current.length === targetPositions.length) {
-        setTimeout(() => startNextRound(), 300);
+      if (foundRef.current.length === gridData.targetPositions.length) {
+        if (nextRoundTimerRef.current) {
+          clearTimeout(nextRoundTimerRef.current);
+        }
+        nextRoundTimerRef.current = setTimeout(() => startNextRound(), 300);
       }
+      return;
     }
+
+    incorrectRef.current += 1;
+    setIncorrect(incorrectRef.current);
+    setFeedback(key);
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 200);
   }
 
   function playAgain() {
@@ -253,7 +344,7 @@ export default function PatternScanning({
             items={[
               {
                 key: 'found',
-                value: `${found.length}/${targetPositions.length}`,
+                value: `${found.length}/${gridData.targetPositions.length}`,
                 label: 'Found',
                 containerStyle: styles.statBox,
                 valueStyle: styles.statValue,
@@ -275,18 +366,26 @@ export default function PatternScanning({
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,
               },
+              {
+                key: 'errors',
+                value: incorrect,
+                label: 'Errors',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
             ]}
           />
 
           <View testID="grid" style={styles.gridContainer}>
-            {grid.map((row, r) => (
+            {gridData.grid.map((row, r) => (
               <View key={r} style={styles.gridRow}>
                 {row.map((cell, c) => {
                   const key = `${r}-${c}`;
                   const isFound = found.includes(key);
                   const isFeedback = feedback === key;
                   return (
-                    <Pressable
+                    <Pressable accessibilityRole="button"
                       key={c}
                       testID={`cell-${r}-${c}`}
                       style={[
@@ -319,7 +418,7 @@ export default function PatternScanning({
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>
@@ -333,7 +432,7 @@ const styles = StyleSheet.create({
   header: { marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
   subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  targetHighlight: { color: '#EA580C', fontWeight: '700', fontSize: 16 },
+  targetHighlight: { color: colors.interactiveWarm, fontWeight: '700', fontSize: 16 },
   idleContent: { flex: 1 },
   descriptionText: {
     fontSize: 15,
@@ -357,7 +456,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     letterSpacing: 4,
   },
-  startBtn: { backgroundColor: '#EA580C', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 8 },
+  startBtn: { backgroundColor: colors.interactiveWarm, paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
@@ -384,11 +483,11 @@ const styles = StyleSheet.create({
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#EA580C', marginVertical: 8 },
+  endScore: { fontSize: 48, fontWeight: '800', color: colors.interactiveWarm, marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: '#F59E0B' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#EA580C', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  starsText: { fontSize: 16, color: colors.warningForeground },
+  playAgainBtn: { marginTop: 16, backgroundColor: colors.interactiveWarm, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

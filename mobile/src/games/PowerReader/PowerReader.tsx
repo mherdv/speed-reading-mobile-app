@@ -4,11 +4,13 @@ import Popover, { PopoverPlacement, Rect } from 'react-native-popover-view';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
 import { loadResults } from '../../data/resultsStore';
+import { ARTICLES } from '../../data/articles';
 import { useAutoStart, useGameProgress } from '../gameHooks';
 import { StatsRow } from '../../ui/StatsRow';
+import { GameDifficultyControl } from '../../ui/GameDifficultyControl';
 import {
   fetchFreeBooksPage,
   fetchFreeBookText,
@@ -26,9 +28,15 @@ type Intensity = 'beginner' | 'intermediate' | 'advanced';
 
 const INTENSITY_CONFIG: Record<Intensity, { wpm: number; label: string; chunkSize: number; color: string }> = {
   beginner: { wpm: 150, label: 'Beginner', chunkSize: 2, color: '#10B981' },
-  intermediate: { wpm: 300, label: 'Intermediate', chunkSize: 3, color: '#8B5CF6' },
+  intermediate: { wpm: 300, label: 'Intermediate', chunkSize: 3, color: colors.interactivePrimary },
   advanced: { wpm: 500, label: 'Advanced', chunkSize: 5, color: '#6366F1' },
 };
+
+function difficultyToIntensity(difficulty: Difficulty): Intensity {
+  if (difficulty === 'easy') return 'beginner';
+  if (difficulty === 'hard') return 'advanced';
+  return 'intermediate';
+}
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -36,7 +44,7 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
@@ -50,21 +58,46 @@ type Props = {
 type Phase = 'idle' | 'running' | 'ended';
 
 const WORDS_PER_PAGE = 180;
+const starterArticle = ARTICLES[0];
+const STARTER_ARTICLE: PowerReaderArticle = {
+  id: `starter-${starterArticle.id}`,
+  title: starterArticle.title,
+  author: 'SpeedRead library',
+  description: 'A short offline article, ready whenever you are.',
+  text: starterArticle.text,
+  source: 'Built-in library',
+  difficulty: starterArticle.difficulty,
+  wordCount: starterArticle.wordCount,
+};
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
-export default function PowerReader({ 
-  text: textProp, 
-  chunkSize: chunkSizeProp, 
-  intervalMs: intervalMsProp, 
+export default function PowerReader({
+  text: textProp,
+  chunkSize: chunkSizeProp,
+  intervalMs: intervalMsProp,
   autoStart = false,
   onReportResult,
   difficulty = 'medium',
 }: Props & { difficulty?: Difficulty }) {
   const [articles, setArticles] = useState<PowerReaderArticle[]>([]);
-  const [selectedArticle, setSelectedArticle] = useState<PowerReaderArticle | null>(null);
+  const [selectedArticle, setSelectedArticle] = useState<PowerReaderArticle | null>(
+    textProp
+      ? {
+          id: 'custom-text',
+          title: 'Custom Text',
+          author: 'Provided',
+          description: 'Provided text',
+          text: textProp,
+          source: 'Custom',
+          difficulty: 'medium',
+          wordCount: textProp.split(/\s+/).filter(Boolean).length,
+        }
+      : STARTER_ARTICLE
+  );
   const [loadingArticles, setLoadingArticles] = useState(false);
   const [articlesError, setArticlesError] = useState<string | null>(null);
+  const [booksRequested, setBooksRequested] = useState(false);
   const [loadingBook, setLoadingBook] = useState(false);
   const [pendingStart, setPendingStart] = useState(false);
   const [booksPage, setBooksPage] = useState(1);
@@ -92,20 +125,21 @@ export default function PowerReader({
 
   const activeArticle = selectedArticle;
   const text = activeArticle?.text ?? '';
-  
+
   const [phase, setPhase] = useState<Phase>('idle');
   const {
     gameProgress,
     setGameProgress,
     selectedDifficulty,
-    setSelectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
-  const [selectedIntensity, setSelectedIntensity] = useState<Intensity>('intermediate');
-  const [targetWpm, setTargetWpm] = useState(300); // Target WPM instead of multiplier
+  const selectedIntensity = difficultyToIntensity(difficulty);
+  const [targetWpm, setTargetWpm] = useState(
+    INTENSITY_CONFIG[selectedIntensity].wpm
+  );
   const [bestWpm, setBestWpm] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  
+
   useEffect(() => {
     async function loadBestWpm() {
       const results = await loadResults();
@@ -148,7 +182,7 @@ export default function PowerReader({
   }, [textProp]);
 
   useEffect(() => {
-    if (textProp) return;
+    if (textProp || !booksRequested) return;
     let isActive = true;
     async function loadBooks() {
       setLoadingArticles(true);
@@ -175,11 +209,11 @@ export default function PowerReader({
     return () => {
       isActive = false;
     };
-  }, [textProp, debouncedQuery]);
+  }, [textProp, booksRequested, debouncedQuery]);
 
 
   useAutoStart(autoStart, phase, progressLoaded, start);
-  
+
   const intensityConfig = INTENSITY_CONFIG[selectedIntensity];
   const chunkSize = chunkSizeProp ?? intensityConfig.chunkSize;
 
@@ -305,7 +339,8 @@ export default function PowerReader({
 
   function scheduleNextChunk() {
     if (pausedRef.current) return;
-    const currentInterval = Math.round((chunkSize / targetWpmRef.current) * 60000);
+    const currentInterval =
+      intervalMsProp ?? Math.round((chunkSize / targetWpmRef.current) * 60000);
     chunkTimerRef.current = setTimeout(() => {
       if (cancelledRef.current || pausedRef.current) return;
       const pageWords = pagesRef.current[pageIndexRef.current] ?? [];
@@ -331,6 +366,7 @@ export default function PowerReader({
   }
 
   function start(force = false) {
+    cancelledRef.current = false;
     if (!force && phase !== 'idle') return;
     if (!text.trim() || pages.length === 0) return;
     reportedRef.current = false;
@@ -392,7 +428,7 @@ export default function PowerReader({
     reportedRef.current = true;
 
     const now = Date.now();
-    const elapsedMs = now - startRef.current;
+    const elapsedMs = Math.max(1, now - startRef.current);
     const wordsRead = words.length;
     const wpm = Math.round((wordsRead / elapsedMs) * 60000);
 
@@ -400,21 +436,24 @@ export default function PowerReader({
     updateProgress(GAME_ID, true, wpm).then(({ progress }) => {
       if (cancelledRef.current) return;
       setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
-    });
+    }).catch(() => undefined);
 
+    setPhase('ended');
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
       score: wpm,
-      accuracy: 1,
-      details: { wordsRead, pagesShown: pages.length },
+      details: {
+        activityType: 'paced-reading',
+        wordCount: wordsRead,
+        wpm,
+        wordsRead,
+        pagesShown: pages.length,
+        difficulty: selectedDifficulty,
+        articleTitle: activeArticle?.title,
+      },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
   }
 
   function playAgain() {
@@ -707,22 +746,40 @@ export default function PowerReader({
           </View>
 
           {/* Title */}
-          <Text style={styles.heroTitle}>Power Read</Text>
-          
+          <Text style={styles.heroTitle}>Power Reader</Text>
+
           {/* Description */}
           <Text style={styles.heroDescription}>
-            Choose a free book, load the text, and jump straight into speed reading.
+            Start with an offline article, or choose a free book to train guided pacing.
           </Text>
 
           {!textProp && (
             <View style={styles.contentPanel}>
+              <Text style={styles.sectionLabel}>Ready offline</Text>
+              <View style={[styles.articleCard, styles.articleCardActive]}>
+                <View style={styles.articleMain}>
+                  <View style={styles.articleCoverFallback}>
+                    <Text style={styles.articleCoverText}>A</Text>
+                  </View>
+                  <View style={styles.articleInfo}>
+                    <Text style={[styles.articleTitle, styles.articleTitleActive]}>
+                      {STARTER_ARTICLE.title}
+                    </Text>
+                    <Text style={styles.articleAuthor}>{STARTER_ARTICLE.author}</Text>
+                    <Text style={[styles.articleDescription, styles.articleDescriptionActive]}>
+                      {STARTER_ARTICLE.wordCount} words · {STARTER_ARTICLE.difficulty}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
               {recentBooks.length > 0 && (
                 <View style={styles.recentSection}>
                   <Text style={styles.sectionLabel}>Recently Read</Text>
                   <View style={styles.articleList}>
                     {recentBooks.map((article) => (
                       <View key={article.id} style={styles.articleCard}>
-                        <Pressable
+                        <Pressable accessibilityRole="button"
                           style={styles.articleMain}
                           onPress={() => handleSelectArticle(article)}
                         >
@@ -745,7 +802,7 @@ export default function PowerReader({
                           </View>
                         </Pressable>
                         <View style={styles.articleActions}>
-                          <Pressable
+                          <Pressable accessibilityRole="button"
                             style={styles.actionButton}
                             onPress={() => handleSelectArticle(article)}
                           >
@@ -762,13 +819,23 @@ export default function PowerReader({
                 Free Books{booksTotalCount ? ` (${booksTotalCount})` : ''}
               </Text>
 
-              <TextInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search title or author"
-                placeholderTextColor="#9CA3AF"
-                style={styles.searchInput}
-              />
+              {!booksRequested ? (
+                <Pressable
+                  accessibilityRole="button"
+                  style={styles.actionButtonOutline}
+                  onPress={() => setBooksRequested(true)}
+                >
+                  <Text style={styles.actionButtonOutlineText}>Browse Project Gutenberg</Text>
+                </Pressable>
+              ) : (
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search title or author"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.searchInput}
+                />
+              )}
 
               {loadingArticles && (
                 <View style={styles.loadingRow}>
@@ -790,7 +857,7 @@ export default function PowerReader({
                     const isActive = selectedArticle?.id === article.id;
                     return (
                       <View key={article.id} style={[styles.articleCard, isActive && styles.articleCardActive]}>
-                        <Pressable
+                        <Pressable accessibilityRole="button"
                           style={styles.articleMain}
                           onPress={() => handleSelectArticle(article)}
                         >
@@ -813,13 +880,13 @@ export default function PowerReader({
                           </View>
                         </Pressable>
                         <View style={styles.articleActions}>
-                          <Pressable
+                          <Pressable accessibilityRole="button"
                             style={styles.actionButton}
                             onPress={() => handleSelectArticle(article)}
                           >
                             <Text style={styles.actionButtonText}>Read</Text>
                           </Pressable>
-                          <Pressable
+                          <Pressable accessibilityRole="button"
                             style={styles.actionButtonOutline}
                             onPress={() => handleDownloadBook(article)}
                           >
@@ -830,7 +897,7 @@ export default function PowerReader({
                     );
                   })}
                   {nextBooksPage && (
-                    <Pressable
+                    <Pressable accessibilityRole="button"
                       style={[styles.loadMoreBtn, loadingMore && styles.loadMoreBtnDisabled]}
                       onPress={handleLoadMoreBooks}
                       disabled={loadingMore}
@@ -845,35 +912,7 @@ export default function PowerReader({
             </View>
           )}
 
-          {/* Intensity Selection */}
-          <Text style={styles.sectionLabel}>Select Intensity</Text>
-          <View style={styles.intensityRow}>
-            {(['beginner', 'intermediate', 'advanced'] as Intensity[]).map((intensity) => {
-              const config = INTENSITY_CONFIG[intensity];
-              const isSelected = selectedIntensity === intensity;
-              return (
-                <Pressable
-                  key={intensity}
-                  style={[
-                    styles.intensityBtn,
-                    { borderColor: config.color },
-                    isSelected && { backgroundColor: config.color + '15' },
-                  ]}
-                  onPress={() => setSelectedIntensity(intensity)}
-                >
-                  <Text style={[styles.intensityLabel, { color: config.color }]}>
-                    {config.label}
-                  </Text>
-                  <Text style={[styles.intensityWpm, { color: config.color }]}>
-                    {config.wpm} WPM
-                  </Text>
-                  {isSelected && (
-                    <View style={[styles.selectedDot, { backgroundColor: config.color }]} />
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
+          <GameDifficultyControl />
 
           {/* Stats Row */}
           <View style={styles.statsContainer}>
@@ -889,14 +928,14 @@ export default function PowerReader({
           </View>
 
           {/* Start Button */}
-          <Pressable
+          <Pressable accessibilityRole="button"
             testID="start-button"
             style={[styles.startBtnWrapper, !text.trim() && styles.startBtnDisabled]}
             onPress={() => start()}
             disabled={!text.trim()}
           >
             <LinearGradient
-              colors={['#8B5CF6', '#6366F1']}
+              colors={[colors.interactivePrimary, colors.primary]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.startBtnGradient}
@@ -934,9 +973,9 @@ export default function PowerReader({
           />
 
           <View style={styles.speedControlRow}>
-            <Pressable 
+            <Pressable accessibilityRole="button"
               testID="speed-decrease"
-              style={[styles.speedBtn, targetWpm <= 50 && styles.speedBtnDisabled]} 
+              style={[styles.speedBtn, targetWpm <= 50 && styles.speedBtnDisabled]}
               onPress={() => adjustSpeed(-25)}
               disabled={targetWpm <= 50}
             >
@@ -946,9 +985,9 @@ export default function PowerReader({
               <Text style={styles.speedValue}>{targetWpm}</Text>
               <Text style={styles.speedLabel}>WPM</Text>
             </View>
-            <Pressable 
+            <Pressable accessibilityRole="button"
               testID="speed-increase"
-              style={[styles.speedBtn, targetWpm >= 600 && styles.speedBtnDisabled]} 
+              style={[styles.speedBtn, targetWpm >= 600 && styles.speedBtnDisabled]}
               onPress={() => adjustSpeed(25)}
               disabled={targetWpm >= 600}
             >
@@ -956,7 +995,7 @@ export default function PowerReader({
             </Pressable>
           </View>
 
-          <Pressable
+          <Pressable accessibilityRole="button"
             style={[styles.pauseButton, isPaused && styles.pauseButtonActive]}
             onPress={togglePause}
           >
@@ -966,7 +1005,7 @@ export default function PowerReader({
           {isPaused && (
             <View style={styles.selectionControls}>
               {(['word', 'phrase', 'sentence'] as const).map((mode) => (
-                <Pressable
+                <Pressable accessibilityRole="button"
                   key={mode}
                   style={[styles.selectionChip, selectionMode === mode && styles.selectionChipActive]}
                   onPress={() => setSelectionMode(mode)}
@@ -978,7 +1017,7 @@ export default function PowerReader({
                   </Text>
                 </Pressable>
               ))}
-              <Pressable style={styles.selectionClear} onPress={() => {
+              <Pressable accessibilityRole="button" style={styles.selectionClear} onPress={() => {
                 setSelectionStart(null);
                 setSelectionEnd(null);
                 setSelectionBox(null);
@@ -993,7 +1032,7 @@ export default function PowerReader({
             <View style={styles.languageControls}>
               <Text style={styles.languageLabel}>From</Text>
               {['en', 'ru', 'es', 'fr', 'de'].map((lang) => (
-                <Pressable
+                <Pressable accessibilityRole="button"
                   key={`from-${lang}`}
                   style={[styles.languageChip, sourceLanguage === lang && styles.languageChipActive]}
                   onPress={() => setSourceLanguage(lang)}
@@ -1007,7 +1046,7 @@ export default function PowerReader({
               ))}
               <Text style={styles.languageLabel}>To</Text>
               {['ru', 'en', 'es', 'fr', 'de'].map((lang) => (
-                <Pressable
+                <Pressable accessibilityRole="button"
                   key={`to-${lang}`}
                   style={[styles.languageChip, targetLanguage === lang && styles.languageChipActive]}
                   onPress={() => setTargetLanguage(lang)}
@@ -1023,13 +1062,13 @@ export default function PowerReader({
           )}
 
           {isPaused && selectionStart !== null && selectionEnd !== null && !translateAnchor && (
-            <Pressable style={styles.translateFallbackButton} onPress={handleTranslateHighlight}>
+            <Pressable accessibilityRole="button" style={styles.translateFallbackButton} onPress={handleTranslateHighlight}>
               <Text style={styles.translateFallbackText}>Translate</Text>
             </Pressable>
           )}
 
           <View style={styles.pageControls}>
-            <Pressable
+            <Pressable accessibilityRole="button"
               style={[styles.pageButton, pageIndex <= 0 && styles.pageButtonDisabled]}
               onPress={goToPrevPage}
               disabled={pageIndex <= 0}
@@ -1039,7 +1078,7 @@ export default function PowerReader({
             <Text style={styles.pageProgressText}>
               Page {Math.min(pageIndex + 1, pages.length)} of {Math.max(pages.length, 1)}
             </Text>
-            <Pressable
+            <Pressable accessibilityRole="button"
               style={[styles.pageButton, pageIndex + 1 >= pages.length && styles.pageButtonDisabled]}
               onPress={goToNextPage}
               disabled={pageIndex + 1 >= pages.length}
@@ -1097,7 +1136,7 @@ export default function PowerReader({
             </Text>
 
             {isPaused && selectionStart !== null && selectionEnd !== null && translateAnchor && (
-              <Pressable
+              <Pressable accessibilityRole="button"
                 style={[
                   styles.translateIconButton,
                   {
@@ -1123,7 +1162,7 @@ export default function PowerReader({
                 <View>
                   <View style={styles.translateHeader}>
                     <Text style={styles.translateTitle}>Translation</Text>
-                    <Pressable onPress={() => setTranslateVisible(false)}>
+                    <Pressable accessibilityRole="button" onPress={() => setTranslateVisible(false)}>
                       <Text style={styles.translateClose}>✕</Text>
                     </Pressable>
                   </View>
@@ -1159,7 +1198,7 @@ export default function PowerReader({
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Read Again</Text>
           </Pressable>
         </View>
@@ -1169,11 +1208,11 @@ export default function PowerReader({
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     backgroundColor: colors.background,
   },
-  idleContent: { 
+  idleContent: {
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 24,
@@ -1287,7 +1326,7 @@ const styles = StyleSheet.create({
   },
   articleMeta: {
     fontSize: 10,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     marginTop: 8,
   },
   articleProgress: {
@@ -1416,7 +1455,7 @@ const styles = StyleSheet.create({
   },
   statDescription: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     marginTop: 4,
   },
   startBtnWrapper: {
@@ -1437,9 +1476,9 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     alignItems: 'center',
   },
-  startBtnText: { 
-    color: 'white', 
-    fontSize: 16, 
+  startBtnText: {
+    color: 'white',
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
   },
@@ -1596,7 +1635,7 @@ const styles = StyleSheet.create({
   },
   translateClose: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   translateSourceText: {
     fontSize: 12,
@@ -1706,7 +1745,7 @@ const styles = StyleSheet.create({
   endMeta: { fontSize: 14, color: '#6B7280' },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: '#F59E0B' },
+  starsText: { fontSize: 16, color: colors.warningForeground },
   playAgainBtn: { marginTop: 16, backgroundColor: '#6366F1', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

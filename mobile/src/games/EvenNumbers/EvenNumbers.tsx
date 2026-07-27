@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
-import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
+import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'EvenNumbers';
 
@@ -14,7 +15,7 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
@@ -57,7 +58,6 @@ export default function EvenNumbers({
     gameProgress,
     setGameProgress,
     selectedDifficulty,
-    setSelectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
   const [index, setIndex] = useState(0);
@@ -76,6 +76,7 @@ export default function EvenNumbers({
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
   const correctRef = useRef(0);
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const currentDurationMs = durationMsProp ?? currentConfig.durationMs;
@@ -92,7 +93,9 @@ export default function EvenNumbers({
   const currentNumber = usesSequence ? (seq[index] ?? 0) : randomNumber;
 
   function start() {
-    if (phase !== 'idle') return;
+    clearTrackedTimeouts();
+    cancelledRef.current = false;
+    if (phase !== 'idle' && phase !== 'ended') return;
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
@@ -123,6 +126,7 @@ export default function EvenNumbers({
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    clearTrackedTimeouts();
 
     const now = Date.now();
     const elapsedMs = now - startAtRef.current;
@@ -132,7 +136,6 @@ export default function EvenNumbers({
     const success = accuracy >= 0.7;
     updateProgress(GAME_ID, success, scoreRef.current).then(({ progress }) => {
       setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
     });
 
     onReportResult?.({
@@ -147,10 +150,7 @@ export default function EvenNumbers({
         difficulty: selectedDifficulty,
       },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function evaluate(isEvenPressed: boolean) {
@@ -176,7 +176,8 @@ export default function EvenNumbers({
       setFeedback('wrong');
     }
 
-    setTimeout(() => setFeedback(null), 200);
+    clearTrackedTimeouts();
+    scheduleTimeout(() => setFeedback(null), 200);
 
     if (usesSequence) {
       setIndex((i) => Math.min(seq.length - 1, i + 1));
@@ -253,10 +254,10 @@ export default function EvenNumbers({
           </View>
 
           <View style={styles.buttonsRow}>
-            <Pressable testID="button-even" style={[styles.choiceBtn, styles.evenBtn]} onPress={() => evaluate(true)}>
+            <Pressable accessibilityRole="button" testID="button-even" style={[styles.choiceBtn, styles.evenBtn]} onPress={() => evaluate(true)}>
               <Text style={styles.choiceBtnText}>EVEN</Text>
             </Pressable>
-            <Pressable testID="button-odd" style={[styles.choiceBtn, styles.oddBtn]} onPress={() => evaluate(false)}>
+            <Pressable accessibilityRole="button" testID="button-odd" style={[styles.choiceBtn, styles.oddBtn]} onPress={() => evaluate(false)}>
               <Text style={styles.choiceBtnText}>ODD</Text>
             </Pressable>
           </View>
@@ -280,7 +281,7 @@ export default function EvenNumbers({
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>
@@ -346,17 +347,17 @@ const styles = StyleSheet.create({
   buttonsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   choiceBtn: { flex: 1, paddingVertical: 16, borderRadius: 10, alignItems: 'center' },
   evenBtn: { backgroundColor: '#10B981' },
-  oddBtn: { backgroundColor: '#F59E0B' },
+  oddBtn: { backgroundColor: colors.warningForeground },
   choiceBtnText: { color: 'white', fontSize: 18, fontWeight: '700' },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
   endScore: { fontSize: 48, fontWeight: '800', color: '#3B82F6', marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+  endDifficulty: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: '#F59E0B' },
+  starsText: { fontSize: 16, color: colors.warningForeground },
   playAgainBtn: { marginTop: 16, backgroundColor: '#3B82F6', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
   hiddenScore: { position: 'absolute', opacity: 0, height: 0 },

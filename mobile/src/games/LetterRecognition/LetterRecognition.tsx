@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Dimensions } from 'react-native';
-import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
-import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
+import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'LetterRecognition';
 
@@ -14,7 +15,7 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
@@ -57,39 +58,38 @@ function shuffleArray<T>(arr: T[]): T[] {
 function buildGrid(gridSize: number, targetCount: number): { cells: LetterCell[]; target: string; targetPositions: Set<number> } {
   const total = gridSize * gridSize;
   const target = LETTERS[Math.floor(Math.random() * LETTERS.length)];
-  
+
   // Create cells with some targets scattered
   const targetPositions = new Set<number>();
   while (targetPositions.size < targetCount) {
     targetPositions.add(Math.floor(Math.random() * total));
   }
-  
+
   const cells: LetterCell[] = [];
   for (let i = 0; i < total; i++) {
     const isTarget = targetPositions.has(i);
-    const letter = isTarget 
-      ? target 
+    const letter = isTarget
+      ? target
       : LETTERS.filter(l => l !== target)[Math.floor(Math.random() * 25)];
     cells.push({ id: i, letter, isTarget });
   }
-  
+
   return { cells, target, targetPositions };
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export default function LetterRecognition({ 
-  durationMs: durationMsProp, 
+export default function LetterRecognition({
+  durationMs: durationMsProp,
   difficulty = 'medium',
   autoStart = false,
-  onReportResult 
+  onReportResult
 }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
   const {
     gameProgress,
     setGameProgress,
     selectedDifficulty,
-    setSelectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
   const [grid, setGrid] = useState<LetterCell[]>([]);
@@ -109,6 +109,7 @@ export default function LetterRecognition({
   const correctRef = useRef(0);
   const phaseRef = useRef<Phase>('idle');
   const startingRef = useRef(false);
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const gridSize = currentConfig.gridSize;
@@ -136,12 +137,14 @@ export default function LetterRecognition({
   }, []);
 
   function startGame() {
+    clearTrackedTimeouts();
+    cancelledRef.current = false;
     // Use ref to check phase to avoid stale closure issues
-    if (phaseRef.current !== 'idle') return;
+    if (phaseRef.current !== 'idle' && phaseRef.current !== 'ended') return;
     // Prevent double execution
     if (startingRef.current) return;
     startingRef.current = true;
-    
+
     // Clear any existing timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -151,11 +154,11 @@ export default function LetterRecognition({
     scoreRef.current = 0;
     roundsRef.current = 0;
     correctRef.current = 0;
-    
+
     // Capture current config values to avoid stale closures
     const currentGridSize = gridSize;
     const currentTargetCount = currentConfig.targetCount;
-    
+
     const { cells, target: t, targetPositions: tp } = buildGrid(currentGridSize, currentTargetCount);
     setGrid(cells);
     setTarget(t);
@@ -184,6 +187,7 @@ export default function LetterRecognition({
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    clearTrackedTimeouts();
 
     const now = Date.now();
     const elapsedMs = now - startRef.current;
@@ -194,8 +198,6 @@ export default function LetterRecognition({
     const isSuccess = accuracy >= 0.7;
     updateProgress(GAME_ID, isSuccess, scoreRef.current).then(({ progress }) => {
       setGameProgress(progress);
-      // Update difficulty for next game based on new level
-      setSelectedDifficulty(levelToDifficulty(progress.level));
     });
 
     onReportResult?.({
@@ -204,21 +206,18 @@ export default function LetterRecognition({
       elapsedMs,
       score: scoreRef.current,
       accuracy: Math.min(1, accuracy),
-      details: { 
-        rounds: roundsRef.current, 
+      details: {
+        rounds: roundsRef.current,
         correct: correctRef.current,
         difficulty: selectedDifficulty,
       },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function onCellPress(cellId: number) {
     if (phase !== 'running') return;
-    
+
     const newSelected = new Set(selected);
     if (newSelected.has(cellId)) {
       newSelected.delete(cellId);
@@ -240,7 +239,7 @@ export default function LetterRecognition({
 
     // Auto-submit when all targets found and no wrong cells selected
     if (correctCount === targetPositions.size && !hasWrongSelection) {
-      
+
         submitRoundInternal(newSelected);
     }
   }
@@ -255,12 +254,12 @@ export default function LetterRecognition({
         correctCount++;
       }
     }
-    
+
     // Penalize wrong selections and missed targets
     const wrongSelections = selectedSet.size - correctCount;
     const missed = targetPositions.size - correctCount;
     const roundScore = Math.max(0, (correctCount * 10) - (wrongSelections * 5) - (missed * 5));
-    
+
     scoreRef.current += roundScore;
     correctRef.current += correctCount;
     roundsRef.current += 1;
@@ -305,7 +304,7 @@ export default function LetterRecognition({
       {phase === 'running' && (
         <View style={styles.gameArea}>
           <Text testID="score" style={styles.hiddenText}>Score: {score}</Text>
-          
+
           <StatsRow
             style={styles.statsRow}
             items={[
@@ -347,7 +346,7 @@ export default function LetterRecognition({
               {grid.map((cell) => {
                 const isSelected = selected.has(cell.id);
                 return (
-                  <Pressable
+                  <Pressable accessibilityRole="button"
                     key={cell.id}
                     testID={`cell-${cell.id}`}
                     style={[
@@ -358,7 +357,7 @@ export default function LetterRecognition({
                     onPress={() => onCellPress(cell.id)}
                   >
                     <Text style={[
-                      styles.cellText, 
+                      styles.cellText,
                       { fontSize: cellSize * 0.5 },
                       isSelected && styles.cellTextSelected
                     ]}>
@@ -370,7 +369,7 @@ export default function LetterRecognition({
             </View>
           </View>
 
-          <Pressable style={styles.submitBtn} onPress={submitRound}>
+          <Pressable accessibilityRole="button" style={styles.submitBtn} onPress={submitRound}>
             <Text style={styles.submitBtnText}>Submit ({selected.size} selected)</Text>
           </Pressable>
         </View>
@@ -390,11 +389,11 @@ export default function LetterRecognition({
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={() => { 
-            setPhase('idle'); 
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={() => {
+            setPhase('idle');
             phaseRef.current = 'idle';
-            // Use setTimeout to ensure state is updated before starting
-            setTimeout(() => startGame(), 0);
+            clearTrackedTimeouts();
+            scheduleTimeout(startGame, 0);
           }}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
@@ -434,7 +433,7 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
   },
   startBtn: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: colors.interactivePrimary,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -476,15 +475,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#E5E7EB',
   },
-  cellSelected: { 
-    backgroundColor: '#8B5CF6', 
-    borderColor: '#8B5CF6',
+  cellSelected: {
+    backgroundColor: colors.interactivePrimary,
+    borderColor: colors.interactivePrimary,
   },
   cellText: { fontWeight: '700', color: '#374151' },
   cellTextSelected: { color: 'white' },
   submitBtn: {
     marginTop: 10,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: colors.interactivePrimary,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -493,12 +492,12 @@ const styles = StyleSheet.create({
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#8B5CF6', marginVertical: 8 },
+  endScore: { fontSize: 48, fontWeight: '800', color: colors.interactivePrimary, marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+  endDifficulty: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: '#F59E0B' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#8B5CF6', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  starsText: { fontSize: 16, color: colors.warningForeground },
+  playAgainBtn: { marginTop: 16, backgroundColor: colors.interactivePrimary, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

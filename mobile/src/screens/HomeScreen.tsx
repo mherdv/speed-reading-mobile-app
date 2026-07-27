@@ -1,13 +1,72 @@
-import { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View, ScrollView, Image } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { loadAllProgress, clearProgress, type GameProgress } from '../data/progressStore';
+import {
+  clearProgress,
+  loadAllProgress,
+  MAX_LEVEL,
+  type GameProgress,
+} from '../data/progressStore';
+import {
+  getDefaultDifficultyPreference,
+  loadAllDifficultyPreferences,
+  type DifficultyPreference,
+} from '../data/difficultyPreferences';
+import { getGameCatalogEntry } from '../data/gameCatalog';
+import type { GameId } from '../data/gameIds';
+import {
+  loadGamePins,
+  toggleFavoriteGame,
+  type GamePins,
+} from '../data/gamePinsStore';
 import { loadResults } from '../data/resultsStore';
+import { TEXT_SAMPLES } from '../data/textSamples';
+import {
+  loadTodayPlanSkips,
+  saveTodayPlanSkips,
+  type TodayPlanItemId,
+} from '../data/todayPlanStore';
 import type { AttemptResult, TextSample } from '../domain/types';
-import { colors, gradients, gameGradients, spacing, borderRadius, shadows } from '../theme/colors';
+import {
+  calculateDailyStreak,
+  formatAttemptSummary,
+} from '../domain/results';
+import {
+  buildTodayPlan,
+  calculatePersonalPracticeEstimate,
+} from '../domain/readingPlan';
+import {
+  borderRadius,
+  colors,
+  gameGradients,
+  gradients,
+  shadows,
+  spacing,
+} from '../theme/colors';
 import { GameIcon } from '../ui/GameIcon';
-import { GAME_LIST } from '../games/registry';
+import { ResponsiveShell } from '../ui/ResponsiveShell';
+import {
+  ALL_GAME_LIST,
+  type GameMeta,
+} from '../games/registry';
+
+export const HOME_GAME_ICON_COLUMNS = 3;
+
+export function getHomeGameIconColumns(): 3 {
+  return HOME_GAME_ICON_COLUMNS;
+}
 
 type Props = {
   onStart: (sample: TextSample) => void;
@@ -16,26 +75,181 @@ type Props = {
   onOpenGame: (gameId: string) => void;
 };
 
-const GRID_COLUMNS = 3;
-const GRID_GAP = 15;
-
-function formatLatest(result: AttemptResult): string {
-  const hasWpm = result.wordCount > 0 && result.wpm > 0;
-  if (hasWpm) {
-    return `${result.sampleTitle}: ${result.wpm} WPM · ${result.comprehensionCorrect ? 'Correct' : 'Incorrect'}`;
+function progressLabel(
+  gameId: string,
+  level: number,
+  preference: DifficultyPreference
+): string {
+  if (preference.mode === 'manual') {
+    const label =
+      getGameCatalogEntry(gameId)?.difficulty[preference.difficulty].label ??
+      preference.difficulty;
+    return `${label} · Manual`;
   }
-
-  const parts: string[] = [result.sampleTitle];
-  if (typeof result.score === 'number') parts.push(`Score: ${result.score}`);
-  if (typeof result.accuracy === 'number') parts.push(`${Math.round(result.accuracy * 100)}%`);
-  if (parts.length === 1) parts.push('Completed');
-  return parts.join(' · ');
+  return `Adaptive · Level ${level}`;
 }
 
-export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }: Props) {
+type GameGridProps = {
+  games: readonly GameMeta[];
+  progress: Record<string, GameProgress>;
+  preferences: Record<string, DifficultyPreference>;
+  favorites: readonly string[];
+  onOpenGame: (gameId: GameId) => void;
+  onToggleFavorite: (gameId: GameId) => void;
+};
+
+function GameGrid({
+  games,
+  progress,
+  preferences,
+  favorites,
+  onOpenGame,
+  onToggleFavorite,
+}: GameGridProps) {
+  return (
+    <View style={styles.gamesGrid}>
+      {games.map((game) => {
+        const gameProgress = progress[game.id];
+        const level = gameProgress?.level ?? 1;
+        const preference =
+          preferences[game.id] ?? getDefaultDifficultyPreference(game.id);
+        const progressPercent = (level / MAX_LEVEL) * 100;
+        const iconGradient = gameGradients[game.id] ?? gradients.cardIcon.colors;
+        const compactTitle =
+          game.id === 'ComprehensionTest'
+            ? 'Comprehension Check'
+            : game.title;
+
+        const favorite = favorites.includes(game.id);
+
+        return (
+          <View key={game.id} style={styles.gameTile}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${game.title}. ${game.shortDescription}. ${progressLabel(game.id, level, preference)}`}
+              testID={`open-game-${game.id}`}
+              style={({ pressed }) => [
+                styles.gameTileButton,
+                pressed && styles.gameCardPressed,
+              ]}
+              onPress={() => onOpenGame(game.id)}
+            >
+              <LinearGradient
+                colors={iconGradient}
+                start={gradients.cardIcon.start}
+                end={gradients.cardIcon.end}
+                style={styles.gameIconContainer}
+              >
+                <GameIcon name={game.id} size={26} color={colors.white} />
+              </LinearGradient>
+              <Text style={styles.gameTitle} numberOfLines={2}>
+                {compactTitle}
+              </Text>
+              <View style={styles.progressTrack}>
+                <LinearGradient
+                  colors={gradients.progress.colors}
+                  start={gradients.progress.start}
+                  end={gradients.progress.end}
+                  style={[styles.progressFill, { width: `${progressPercent}%` }]}
+                />
+              </View>
+              <Text style={styles.levelText}>Level {level}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${favorite ? 'Remove' : 'Add'} ${game.title} ${favorite ? 'from' : 'to'} favorites`}
+              accessibilityState={{ selected: favorite }}
+              hitSlop={4}
+              testID={`favorite-game-${game.id}`}
+              style={({ pressed }) => [
+                styles.favoriteButton,
+                favorite && styles.favoriteButtonSelected,
+                pressed && styles.gameCardPressed,
+              ]}
+              onPress={() => onToggleFavorite(game.id)}
+            >
+              <Text
+                style={[
+                  styles.favoriteIcon,
+                  favorite && styles.favoriteIconSelected,
+                ]}
+              >
+                {favorite ? '★' : '☆'}
+              </Text>
+            </Pressable>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+export function HomeScreen({
+  onStart,
+  onOpenHistory,
+  refreshToken,
+  onOpenGame,
+}: Props) {
   const [latest, setLatest] = useState<AttemptResult | null>(null);
   const [progress, setProgress] = useState<Record<string, GameProgress>>({});
-  const [dailyStreak, setDailyStreak] = useState(5); // TODO: Calculate from results
+  const [preferences, setPreferences] = useState<
+    Record<string, DifficultyPreference>
+  >({});
+  const [dailyStreak, setDailyStreak] = useState(0);
+  const [results, setResults] = useState<AttemptResult[]>([]);
+  const [skillSwapOffset, setSkillSwapOffset] = useState(0);
+  const [readingSwapOffset, setReadingSwapOffset] = useState(0);
+  const [skippedPlanItems, setSkippedPlanItems] = useState<
+    TodayPlanItemId[]
+  >([]);
+  const [todayIndex, setTodayIndex] = useState(0);
+  const [gameSearch, setGameSearch] = useState('');
+  const [gamePins, setGamePins] = useState<GamePins>({
+    favorites: [],
+    recent: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const todayPlan = useMemo(
+    () =>
+      buildTodayPlan({
+        results,
+        samples: TEXT_SAMPLES,
+        swapOffset: skillSwapOffset,
+        readingSwapOffset,
+        skipped: skippedPlanItems,
+      }),
+    [readingSwapOffset, results, skillSwapOffset, skippedPlanItems]
+  );
+  const personalEstimate = useMemo(
+    () => calculatePersonalPracticeEstimate(results),
+    [results]
+  );
+  const visibleTodayIndex =
+    todayPlan.length > 0
+      ? Math.min(todayIndex, todayPlan.length - 1)
+      : 0;
+  const activeTodayItem = todayPlan[visibleTodayIndex];
+  const favoriteGames = gamePins.favorites
+    .map((id) => ALL_GAME_LIST.find((game) => game.id === id))
+    .filter((game): game is GameMeta => Boolean(game));
+  const filteredGames = useMemo(() => {
+    const query = gameSearch.trim().toLocaleLowerCase();
+    if (!query) return ALL_GAME_LIST;
+
+    return ALL_GAME_LIST.filter((game) =>
+      [
+        game.title,
+        game.shortDescription,
+        game.category,
+        game.tier,
+        ...game.keywords,
+        ...game.rules,
+      ]
+        .join(' ')
+        .toLocaleLowerCase()
+        .includes(query)
+    );
+  }, [gameSearch]);
 
   const handleResetDifficulty = async () => {
     const doReset = async () => {
@@ -44,55 +258,88 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
     };
 
     if (Platform.OS === 'web') {
-      // eslint-disable-next-line no-restricted-globals
-      if (confirm('This will reset all games to level 1. Are you sure?')) {
+      if (globalThis.confirm('Reset every game to level 1? Your results history will stay intact.')) {
         await doReset();
       }
-    } else {
-      Alert.alert(
-        'Reset Difficulty',
-        'This will reset all games to level 1. Are you sure?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Reset',
-            style: 'destructive',
-            onPress: doReset,
-          },
-        ]
-      );
+      return;
     }
+
+    Alert.alert(
+      'Reset game levels?',
+      'Every game will return to level 1. Your results history will stay intact.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset levels', style: 'destructive', onPress: doReset },
+      ]
+    );
+  };
+
+  const skipTodayItem = (itemId: TodayPlanItemId) => {
+    setSkippedPlanItems((current) => {
+      const next = current.includes(itemId) ? current : [...current, itemId];
+      void saveTodayPlanSkips(next);
+      return next;
+    });
+  };
+
+  const restoreTodayPlan = () => {
+    setSkippedPlanItems([]);
+    void saveTodayPlanSkips([]);
+  };
+
+  const handleToggleFavorite = (gameId: GameId) => {
+    setGamePins((current) => ({
+      ...current,
+      favorites: current.favorites.includes(gameId)
+        ? current.favorites.filter((id) => id !== gameId)
+        : [gameId, ...current.favorites],
+    }));
+    void toggleFavoriteGame(gameId)
+      .then(setGamePins)
+      .catch(() => undefined);
+  };
+
+  const handleOpenGame = (gameId: GameId) => {
+    onOpenGame(gameId);
   };
 
   useEffect(() => {
     let cancelled = false;
 
     async function refresh() {
-      const [results, allProgress] = await Promise.all([
+      setLoading(true);
+      const [results, allProgress, allPreferences, skippedToday, pins] = await Promise.all([
         loadResults(),
         loadAllProgress(),
+        loadAllDifficultyPreferences(),
+        loadTodayPlanSkips(),
+        loadGamePins(),
       ]);
       if (cancelled) return;
+
       setLatest(results[0] ?? null);
+      setResults(results);
       setProgress(allProgress);
-      
-      // Calculate daily streak from results
-      if (results.length > 0) {
-        // Simple streak calculation - count consecutive days with activity
-        const today = new Date().toDateString();
-        const lastActivity = new Date(results[0].finishedAtIso).toDateString();
-        if (today === lastActivity) {
-          setDailyStreak(prev => Math.max(prev, 1));
-        }
-      }
+      setPreferences(allPreferences);
+      setSkippedPlanItems(skippedToday);
+      setGamePins(pins);
+      setDailyStreak(calculateDailyStreak(results));
+      setLoading(false);
     }
 
-    refresh();
-
+    void refresh();
     return () => {
       cancelled = true;
     };
   }, [refreshToken]);
+
+  useEffect(() => {
+    if (todayPlan.length === 0) {
+      setTodayIndex(0);
+    } else if (todayIndex >= todayPlan.length) {
+      setTodayIndex(todayPlan.length - 1);
+    }
+  }, [todayIndex, todayPlan.length]);
 
   return (
     <LinearGradient
@@ -101,112 +348,332 @@ export function HomeScreen({ onStart, onOpenHistory, refreshToken, onOpenGame }:
       end={gradients.background.end}
       style={styles.gradientContainer}
     >
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Header Section */}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <ResponsiveShell style={styles.shell}>
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('../../assets/logo.png')}
-              style={styles.logoImage}
-              resizeMode="cover"
-            />
-          </View>
-          <Text style={styles.welcomeText}>Welcome back!</Text>
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakText}>Daily Streak: {dailyStreak} Days 🔥</Text>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+            accessibilityLabel="SpeedRead"
+          />
+          <View style={styles.welcomeRow}>
+            <View>
+              <Text style={styles.eyebrow}>YOUR READING GYM</Text>
+              <Text style={styles.welcomeText}>Welcome back</Text>
+            </View>
+            <View style={styles.streakBadge}>
+              <Text style={styles.streakIcon}>🔥</Text>
+              <View>
+                <Text style={styles.streakValue}>{dailyStreak}</Text>
+                <Text style={styles.streakLabel}>
+                  {dailyStreak === 1 ? 'day' : 'days'}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
-      {/* Quick Start Button */}
-      <Pressable 
-        style={styles.quickStartButton}
-        onPress={() => onOpenGame('PowerReader')}
-      >
-        <LinearGradient
-          colors={gradients.button.colors}
-          start={gradients.button.start}
-          end={gradients.button.end}
-          style={styles.quickStartGradient}
-        >
-          <Text style={styles.quickStartText}>Quick-start</Text>
-          <Text style={styles.quickStartSubtext}>Recommended Exercise</Text>
-        </LinearGradient>
-      </Pressable>
+        <View style={styles.trainingCard}>
+          <Text style={styles.trainingEyebrow}>TODAY</Text>
+          <Text style={styles.trainingTitle}>A short reading-first plan</Text>
+          <Text
+            testID="personal-estimate"
+            accessibilityLiveRegion="polite"
+            style={styles.trainingDescription}
+          >
+            {personalEstimate.ready
+              ? `Personal practice estimate: ${personalEstimate.medianWpm} WPM · ${personalEstimate.correct}/${personalEstimate.total} comprehension across ${personalEstimate.validPassageCount} passages`
+              : `Not enough readings for a personal estimate · ${personalEstimate.validPassageCount} of 3 valid passages`}
+          </Text>
 
-      {/* Games Grid */}
-      <View style={styles.section}>
-        <View style={styles.gamesGrid}>
-          {GAME_LIST.map((g) => {
-            const gameProgress = progress[g.id];
-            const level = gameProgress?.level ?? 1;
-            const progressPercent = Math.min(100, level * 20) / 100;
-            
-            // Get game-specific gradient or fallback to default
-            const iconGradient = gameGradients[g.id] ?? gradients.cardIcon.colors;
-            
+          {activeTodayItem && (() => {
+            const item = activeTodayItem;
+            const gameId =
+              item.kind === 'reading' ? 'ComprehensionTest' : item.gameId;
             return (
-              <Pressable
-                key={g.id}
-                testID={`open-game-${g.id}`}
-                style={styles.gameCard}
-                onPress={() => onOpenGame(g.id)}
-              >
-                {/* Icon Container with Game-specific Gradient Background */}
-                <LinearGradient
-                  colors={iconGradient}
-                  start={gradients.cardIcon.start}
-                  end={gradients.cardIcon.end}
-                  style={styles.gameIconContainer}
-                >
-                  <GameIcon name={g.id} size={24} color="#FFFFFF" />
-                </LinearGradient>
-                
-                {/* Title */}
-                <Text style={styles.gameTitle} numberOfLines={2}>{g.title}</Text>
-                
-                {/* Description */}
-                <Text style={styles.gameDescription} numberOfLines={2}>{g.shortDescription}</Text>
-                
-                {/* Progress Bar */}
-                <View style={styles.progressRing}>
-                  <View style={styles.progressBar}>
-                    <LinearGradient
-                      colors={gradients.progress.colors}
-                      start={gradients.progress.start}
-                      end={gradients.progress.end}
-                      style={[styles.progressBarFill, { width: `${progressPercent * 100}%` }]}
-                    />
+              <View key={item.id} testID={`today-card-${item.id}`} style={styles.todayCard}>
+                <View style={styles.todayCardHeader}>
+                  <View style={styles.todayIcon}>
+                    <GameIcon name={gameId} size={20} color={colors.onInteractive} />
+                  </View>
+                  <View style={styles.todayHeading}>
+                    <Text style={styles.todayOrder}>
+                      {visibleTodayIndex + 1} OF {todayPlan.length} · {item.kind === 'reading' ? 'DIRECT READING' : item.kind === 'skill' ? 'FOCUSED SKILL' : 'OPTIONAL COMFORT'}
+                    </Text>
+                    <Text style={styles.todayTitle}>{item.title}</Text>
                   </View>
                 </View>
-              </Pressable>
+                <Text style={styles.todayReason}>Why this: {item.reason}</Text>
+                <Text style={styles.todayDuration}>{item.durationLabel}</Text>
+                <View style={styles.todayActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Start ${item.title}`}
+                    testID={item.id === 'reading' ? 'start-reading-exercise' : `start-today-${item.id}`}
+                    style={({ pressed }) => [
+                      styles.todayStart,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() =>
+                      item.kind === 'reading'
+                        ? onStart(item.sample)
+                        : handleOpenGame(item.gameId)
+                    }
+                  >
+                    <Text style={styles.todayStartText}>Start</Text>
+                  </Pressable>
+                  {item.kind !== 'comfort' && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Swap ${item.title}`}
+                      testID={`swap-today-${item.id}`}
+                      style={({ pressed }) => [
+                        styles.todaySecondaryAction,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() =>
+                        item.kind === 'reading'
+                          ? setReadingSwapOffset((value) => value + 1)
+                          : setSkillSwapOffset((value) => value + 1)
+                      }
+                    >
+                      <Text style={styles.todaySecondaryText}>Swap</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Skip ${item.title}. Skipping does not affect your streak.`}
+                    testID={`skip-today-${item.id}`}
+                    style={({ pressed }) => [
+                      styles.todaySecondaryAction,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => skipTodayItem(item.id)}
+                  >
+                    <Text style={styles.todaySecondaryText}>Skip</Text>
+                  </Pressable>
+                </View>
+              </View>
             );
-          })}
+          })()}
+          {todayPlan.length > 1 && (
+            <View style={styles.todayNavigation}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Previous plan item"
+                accessibilityState={{ disabled: visibleTodayIndex === 0 }}
+                disabled={visibleTodayIndex === 0}
+                testID="today-previous"
+                style={({ pressed }) => [
+                  styles.todayNavButton,
+                  visibleTodayIndex === 0 && styles.todayNavButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() =>
+                  setTodayIndex((current) => Math.max(0, current - 1))
+                }
+              >
+                <Text style={styles.todayNavText}>‹</Text>
+              </Pressable>
+              <View style={styles.todayDots}>
+                {todayPlan.map((item, index) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show plan item ${index + 1}: ${item.title}`}
+                    accessibilityState={{ selected: index === visibleTodayIndex }}
+                    key={item.id}
+                    testID={`today-dot-${index}`}
+                    style={[
+                      styles.todayDotButton,
+                      index === visibleTodayIndex && styles.todayDotButtonActive,
+                    ]}
+                    onPress={() => setTodayIndex(index)}
+                  />
+                ))}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Next plan item"
+                accessibilityState={{
+                  disabled: visibleTodayIndex === todayPlan.length - 1,
+                }}
+                disabled={visibleTodayIndex === todayPlan.length - 1}
+                testID="today-next"
+                style={({ pressed }) => [
+                  styles.todayNavButton,
+                  visibleTodayIndex === todayPlan.length - 1 &&
+                    styles.todayNavButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() =>
+                  setTodayIndex((current) =>
+                    Math.min(todayPlan.length - 1, current + 1)
+                  )
+                }
+              >
+                <Text style={styles.todayNavText}>›</Text>
+              </Pressable>
+            </View>
+          )}
+          {todayPlan.length === 0 && (
+            <View testID="today-empty" style={styles.todayEmpty}>
+              <Text style={styles.todayTitle}>Plan skipped for today</Text>
+              <Text style={styles.todayReason}>
+                Skipping does not change your streak or progress.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                style={styles.todaySecondaryAction}
+                onPress={restoreTodayPlan}
+              >
+                <Text style={styles.todaySecondaryText}>Restore plan</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
-      </View>
 
-      {/* Bottom Actions */}
-      <View style={styles.bottomSection}>
-        <View style={styles.buttonsRow}>
-          <Pressable style={styles.actionButton} onPress={onOpenHistory} testID="open-history">
-            <Text style={styles.actionButtonIcon}>📊</Text>
-            <Text style={styles.actionButtonText}>History</Text>
-          </Pressable>
-          <Pressable style={styles.actionButton} onPress={handleResetDifficulty}>
-            <Text style={styles.actionButtonIcon}>⚙️</Text>
-            <Text style={styles.actionButtonText}>Reset</Text>
+        {!loading && favoriteGames.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Favorites</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Your pinned exercises
+                </Text>
+              </View>
+            </View>
+            <GameGrid
+              games={favoriteGames}
+              progress={progress}
+              preferences={preferences}
+              favorites={gamePins.favorites}
+              onOpenGame={handleOpenGame}
+              onToggleFavorite={handleToggleFavorite}
+            />
+          </>
+        )}
+
+        <View style={styles.catalogTools}>
+          <Text style={styles.catalogCount}>
+            {gameSearch.trim()
+              ? `${filteredGames.length} matching ${filteredGames.length === 1 ? 'exercise' : 'exercises'}`
+              : `${ALL_GAME_LIST.length} exercises`}
+          </Text>
+          <View style={styles.searchField}>
+            <View style={styles.searchIcon}>
+              <GameIcon name="TextSearch" size={20} color={colors.primaryDark} />
+            </View>
+            <TextInput
+              accessibilityLabel="Search exercises"
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+              onChangeText={setGameSearch}
+              placeholder="Search exercises"
+              placeholderTextColor={colors.textMuted}
+              returnKeyType="search"
+              style={styles.searchInput}
+              testID="home-game-search"
+              value={gameSearch}
+            />
+            {gameSearch.length > 0 && Platform.OS !== 'ios' && (
+              <Pressable
+                accessibilityLabel="Clear exercise search"
+                accessibilityRole="button"
+                hitSlop={4}
+                onPress={() => setGameSearch('')}
+                style={({ pressed }) => [
+                  styles.clearSearchButton,
+                  pressed && styles.pressed,
+                ]}
+                testID="clear-home-game-search"
+              >
+                <Text style={styles.clearSearchText}>×</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        {loading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.loadingText}>Loading your training plan…</Text>
+          </View>
+        ) : (
+          filteredGames.length > 0 ? (
+            <GameGrid
+              games={filteredGames}
+              progress={progress}
+              preferences={preferences}
+              favorites={gamePins.favorites}
+              onOpenGame={handleOpenGame}
+              onToggleFavorite={handleToggleFavorite}
+            />
+          ) : (
+            <View style={styles.emptySearch}>
+              <Text style={styles.emptySearchTitle}>No exercises found</Text>
+              <Text style={styles.emptySearchText}>
+                Try a skill such as reading, words, scanning, memory, or WPM.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setGameSearch('')}
+                style={({ pressed }) => [
+                  styles.emptySearchButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.emptySearchButtonText}>Clear search</Text>
+              </Pressable>
+            </View>
+          )
+        )}
+
+        <View style={styles.progressSection}>
+          <View style={styles.progressSectionHeader}>
+            <Text style={styles.sectionTitle}>Your progress</Text>
+            <Pressable
+              accessibilityRole="button"
+              testID="open-history"
+              onPress={onOpenHistory}
+              hitSlop={8}
+            >
+              <Text style={styles.historyLink}>View history</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.latestResult}>
+            <View style={styles.latestIcon}>
+              <Text style={styles.latestIconText}>{latest ? '↗' : '•'}</Text>
+            </View>
+            <View style={styles.latestCopy}>
+              <Text style={styles.latestLabel}>
+                {latest ? 'Latest session' : 'Ready when you are'}
+              </Text>
+              <Text style={styles.latestText} numberOfLines={2}>
+                {latest
+                  ? formatAttemptSummary(latest)
+                  : 'Complete a measured read to set your baseline.'}
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reset game levels"
+            style={styles.resetButton}
+            onPress={handleResetDifficulty}
+          >
+            <Text style={styles.resetButtonText}>Reset game levels</Text>
           </Pressable>
         </View>
-        
-        {latest && (
-          <View style={styles.latestResult}>
-            <Text style={styles.latestLabel}>Latest:</Text>
-            <Text style={styles.latestText} numberOfLines={1}>
-              {formatLatest(latest)}
-            </Text>
-          </View>
-        )}
-      </View>
-    </ScrollView>
+        </ResponsiveShell>
+      </ScrollView>
     </LinearGradient>
   );
 }
@@ -218,171 +685,541 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  content: {
+    paddingBottom: spacing.xl,
+  },
+  shell: {
+    paddingBottom: spacing.xl,
+  },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-    alignItems: 'center',
-  },
-  logoContainer: {
-    width: 356,
-    height: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-    overflow: 'hidden',
+    paddingTop: spacing.xs,
   },
   logoImage: {
-    width: '100%',
-    height: '100%',
+    width: 232,
+    height: 72,
+    alignSelf: 'center',
+    marginBottom: spacing.sm,
+  },
+  welcomeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  eyebrow: {
+    color: colors.primaryDark,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginBottom: 3,
   },
   welcomeText: {
-    fontSize: 24,
-    fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: spacing.sm,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.6,
   },
   streakBadge: {
-    backgroundColor: colors.cardBackground,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.xl,
-    alignSelf: 'center',
-    ...shadows.medium,
-  },
-  streakText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  quickStartButton: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.md,
-    borderRadius: 35,
-    overflow: 'hidden',
-    ...shadows.medium,
-  },
-  quickStartGradient: {
-    height: 70,
-    paddingHorizontal: spacing.lg,
+    minWidth: 78,
+    minHeight: 52,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.cardBackground,
+    ...shadows.small,
   },
-  quickStartText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.white,
+  streakIcon: {
+    fontSize: 20,
   },
-  quickStartSubtext: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
+  streakValue: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 19,
+  },
+  streakLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    lineHeight: 12,
+  },
+  trainingCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: 20,
+    borderRadius: 26,
+    backgroundColor: colors.cardBackground,
+    ...shadows.medium,
+  },
+  trainingEyebrow: {
+    color: colors.secondaryDark,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  trainingTitle: {
+    marginTop: 5,
+    color: colors.textPrimary,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  trainingDescription: {
+    marginTop: 4,
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  todayCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  todayCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  todayIcon: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: colors.interactivePrimary,
+  },
+  todayHeading: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  todayOrder: {
+    color: colors.primaryDark,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.7,
+  },
+  todayTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 23,
     marginTop: 2,
   },
-  section: {
-    paddingHorizontal: spacing.md,
+  todayReason: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 10,
   },
-  gamesGrid: {
+  todayDuration: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  todayActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 12,
   },
-  gameCard: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 16,
-    padding: spacing.sm,
-    marginBottom: GRID_GAP,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 160,
-    ...shadows.small,
-    width: '31%',
-  },
-  gameIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  todayStart: {
+    minWidth: 96,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    paddingHorizontal: 16,
+    borderRadius: 13,
+    backgroundColor: colors.interactivePrimary,
   },
-  gameTitle: {
+  todayStartText: {
+    color: colors.onInteractive,
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-    lineHeight: 18,
+    fontWeight: '800',
   },
-  gameDescription: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 8,
-    minHeight: 28,
-    lineHeight: 14,
+  todaySecondaryAction: {
+    minWidth: 72,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
   },
-  starsRow: {
-    marginTop: 'auto',
-    marginBottom: spacing.xs,
+  todaySecondaryText: {
+    color: colors.primaryDark,
+    fontSize: 13,
+    fontWeight: '800',
   },
-  progressRing: {
-    width: '80%',
-    marginTop: spacing.xs,
+  todayEmpty: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: 18,
+    backgroundColor: colors.background,
   },
-  progressBar: {
-    width: '100%',
-    height: 6,
-    backgroundColor: colors.border,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  bottomSection: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    marginTop: spacing.sm,
-  },
-  buttonsRow: {
+  todayNavigation: {
+    minHeight: 48,
     flexDirection: 'row',
-    gap: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  todayNavButton: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: colors.surfaceTonal,
+  },
+  todayNavButtonDisabled: {
+    opacity: 0.35,
+  },
+  todayNavText: {
+    color: colors.primaryDark,
+    fontSize: 31,
+    fontWeight: '500',
+    lineHeight: 34,
+  },
+  todayDots: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  todayDotButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 17,
+    borderColor: 'transparent',
+    backgroundColor: colors.border,
+  },
+  todayDotButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  measuredReadButton: {
+    marginTop: spacing.md,
+    minHeight: 68,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+  },
+  measuredReadButtonText: {
+    color: colors.white,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  measuredReadButtonMeta: {
+    marginTop: 3,
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 12,
+  },
+  powerReaderButton: {
+    minHeight: 60,
+    marginTop: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceTonal,
+  },
+  powerReaderIcon: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+    backgroundColor: colors.accent,
+  },
+  powerReaderCopy: {
+    flex: 1,
+    marginLeft: 11,
+  },
+  powerReaderTitle: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  powerReaderMeta: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  chevron: {
+    color: colors.textSecondary,
+    fontSize: 26,
+    marginLeft: 8,
+  },
+  pressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.99 }],
+  },
+  sectionHeader: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  sectionSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  catalogTools: {
+    marginTop: spacing.xl,
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
-  actionButton: {
-    flex: 1,
-    backgroundColor: colors.cardBackground,
-    borderRadius: borderRadius.md,
-    paddingVertical: 14,
-    alignItems: 'center',
-    ...shadows.small,
-  },
-  actionButtonIcon: {
-    fontSize: 20,
-    marginBottom: spacing.xs,
-  },
-  actionButtonText: {
+  catalogCount: {
+    marginBottom: 9,
+    color: colors.textSecondary,
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    fontWeight: '700',
   },
-  latestResult: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: borderRadius.md,
-    padding: 14,
+  searchField: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingLeft: 14,
+    paddingRight: 4,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
+    ...shadows.small,
+  },
+  searchIcon: {
+    width: 28,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchInput: {
+    minHeight: 50,
+    flex: 1,
+    paddingHorizontal: 10,
+    color: colors.textPrimary,
+    fontSize: 16,
+  },
+  clearSearchButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+  },
+  clearSearchText: {
+    color: colors.textSecondary,
+    fontSize: 28,
+    lineHeight: 30,
+  },
+  loadingCard: {
+    marginHorizontal: spacing.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.cardBackground,
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  gamesGrid: {
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  gameTile: {
+    position: 'relative',
+    width: '33.3333%',
+    minHeight: 138,
+    marginBottom: 12,
+  },
+  gameTileButton: {
+    width: '100%',
+    minHeight: 138,
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingHorizontal: 4,
+    paddingBottom: 6,
+    borderRadius: 18,
+  },
+  gameCardPressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.985 }],
+  },
+  gameIconContainer: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: -2,
+    right: -3,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+  },
+  favoriteButtonSelected: {
+    backgroundColor: colors.warningSurface,
+  },
+  favoriteIcon: {
+    color: colors.textMuted,
+    fontSize: 22,
+  },
+  favoriteIconSelected: {
+    color: colors.starActive,
+  },
+  gameTitle: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 15,
+    minHeight: 30,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  progressTrack: {
+    width: '76%',
+    height: 4,
+    overflow: 'hidden',
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginTop: 7,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  levelText: {
+    color: colors.textMuted,
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 5,
+  },
+  emptySearch: {
+    marginHorizontal: spacing.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.cardBackground,
+    ...shadows.small,
+  },
+  emptySearchTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  emptySearchText: {
+    marginTop: 5,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  emptySearchButton: {
+    minHeight: 44,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: colors.interactivePrimary,
+  },
+  emptySearchButtonText: {
+    color: colors.onInteractive,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  progressSection: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: colors.cardBackground,
+    ...shadows.small,
+  },
+  progressSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  historyLink: {
+    minHeight: 44,
+    paddingVertical: 12,
+    color: colors.primaryDark,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  latestResult: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 13,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceTonal,
+  },
+  latestIcon: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+    backgroundColor: colors.cardBackground,
+  },
+  latestIconText: {
+    color: colors.primaryDark,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  latestCopy: {
+    flex: 1,
+    marginLeft: 11,
   },
   latestLabel: {
+    color: colors.textPrimary,
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginRight: spacing.sm,
+    fontWeight: '700',
   },
   latestText: {
-    fontSize: 13,
-    color: colors.textPrimary,
-    flex: 1,
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  resetButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  resetButtonText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

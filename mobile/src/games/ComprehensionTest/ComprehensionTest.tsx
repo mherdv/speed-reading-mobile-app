@@ -1,9 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
-import { useAutoStart } from '../gameHooks';
+import { updateProgress } from '../../data/progressStore';
+import { borderRadius, colors, shadows, spacing } from '../../theme/colors';
+import { useAutoStart, type Difficulty } from '../gameHooks';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
+import { ReadingColumn } from '../../ui/ResponsiveShell';
+import {
+  COMPREHENSION_PASSAGES,
+  type ComprehensionQuestion,
+} from '../../data/comprehensionPassages';
 
 const GAME_ID = 'ComprehensionTest';
 
@@ -13,40 +20,33 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
-};
-
-type Question = {
-  question: string;
-  options: string[];
-  correctIndex: number;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
   passage?: string;
-  questions?: Question[];
+  questions?: ComprehensionQuestion[];
+  difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
 type Phase = 'idle' | 'reading' | 'questions' | 'ended';
 
-const DEFAULT_PASSAGE = `Speed reading is a collection of reading methods that attempt to increase rates of reading without greatly reducing comprehension. Methods include chunking and minimizing subvocalization. The average reading speed is about 200 to 250 words per minute. Speed readers claim to read over 1000 words per minute.`;
+export function getComprehensionChallenge(difficulty: Difficulty) {
+  return COMPREHENSION_PASSAGES[difficulty];
+}
 
-const DEFAULT_QUESTIONS: Question[] = [
-  {
-    question: 'What is the average reading speed?',
-    options: ['100-150 WPM', '200-250 WPM', '500-600 WPM', '1000+ WPM'],
-    correctIndex: 1,
-  },
-  {
-    question: 'What do speed readers claim to read?',
-    options: ['Under 200 WPM', '500 WPM', 'Over 1000 WPM', 'Same as average'],
-    correctIndex: 2,
-  },
-];
-
-export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions = DEFAULT_QUESTIONS, autoStart = false, onReportResult }: Props) {
+export default function ComprehensionTest({
+  passage: passageProp,
+  questions: questionsProp,
+  difficulty = 'medium',
+  autoStart = false,
+  onReportResult,
+}: Props) {
+  const challenge = getComprehensionChallenge(difficulty);
+  const passage = passageProp ?? challenge.text;
+  const questions = questionsProp ?? challenge.questions;
   const [phase, setPhase] = useState<Phase>('idle');
   const [questionIndex, setQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -55,22 +55,24 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
 
   const startRef = useRef<number>(0);
-  const readStartRef = useRef<number>(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const answersRef = useRef<number[]>([]);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cleanup on unmount - prevent reporting results after back button
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
     };
   }, []);
 
   useAutoStart(autoStart, phase, true, start);
 
   function start(force = false) {
+    cancelledRef.current = false;
     if (!force && phase !== 'idle') return;
     reportedRef.current = false;
     scoreRef.current = 0;
@@ -82,7 +84,6 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
     setSelectedAnswer(null);
     setFeedback(null);
     startRef.current = Date.now();
-    readStartRef.current = Date.now();
   }
 
   function doneReading() {
@@ -97,7 +98,7 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
     const correct = index === currentQ.correctIndex;
 
     if (correct) {
-      scoreRef.current += 25;
+      scoreRef.current += 1;
       setScore(scoreRef.current);
       setFeedback('correct');
     } else {
@@ -107,7 +108,8 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
     answersRef.current.push(index);
     setAnswers([...answersRef.current]);
 
-    setTimeout(() => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = setTimeout(() => {
       setFeedback(null);
       setSelectedAnswer(null);
 
@@ -128,19 +130,27 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
     const elapsedMs = now - startRef.current;
     const correctCount = answersRef.current.filter((a, i) => a === questions[i].correctIndex).length;
     const accuracy = questions.length > 0 ? correctCount / questions.length : 0;
+    const scorePercent = Math.round(accuracy * 100);
 
+    setPhase('ended');
+    void updateProgress(GAME_ID, accuracy >= 0.7, scorePercent).catch(
+      () => undefined
+    );
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
-      score: scoreRef.current,
+      score: scorePercent,
       accuracy,
-      details: { questionsTotal: questions.length, correctCount },
+      details: {
+        activityType: 'comprehension',
+        contentId: passageProp ? 'custom' : challenge.id,
+        challenge: passageProp ? 'custom' : challenge.challenge,
+        questionsTotal: questions.length,
+        correctCount,
+        difficulty,
+      },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
   }
 
   function playAgain() {
@@ -170,11 +180,16 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
 
       {phase === 'reading' && (
         <View style={styles.gameArea}>
-          <ScrollView style={styles.passageBox}>
-            <Text testID="passage" style={styles.passage}>{passage}</Text>
-          </ScrollView>
+          <ReadingColumn
+            testID="comprehension-reading-column"
+            style={styles.readingArea}
+          >
+            <ScrollView style={styles.passageBox}>
+              <Text testID="passage" style={styles.passage}>{passage}</Text>
+            </ScrollView>
+          </ReadingColumn>
 
-          <Pressable testID="done-reading" style={styles.doneBtn} onPress={doneReading}>
+          <Pressable accessibilityRole="button" testID="done-reading" style={styles.doneBtn} onPress={doneReading}>
             <Text style={styles.doneBtnText}>Done Reading</Text>
           </Pressable>
         </View>
@@ -188,7 +203,7 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
               {
                 key: 'score',
                 value: score,
-                label: 'Score',
+                label: 'Correct',
                 containerStyle: styles.statBox,
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,
@@ -210,7 +225,7 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
 
           <View style={styles.optionsContainer}>
             {currentQ.options.map((opt, i) => (
-              <Pressable
+              <Pressable accessibilityRole="button"
                 key={i}
                 testID={`option-${i}`}
                 style={[
@@ -232,11 +247,13 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
         <View testID="end" style={styles.endCard}>
           <Text style={styles.endEmoji}>📚</Text>
           <Text style={styles.endTitle}>Test Complete!</Text>
-          <Text style={styles.endScore}>{score}</Text>
+          <Text style={styles.endScore}>
+            {questions.length > 0 ? Math.round((score / questions.length) * 100) : 0}%
+          </Text>
           <Text style={styles.endMeta}>
             {answers.filter((a, i) => a === questions[i].correctIndex).length}/{questions.length} correct
           </Text>
-          <Pressable style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Try Again</Text>
           </Pressable>
         </View>
@@ -246,56 +263,66 @@ export default function ComprehensionTest({ passage = DEFAULT_PASSAGE, questions
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 12 },
-  header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  container: { flex: 1, padding: spacing.sm },
+  header: { marginBottom: spacing.sm },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   idleContent: { flex: 1, justifyContent: 'center' },
   descriptionText: {
     fontSize: 15,
-    color: '#4B5563',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
     paddingHorizontal: 8,
   },
-  startBtn: { backgroundColor: '#059669', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  startBtn: { backgroundColor: colors.primary, paddingVertical: 12, borderRadius: borderRadius.md, alignItems: 'center' },
   startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
-  passageBox: { flex: 1, backgroundColor: '#ECFDF5', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 2, borderColor: '#6EE7B7' },
-  passage: { fontSize: 16, color: '#065F46', lineHeight: 24 },
-  doneBtn: { backgroundColor: '#059669', paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
+  passageBox: {
+    flex: 1,
+    backgroundColor: colors.cardBackground,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  readingArea: { flex: 1 },
+  passage: { fontSize: 18, color: colors.textPrimary, lineHeight: 30 },
+  doneBtn: { backgroundColor: colors.primary, paddingVertical: 14, borderRadius: borderRadius.md, alignItems: 'center' },
   doneBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
-  statBox: { alignItems: 'center', backgroundColor: '#D1FAE5', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
-  questionBox: { backgroundColor: '#A7F3D0' },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#065F46' },
-  statLabel: { fontSize: 10, color: '#047857' },
+  statBox: { alignItems: 'center', backgroundColor: colors.surfaceTonal, paddingVertical: 6, paddingHorizontal: 14, borderRadius: borderRadius.md },
+  questionBox: { backgroundColor: '#FCEDE5' },
+  statValue: { fontSize: 18, fontWeight: '700', color: colors.primaryDark },
+  statLabel: { fontSize: 10, color: colors.textSecondary },
   questionCard: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#6EE7B7',
+    backgroundColor: colors.cardBackground,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
   },
-  questionText: { fontSize: 16, fontWeight: '600', color: '#065F46' },
+  questionText: { fontSize: 17, fontWeight: '600', color: colors.textPrimary, lineHeight: 25 },
   optionsContainer: { gap: 8 },
   optionBtn: {
-    backgroundColor: '#F0FDF4',
-    borderRadius: 10,
+    backgroundColor: colors.cardBackground,
+    borderRadius: borderRadius.md,
     padding: 14,
-    borderWidth: 2,
-    borderColor: '#86EFAC',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  optionCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
-  optionWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
-  optionText: { fontSize: 14, color: '#065F46', textAlign: 'center' },
+  optionCorrect: { backgroundColor: '#EAF8F2', borderColor: colors.success },
+  optionWrong: { backgroundColor: '#FCECEF', borderColor: colors.error },
+  optionText: { fontSize: 14, color: colors.textPrimary, textAlign: 'center' },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#059669', marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#059669', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  endTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  endScore: { fontSize: 48, fontWeight: '800', color: colors.primary, marginVertical: 8 },
+  endMeta: { fontSize: 14, color: colors.textSecondary },
+  playAgainBtn: { marginTop: 16, backgroundColor: colors.primary, paddingVertical: 10, paddingHorizontal: 24, borderRadius: borderRadius.md },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

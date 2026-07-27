@@ -51,7 +51,7 @@ describe('ComprehensionTest', () => {
     });
   });
 
-  it('calls onReportResult when game ends', () => {
+  it('reports a normalized score and comprehension details when the game ends', () => {
     const onReportResult = jest.fn();
     const { getByTestId } = render(
       <ComprehensionTest
@@ -69,6 +69,16 @@ describe('ComprehensionTest', () => {
       jest.advanceTimersByTime(1100);  // Wait for the 1000ms delay before finish
     });
 
-    expect(onReportResult).toHaveBeenCalled();
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        score: 100,
+        accuracy: 1,
+        details: expect.objectContaining({
+          activityType: 'comprehension',
+          questionsTotal: 1,
+          correctCount: 1,
+        }),
+      })
+    );
   });
 });

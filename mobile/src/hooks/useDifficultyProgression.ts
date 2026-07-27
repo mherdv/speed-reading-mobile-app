@@ -23,7 +23,8 @@ type UseDifficultyProgressionReturn = {
 };
 
 export function useDifficultyProgression(
-  initialDifficulty: Difficulty = 'easy'
+  initialDifficulty: Difficulty = 'easy',
+  autoAdjust = true
 ): UseDifficultyProgressionReturn {
   const [state, setState] = useState<ProgressionState>({
     difficulty: initialDifficulty,
@@ -40,7 +41,11 @@ export function useDifficultyProgression(
       const currentIndex = DIFFICULTIES.indexOf(prev.difficulty);
 
       // Check if we should increase difficulty
-      if (newCorrectStreak >= CORRECT_THRESHOLD && currentIndex < DIFFICULTIES.length - 1) {
+      if (
+        autoAdjust &&
+        newCorrectStreak >= CORRECT_THRESHOLD &&
+        currentIndex < DIFFICULTIES.length - 1
+      ) {
         return {
           difficulty: DIFFICULTIES[currentIndex + 1],
           correctStreak: 0,
@@ -54,7 +59,7 @@ export function useDifficultyProgression(
         failStreak: 0, // Reset fail streak on correct
       };
     });
-  }, []);
+  }, [autoAdjust]);
 
   const recordFail = useCallback(() => {
     setState((prev) => {
@@ -62,7 +67,7 @@ export function useDifficultyProgression(
       const currentIndex = DIFFICULTIES.indexOf(prev.difficulty);
 
       // Check if we should decrease difficulty
-      if (newFailStreak >= FAIL_THRESHOLD && currentIndex > 0) {
+      if (autoAdjust && newFailStreak >= FAIL_THRESHOLD && currentIndex > 0) {
         return {
           difficulty: DIFFICULTIES[currentIndex - 1],
           correctStreak: 0,
@@ -76,7 +81,7 @@ export function useDifficultyProgression(
         correctStreak: 0, // Reset correct streak on fail
       };
     });
-  }, []);
+  }, [autoAdjust]);
 
   const reset = useCallback(() => {
     setState({

@@ -18,7 +18,7 @@ type Props = {
 
 /**
  * Displays difficulty as stars.
- * 
+ *
  * Level 1-15 maps to 0 to 5 stars:
  * - Level 1 = 0 stars
  * - Level 2-4 = 1 star
@@ -27,9 +27,9 @@ type Props = {
  * - Level 11-13 = 4 stars
  * - Level 14-15 = 5 stars
  */
-export function DifficultyStars({ 
-  level, 
-  maxLevel = 15, 
+export function DifficultyStars({
+  level,
+  maxLevel = 15,
   starCount = 5,
   size = 'medium',
   showLevel = false,
@@ -37,7 +37,10 @@ export function DifficultyStars({
 }: Props) {
   // Convert level to star rating (0 to 5)
   // Level 1 = 0 stars, Level 15 = 5 stars
-  const fullStars = level <= 1 ? 0 : Math.min(starCount, Math.floor((level - 1) / 3) + 1);
+  const clampedLevel = Math.min(maxLevel, Math.max(1, level));
+  const fullStars = clampedLevel <= 1
+    ? 0
+    : Math.min(starCount, Math.floor((clampedLevel - 1) / 3) + 1);
   const emptyStars = starCount - fullStars;
 
   const sizeConfig = {
@@ -49,32 +52,30 @@ export function DifficultyStars({
   const renderStars = () => {
     const stars: React.ReactNode[] = [];
 
-    // Empty stars first (will be at top in vertical)
-    for (let i = 0; i < emptyStars; i++) {
+    for (let i = 0; i < fullStars; i++) {
       stars.push(
-        <Text 
-          key={`empty-${i}`} 
+        <Text
+          key={`full-${i}`}
           style={[
-            styles.star, 
-            styles.starEmpty, 
+            styles.star,
+            styles.starFull,
             { fontSize: sizeConfig.fontSize }
-          ]} 
+          ]}
         >
           ★
         </Text>
       );
     }
 
-    // Full stars (filled) - will be at bottom in vertical
-    for (let i = 0; i < fullStars; i++) {
+    for (let i = 0; i < emptyStars; i++) {
       stars.push(
-        <Text 
-          key={`full-${i}`} 
+        <Text
+          key={`empty-${i}`}
           style={[
-            styles.star, 
-            styles.starFull, 
+            styles.star,
+            styles.starEmpty,
             { fontSize: sizeConfig.fontSize }
-          ]} 
+          ]}
         >
           ★
         </Text>
@@ -85,13 +86,17 @@ export function DifficultyStars({
   };
 
   return (
-    <View style={[styles.container, orientation === 'vertical' && styles.containerVertical]}>
+    <View
+      accessibilityRole="image"
+      accessibilityLabel={`${fullStars} of ${starCount} difficulty stars, level ${clampedLevel}`}
+      style={[styles.container, orientation === 'vertical' && styles.containerVertical]}
+    >
       <View style={[styles.starsRow, orientation === 'vertical' && styles.starsColumn]}>
         {renderStars()}
       </View>
       {showLevel && (
         <Text style={[styles.levelText, { fontSize: sizeConfig.fontSize - 2 }]}>
-          Lv.{level}
+          Lv.{clampedLevel}
         </Text>
       )}
     </View>

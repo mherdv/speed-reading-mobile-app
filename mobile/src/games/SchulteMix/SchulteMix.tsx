@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
-import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
+import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'SchulteMix';
 
@@ -17,7 +18,7 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
@@ -33,11 +34,11 @@ type CellType = { value: string; type: 'number' | 'letter' };
 function getDifficultyConfig(difficulty: Difficulty) {
   switch (difficulty) {
     case 'easy':
-      return { gridSize: 4 };
+      return { gridSize: 3 };
     case 'medium':
-      return { gridSize: 5 };
+      return { gridSize: 4 };
     case 'hard':
-      return { gridSize: 7 };
+      return { gridSize: 5 };
   }
 }
 
@@ -81,7 +82,6 @@ export default function SchulteMix({
     gameProgress,
     setGameProgress,
     selectedDifficulty,
-    setSelectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
   const [grid, setGrid] = useState<CellType[]>([]);
@@ -126,10 +126,13 @@ export default function SchulteMix({
     (maxGridHeight - cellGap * (gridSize - 1)) / gridSize
   ));
   const actualGridSize = cellSize * gridSize + cellGap * (gridSize - 1) + gridPadding * 2;
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
   function start() {
+    clearTrackedTimeouts();
+    cancelledRef.current = false;
     reportedRef.current = false;
     setGrid(generateGrid(gridSize));
     setSequence(generateSequence(gridSize));
@@ -144,6 +147,7 @@ export default function SchulteMix({
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    clearTrackedTimeouts();
     
     const now = Date.now();
     const elapsedMs = now - startedAtRef.current;
@@ -154,7 +158,6 @@ export default function SchulteMix({
     const success = accuracy >= 0.7;
     updateProgress(GAME_ID, success, total).then(({ progress }) => {
       setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
     });
 
     onReportResult?.({
@@ -165,10 +168,7 @@ export default function SchulteMix({
       accuracy,
       details: { gridSize, mistakes, timeMs: elapsedMs, difficulty: selectedDifficulty },
     });
-    
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function onTap(cell: CellType) {
@@ -263,7 +263,7 @@ export default function SchulteMix({
                     const key = `${cell.type}-${cell.value}`;
                     const isDone = tapped.has(key);
                     return (
-                      <Pressable
+                      <Pressable accessibilityRole="button"
                         key={colIndex}
                         testID={`cell-${cell.type}-${cell.value}`}
                         style={[
@@ -310,7 +310,11 @@ export default function SchulteMix({
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={() => { setPhase('idle'); setTimeout(start, 50); }}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={() => {
+            clearTrackedTimeouts();
+            setPhase('idle');
+            scheduleTimeout(start, 50);
+          }}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>
@@ -387,10 +391,10 @@ const styles = StyleSheet.create({
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
   endTime: { fontSize: 32, fontWeight: '800', color: '#EC4899', marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+  endDifficulty: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: '#F59E0B' },
+  starsText: { fontSize: 16, color: colors.warningForeground },
   playAgainBtn: { marginTop: 16, backgroundColor: '#EC4899', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

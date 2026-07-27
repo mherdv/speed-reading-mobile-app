@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View, TextInput as TextInputType } from 'react-native';
 
-import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { getWordsByDifficulty } from '../../data/vocabulary';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
-import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
+import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'LetterJumble';
 
@@ -16,7 +17,7 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
@@ -48,7 +49,6 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
     gameProgress,
     setGameProgress,
     selectedDifficulty,
-    setSelectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
 
@@ -71,6 +71,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
   const inputRef = useRef<TextInputType>(null);
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(() => {
     if (phase !== 'running') return;
@@ -94,6 +95,8 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
   function start() {
+    clearTrackedTimeouts();
+    cancelledRef.current = false;
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
@@ -111,6 +114,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    clearTrackedTimeouts();
     
     const now = Date.now();
     const elapsedMs = now - startedAtRef.current;
@@ -120,7 +124,6 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
     const success = accuracy >= 0.7;
     updateProgress(GAME_ID, success, scoreRef.current).then(({ progress }) => {
       setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
     });
 
     onReportResult?.({
@@ -131,10 +134,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
       accuracy,
       details: { rounds: attemptsRef.current, correct: scoreRef.current },
     });
-    
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function onSubmit() {
@@ -152,7 +152,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
     setInput('');
     setShowHint(false);
     // Refocus input after submit
-    setTimeout(() => inputRef.current?.focus(), 50);
+    scheduleTimeout(() => inputRef.current?.focus(), 50);
   }
 
   function onSkip() {
@@ -163,12 +163,13 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
     setInput('');
     setShowHint(false);
     // Refocus input after skip
-    setTimeout(() => inputRef.current?.focus(), 50);
+    scheduleTimeout(() => inputRef.current?.focus(), 50);
   }
 
   function playAgain() {
+    clearTrackedTimeouts();
     setPhase('idle');
-    setTimeout(start, 50);
+    scheduleTimeout(start, 50);
   }
 
   return (
@@ -240,7 +241,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
             value={input}
             onChangeText={setInput}
             placeholder="Type your answer..."
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus={true}
@@ -249,13 +250,13 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
           />
 
           <View style={styles.buttonRow}>
-            <Pressable style={styles.hintBtn} onPress={() => setShowHint(true)}>
+            <Pressable accessibilityRole="button" style={styles.hintBtn} onPress={() => setShowHint(true)}>
               <Text style={styles.hintBtnText}>💡 Hint</Text>
             </Pressable>
-            <Pressable style={styles.skipBtn} onPress={onSkip}>
+            <Pressable accessibilityRole="button" style={styles.skipBtn} onPress={onSkip}>
               <Text style={styles.skipBtnText}>Skip →</Text>
             </Pressable>
-            <Pressable testID="submit-button" style={styles.submitBtn} onPress={onSubmit}>
+            <Pressable accessibilityRole="button" testID="submit-button" style={styles.submitBtn} onPress={onSubmit}>
               <Text style={styles.submitBtnText}>Submit</Text>
             </Pressable>
           </View>
@@ -278,7 +279,7 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>
@@ -316,7 +317,7 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
   },
   startBtn: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warningForeground,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -356,17 +357,17 @@ const styles = StyleSheet.create({
   hintBtnText: { fontSize: 14, fontWeight: '600', color: '#92400E' },
   skipBtn: { backgroundColor: '#F3F4F6', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
   skipBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
-  submitBtn: { backgroundColor: '#F59E0B', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
+  submitBtn: { backgroundColor: colors.warningForeground, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
   submitBtnText: { fontSize: 14, fontWeight: '600', color: 'white' },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 32, fontWeight: '800', color: '#F59E0B', marginVertical: 8 },
+  endScore: { fontSize: 32, fontWeight: '800', color: colors.warningForeground, marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+  endDifficulty: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: '#F59E0B' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#F59E0B', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  starsText: { fontSize: 16, color: colors.warningForeground },
+  playAgainBtn: { marginTop: 16, backgroundColor: colors.warningForeground, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

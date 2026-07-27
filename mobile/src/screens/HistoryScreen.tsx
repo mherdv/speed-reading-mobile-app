@@ -1,44 +1,97 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View, ScrollView, Dimensions } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import type { AttemptResult } from '../domain/types';
+import {
+  formatDuration,
+  getResultMetric,
+  isMeasuredReadingResult,
+  isReadingResult,
+  isValidProgressMeasurement,
+} from '../domain/results';
+import {
+  calculatePersonalPracticeEstimate,
+  getComprehensionCounts,
+} from '../domain/readingPlan';
 import { clearResults, loadResults } from '../data/resultsStore';
+import { getGameCatalogEntry } from '../data/gameCatalog';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { ProgressCharts } from '../ui/ProgressCharts';
-import { LineChart } from '../ui/LineChart';
+import { ResponsiveShell } from '../ui/ResponsiveShell';
 import { colors } from '../theme/colors';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type Props = {
   onBack: () => void;
   refreshToken: number;
+  optimisticResult?: AttemptResult;
 };
 
 type Tab = 'charts' | 'history';
+export type HistoryFilter = 'reading' | 'practice' | 'labs';
+
+export function classifyHistoryResult(
+  result: AttemptResult
+): HistoryFilter {
+  if (isMeasuredReadingResult(result)) return 'reading';
+  const activityType = result.details?.activityType;
+  if (
+    activityType === 'evidence-hunt' ||
+    activityType === 'context-builder' ||
+    result.sampleId === 'ContextBuilder'
+  ) {
+    return 'practice';
+  }
+  const catalog = getGameCatalogEntry(result.sampleId);
+  if (
+    catalog?.tier === 'reading-practice' ||
+    catalog?.tier === 'wellness'
+  ) {
+    return 'practice';
+  }
+  return 'labs';
+}
 
 function calculateTotalTime(results: AttemptResult[]): string {
   const totalMs = results.reduce((sum, r) => sum + r.elapsedMs, 0);
-  const totalMinutes = Math.floor(totalMs / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
+  return formatDuration(totalMs);
 }
 
-function calculateAverageSpeed(results: AttemptResult[]): string {
-  const wpmResults = results.filter(r => r.wpm > 0);
-  if (wpmResults.length === 0) return '0';
+export function calculateAverageValidMeasuredSpeed(
+  results: AttemptResult[]
+): string {
+  const wpmResults = results.filter(
+    (result) =>
+      isMeasuredReadingResult(result) &&
+      isValidProgressMeasurement(result)
+  );
+  if (wpmResults.length === 0) return '—';
   const avgWpm = Math.round(wpmResults.reduce((sum, r) => sum + r.wpm, 0) / wpmResults.length);
-  return `${avgWpm}`;
+  return `${avgWpm} wpm`;
 }
 
-export function HistoryScreen({ onBack, refreshToken }: Props) {
+export function HistoryScreen({
+  onBack,
+  refreshToken,
+  optimisticResult,
+}: Props) {
   const [results, setResults] = useState<AttemptResult[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('charts');
+  const [historyFilter, setHistoryFilter] =
+    useState<HistoryFilter>('reading');
+  const filteredResults = results.filter(
+    (result) => classifyHistoryResult(result) === historyFilter
+  );
+  const personalEstimate = calculatePersonalPracticeEstimate(results);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +99,14 @@ export function HistoryScreen({ onBack, refreshToken }: Props) {
     async function refresh() {
       const loaded = await loadResults();
       if (cancelled) return;
-      setResults(loaded);
+      setResults(
+        optimisticResult
+          ? [
+              optimisticResult,
+              ...loaded.filter((result) => result.id !== optimisticResult.id),
+            ]
+          : loaded
+      );
     }
 
     refresh();
@@ -54,32 +114,33 @@ export function HistoryScreen({ onBack, refreshToken }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [refreshToken]);
+  }, [optimisticResult, refreshToken]);
 
   async function onClear() {
     await clearResults();
     setResults([]);
   }
 
-  // Get daily scores for the main chart
-  const getDailyScores = () => {
-    const last30Days = results
-      .filter(r => r.score !== undefined)
-      .slice(0, 30)
-      .reverse();
-    return last30Days.map(r => r.score ?? 0);
-  };
-
-  const getDayLabels = () => {
-    const last30Days = results.slice(0, 30).reverse();
-    return last30Days.map((r, i) => {
-      if (i % 5 === 0) return `${i + 1}`;
-      return '';
-    });
-  };
+  function confirmClear() {
+    if (Platform.OS === 'web') {
+      if (globalThis.confirm('Clear all session history? This cannot be undone.')) {
+        void onClear();
+      }
+      return;
+    }
+    Alert.alert(
+      'Clear session history?',
+      'This permanently removes every saved result. Game levels are not affected.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear history', style: 'destructive', onPress: onClear },
+      ]
+    );
+  }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
+    <ResponsiveShell style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <BackButton onPress={onBack} />
@@ -88,66 +149,138 @@ export function HistoryScreen({ onBack, refreshToken }: Props) {
       </View>
 
       {/* Summary Stats */}
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Total Training Time</Text>
-          <Text style={styles.summaryValue}>{calculateTotalTime(results)}</Text>
+      {historyFilter === 'reading' ? (
+        <View testID="reading-history-summary">
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Personal practice estimate</Text>
+              <Text style={styles.summaryValue}>
+                {personalEstimate.ready
+                  ? `${personalEstimate.medianWpm} wpm`
+                  : 'Not enough readings'}
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Comprehension</Text>
+              <Text style={styles.summaryValue}>
+                {personalEstimate.correct}/{personalEstimate.total}
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Valid passages</Text>
+              <Text style={styles.summaryValue}>
+                {personalEstimate.validPassageCount}/3
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.uncertaintyText}>
+            {personalEstimate.ready
+              ? 'A median across different valid passages is a personal practice estimate, not a diagnostic score.'
+              : 'Not enough readings for a personal estimate. Complete three different valid passages; short or extreme attempts remain visible but are excluded.'}
+          </Text>
         </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Average Speed</Text>
-          <Text style={styles.summaryValue}>{calculateAverageSpeed(results)} wpm</Text>
-        </View>
-      </View>
-
-      {/* Main Progress Chart */}
-      {results.length > 1 && (
-        <View style={styles.mainChartCard}>
-          <LineChart
-            data={getDailyScores().length > 0 ? getDailyScores() : [0]}
-            width={SCREEN_WIDTH - 64}
-            height={180}
-            color={colors.primary}
-            showDots={getDailyScores().length <= 10}
-            showArea={true}
-            showYAxis={true}
-            showXAxis={true}
-            yAxisTicks={4}
-          />
-          <Text style={styles.chartCaption}>Days</Text>
+      ) : (
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Visible sessions</Text>
+            <Text style={styles.summaryValue}>{filteredResults.length}</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Practice time</Text>
+            <Text style={styles.summaryValue}>
+              {calculateTotalTime(filteredResults)}
+            </Text>
+          </View>
         </View>
       )}
+
+      <View
+        accessibilityRole="tablist"
+        accessibilityLabel="History category"
+        style={styles.filterRow}
+      >
+        {(['reading', 'practice', 'labs'] as const).map((filter) => (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: historyFilter === filter }}
+            key={filter}
+            testID={`history-filter-${filter}`}
+            style={[
+              styles.filter,
+              historyFilter === filter && styles.filterActive,
+            ]}
+            onPress={() => setHistoryFilter(filter)}
+          >
+            <Text
+              style={[
+                styles.filterText,
+                historyFilter === filter && styles.filterTextActive,
+              ]}
+            >
+              {filter[0].toUpperCase() + filter.slice(1)}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
       {/* Tabs */}
       <View style={styles.tabRow}>
         <Pressable 
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'charts' }}
           style={[styles.tab, activeTab === 'charts' && styles.tabActive]}
           onPress={() => setActiveTab('charts')}
         >
-          <Text style={[styles.tabText, activeTab === 'charts' && styles.tabTextActive]}>📊 Charts</Text>
+          <Text style={[styles.tabText, activeTab === 'charts' && styles.tabTextActive]}>Charts</Text>
         </Pressable>
         <Pressable 
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'history' }}
           style={[styles.tab, activeTab === 'history' && styles.tabActive]}
           onPress={() => setActiveTab('history')}
         >
-          <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>📋 History</Text>
+          <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>Sessions</Text>
         </Pressable>
       </View>
 
       {activeTab === 'charts' ? (
         <ScrollView style={styles.scrollArea}>
-          <ProgressCharts results={results} />
+          <ProgressCharts results={filteredResults} />
         </ScrollView>
       ) : (
         <>
           <FlatList
             style={styles.list}
-            data={results}
+            data={filteredResults}
             keyExtractor={(r) => r.id}
-            ListEmptyComponent={<Text style={styles.empty}>No results yet.</Text>}
+            ListEmptyComponent={(
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No sessions yet</Text>
+                <Text style={styles.empty}>
+                  Complete a measured read or skill drill to start your history.
+                </Text>
+              </View>
+            )}
             renderItem={({ item }) => (
               <View style={styles.item}>
-                <Text style={styles.itemTitle}>{item.sampleTitle}</Text>
+                <View style={styles.itemHeader}>
+                  <Text style={styles.itemTitle}>{item.sampleTitle}</Text>
+                  <Text style={styles.itemMetric}>
+                    {getResultMetric(item).value} {getResultMetric(item).label}
+                  </Text>
+                </View>
                 <Text style={styles.itemMeta}>{formatHistoryMeta(item)}</Text>
+                {!isValidProgressMeasurement(item) && (
+                  <Text
+                    testID={`history-quality-${item.id}`}
+                    style={styles.qualityFlag}
+                  >
+                    Not used for progress
+                  </Text>
+                )}
+                <Text style={styles.itemDate}>
+                  {new Date(item.finishedAtIso).toLocaleString()}
+                </Text>
               </View>
             )}
           />
@@ -155,36 +288,57 @@ export function HistoryScreen({ onBack, refreshToken }: Props) {
       )}
 
       <View style={styles.bottomRow}>
-        <Button testID="history-back" label="Back" onPress={onBack} />
+        <Button testID="history-back" label="Back" variant="secondary" onPress={onBack} />
         <View style={styles.spacer} />
         <Button
           testID="history-clear"
-          label="Clear All"
-          onPress={onClear}
+          label="Clear history"
+          variant="destructive"
+          onPress={confirmClear}
           disabled={results.length === 0}
         />
       </View>
+    </ResponsiveShell>
     </View>
   );
 }
 
 function formatHistoryMeta(item: AttemptResult): string {
-  const hasWpm = item.wordCount > 0 && item.wpm > 0;
-  const base = `${(item.elapsedMs / 1000).toFixed(1)}s`;
-  if (hasWpm) {
-    return `${item.wpm} WPM · ${base} · ${item.comprehensionCorrect ? 'Correct' : 'Incorrect'}`;
+  const base = formatDuration(item.elapsedMs);
+  if (isReadingResult(item)) {
+    if (isMeasuredReadingResult(item)) {
+      const comprehension = getComprehensionCounts(item);
+      return `${base} · ${comprehension.correct}/${comprehension.total} comprehension`;
+    }
+    return `${base} · Guided pacing`;
   }
 
   const parts: string[] = [base];
-  if (typeof item.score === 'number') parts.unshift(`Score: ${item.score}`);
+  if (item.details?.activityType === 'evidence-hunt') {
+    parts.push(
+      `${item.details.answerCorrect ?? 0}/${item.details.rounds ?? 0} answers`,
+      `${item.details.evidenceCorrect ?? 0}/${item.details.evidenceRequired ?? 0} evidence`
+    );
+    return parts.join(' · ');
+  }
+  if (item.details?.activityType === 'context-builder') {
+    parts.push(
+      `${item.details.meaningCorrect ?? 0}/${item.details.attempts ?? 0} meanings`,
+      `${item.details.clueCorrect ?? 0}/${item.details.attempts ?? 0} clues`
+    );
+    return parts.join(' · ');
+  }
   if (typeof item.accuracy === 'number') parts.push(`${Math.round(item.accuracy * 100)}%`);
   return parts.join(' · ');
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   container: {
     flex: 1,
-    padding: 16,
     backgroundColor: colors.background,
   },
   header: {
@@ -204,11 +358,13 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 16,
   },
   summaryItem: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 150,
     backgroundColor: colors.cardBackground,
     borderRadius: 14,
     padding: 16,
@@ -217,6 +373,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
+  },
+  uncertaintyText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: -8,
+    marginBottom: 16,
+  },
+  filterRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    marginBottom: 12,
+    borderRadius: 14,
+    backgroundColor: colors.backgroundDark,
+  },
+  filter: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+  },
+  filterActive: {
+    backgroundColor: colors.cardBackground,
+  },
+  filterText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  filterTextActive: {
+    color: colors.primaryDark,
   },
   summaryLabel: {
     fontSize: 12,
@@ -227,23 +417,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: colors.textPrimary,
-  },
-  mainChartCard: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-    alignItems: 'center',
-  },
-  chartCaption: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 8,
   },
   tabRow: {
     flexDirection: 'row',
@@ -292,8 +465,27 @@ const styles = StyleSheet.create({
   },
   empty: {
     color: colors.textSecondary,
-    marginTop: 20,
     textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  emptyCard: {
+    alignItems: 'center',
+    marginTop: 20,
+    padding: 28,
+    borderRadius: 18,
+    backgroundColor: colors.cardBackground,
+  },
+  emptyIcon: {
+    color: colors.primary,
+    fontSize: 34,
+  },
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 8,
+    marginBottom: 4,
   },
   item: {
     borderRadius: 14,
@@ -307,6 +499,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   itemTitle: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 4,
@@ -315,5 +508,26 @@ const styles = StyleSheet.create({
   itemMeta: {
     fontSize: 13,
     color: colors.textSecondary,
+  },
+  qualityFlag: {
+    color: colors.warningForeground,
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  itemMetric: {
+    color: colors.primaryDark,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  itemDate: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: 5,
   },
 });

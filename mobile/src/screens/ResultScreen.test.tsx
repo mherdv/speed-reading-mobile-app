@@ -1,0 +1,81 @@
+import React from 'react';
+import { render } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import type { AttemptResult } from '../domain/types';
+import { ResultScreen } from './ResultScreen';
+
+function result(overrides: Partial<AttemptResult>): AttemptResult {
+  return {
+    id: 'result-1',
+    sampleId: 'sample-1',
+    sampleTitle: 'Measured passage',
+    startedAtIso: '2026-07-26T08:00:00.000Z',
+    finishedAtIso: '2026-07-26T08:01:00.000Z',
+    elapsedMs: 60_000,
+    wordCount: 240,
+    wpm: 240,
+    comprehensionCorrect: false,
+    details: {
+      activityType: 'measured-reading',
+      measurementValid: true,
+      contentId: 'sample-1',
+      comparisonBand: 'general-practice-brief-v1',
+      comprehensionCorrectCount: 2,
+      comprehensionQuestionCount: 3,
+    },
+    ...overrides,
+  };
+}
+
+const actions = {
+  onDone: jest.fn(),
+  onOpenHistory: jest.fn(),
+  onPlayAgain: jest.fn(),
+};
+
+describe('ResultScreen truthful metric cards', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  it('shows measured reading rate and comprehension as separate labeled values', () => {
+    const view = render(<ResultScreen result={result({})} {...actions} />);
+    expect(view.getByTestId('result-metric-cards')).toBeTruthy();
+    expect(view.getByText('Personal practice WPM')).toBeTruthy();
+    expect(view.getByText('240')).toBeTruthy();
+    expect(view.getByText('2/3')).toBeTruthy();
+    expect(view.getByText('Comprehension')).toBeTruthy();
+  });
+
+  it('shows Evidence Hunt metrics without turning them into one index', () => {
+    const view = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: 'EvidenceHunt',
+          sampleTitle: 'Evidence Hunt',
+          wordCount: 0,
+          wpm: 0,
+          score: 63,
+          accuracy: 0.75,
+          details: {
+            schemaVersion: 1,
+            activityType: 'evidence-hunt',
+            rounds: 4,
+            answerCorrect: 3,
+            evidenceCorrect: 2,
+            evidenceRequired: 4,
+            wrongSelections: 2,
+            medianLocateMs: 12_000,
+          },
+        })}
+      />
+    );
+    expect(view.getByText('3/4')).toBeTruthy();
+    expect(view.getByText('Answers correct')).toBeTruthy();
+    expect(view.getByText('2/4')).toBeTruthy();
+    expect(view.getByText('Evidence credit')).toBeTruthy();
+    expect(view.getByText('Median locate time')).toBeTruthy();
+  });
+});

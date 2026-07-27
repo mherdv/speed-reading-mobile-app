@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { updateProgress, levelToDifficulty, levelToStars } from '../../data/progressStore';
+import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
-import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
+import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'VisualSpanExpansion';
 
@@ -15,7 +16,7 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
@@ -49,7 +50,6 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
     gameProgress,
     setGameProgress,
     selectedDifficulty,
-    setSelectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
   const [level, setLevel] = useState(3);
@@ -66,6 +66,7 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
   const attemptsRef = useRef(0);
   const levelRef = useRef(3);
   const showTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
   const startingLength = startingLengthProp ?? currentConfig.startingLength;
@@ -81,7 +82,9 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
   useAutoStart(autoStart, phase, progressLoaded, start);
 
   function start() {
-    if (phase !== 'idle') return;
+    clearTrackedTimeouts();
+    cancelledRef.current = false;
+    if (phase !== 'idle' && phase !== 'ended') return;
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
@@ -137,6 +140,7 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    clearTrackedTimeouts();
 
     const now = Date.now();
     const elapsedMs = now - startRef.current;
@@ -147,7 +151,6 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
     const success = accuracy >= 0.7;
     updateProgress(GAME_ID, success, scoreRef.current).then(({ progress }) => {
       setGameProgress(progress);
-      setSelectedDifficulty(levelToDifficulty(progress.level));
     });
 
     onReportResult?.({
@@ -158,15 +161,13 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
       accuracy,
       details: { maxLevel, attempts: attemptsRef.current, difficulty: selectedDifficulty },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
+    setPhase('ended');
   }
 
   function playAgain() {
+    clearTrackedTimeouts();
     setPhase('idle');
-    setTimeout(start, 50);
+    scheduleTimeout(start, 50);
   }
 
   return (
@@ -261,12 +262,12 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
               onChangeText={setInput}
               keyboardType="number-pad"
               placeholder="Enter sequence"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textMuted}
               autoFocus
             />
           </View>
 
-          <Pressable testID="submit-btn" style={styles.submitBtn} onPress={submit}>
+          <Pressable accessibilityRole="button" testID="submit-btn" style={styles.submitBtn} onPress={submit}>
             <Text style={styles.submitBtnText}>Submit</Text>
           </Pressable>
         </View>
@@ -286,7 +287,7 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Try Again</Text>
           </Pressable>
         </View>
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     letterSpacing: 4,
   },
-  startBtn: { backgroundColor: '#0D9488', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  startBtn: { backgroundColor: colors.interactiveTeal, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 },
@@ -353,17 +354,17 @@ const styles = StyleSheet.create({
   cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
   cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
   input: { fontSize: 28, fontWeight: '700', color: '#115E59', textAlign: 'center', letterSpacing: 4 },
-  submitBtn: { backgroundColor: '#0D9488', paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
+  submitBtn: { backgroundColor: colors.interactiveTeal, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   submitBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#0D9488', marginVertical: 8 },
+  endScore: { fontSize: 48, fontWeight: '800', color: colors.interactiveTeal, marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+  endDifficulty: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: '#F59E0B' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#0D9488', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  starsText: { fontSize: 16, color: colors.warningForeground },
+  playAgainBtn: { marginTop: 16, backgroundColor: colors.interactiveTeal, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

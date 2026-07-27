@@ -79,4 +79,39 @@ describe('FlashReading', () => {
       });
     }
   });
+
+  it('ends after the third consecutive recall miss', () => {
+    const onReportResult = jest.fn();
+    const view = render(
+      <FlashReading
+        words={['focus', 'signal']}
+        displayMs={10}
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+    for (let miss = 0; miss < 3; miss += 1) {
+      act(() => {
+        jest.advanceTimersByTime(15);
+      });
+      fireEvent.changeText(view.getByTestId('recall-input'), 'wrong');
+      fireEvent.press(view.getByTestId('submit-btn'));
+      act(() => {
+        jest.advanceTimersByTime(700);
+      });
+      if (miss < 2) expect(view.queryByTestId('end')).toBeNull();
+    }
+
+    expect(view.getByTestId('end')).toBeTruthy();
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          rounds: 3,
+          endingFailureStreak: 3,
+          finishReason: 'three-misses',
+        }),
+      })
+    );
+  });
 });

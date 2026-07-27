@@ -1,7 +1,12 @@
 import React from 'react';
 import { act, render } from '@testing-library/react-native';
 
-// Import all 22 games
+// Import all registered games
+import RepeatedReading from '../games/RepeatedReading/RepeatedReading';
+import MainIdeaSprint from '../games/MainIdeaSprint/MainIdeaSprint';
+import StructureScan from '../games/StructureScan/StructureScan';
+import EvidenceHunt from '../games/EvidenceHunt/EvidenceHunt';
+import ContextBuilder from '../games/ContextBuilder/ContextBuilder';
 import PowerReader from '../games/PowerReader/PowerReader';
 import LetterRecognition from '../games/LetterRecognition/LetterRecognition';
 import TextSearch from '../games/TextSearch/TextSearch';
@@ -15,6 +20,7 @@ import SymbolRecognition from '../games/SymbolRecognition/SymbolRecognition';
 import PatternScanning from '../games/PatternScanning/PatternScanning';
 import TimedPhraseRecognition from '../games/TimedPhraseRecognition/TimedPhraseRecognition';
 import TimedWordRecognition from '../games/TimedWordRecognition/TimedWordRecognition';
+import LastWordRecall from '../games/LastWordRecall/LastWordRecall';
 import WordMismatchGrid from '../games/WordMismatchGrid/WordMismatchGrid';
 import WordPairs from '../games/WordPairs/WordPairs';
 import LetterJumble from '../games/LetterJumble/LetterJumble';
@@ -47,6 +53,61 @@ describe('All Games - AutoStart Functionality', () => {
       await Promise.resolve();
     });
   };
+
+  describe('RepeatedReading', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <RepeatedReading autoStart={true} />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('repeated-passage')).toBeTruthy();
+    });
+  });
+
+  describe('MainIdeaSprint', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <MainIdeaSprint autoStart={true} />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('main-idea-passage')).toBeTruthy();
+    });
+  });
+
+  describe('StructureScan', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <StructureScan autoStart={true} />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('structure-scan-article')).toBeTruthy();
+    });
+  });
+
+  describe('EvidenceHunt', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <EvidenceHunt autoStart />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('evidence-active')).toBeTruthy();
+    });
+  });
+
+  describe('ContextBuilder', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <ContextBuilder autoStart />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('context-active')).toBeTruthy();
+    });
+  });
 
   describe('PowerReader', () => {
     it('auto-starts when autoStart prop is true', async () => {
@@ -86,8 +147,7 @@ describe('All Games - AutoStart Functionality', () => {
       const { queryByTestId, getByTestId } = render(<EyeMovementTraining autoStart={true} />);
       await waitForAutoStart();
       expect(queryByTestId('start-button')).toBeNull();
-      // Should show the dot track
-      expect(getByTestId('dot-track')).toBeTruthy();
+      expect(getByTestId('blink-stage')).toBeTruthy();
     });
   });
 
@@ -160,6 +220,17 @@ describe('All Games - AutoStart Functionality', () => {
       const { queryByTestId } = render(<TimedWordRecognition autoStart={true} />);
       await waitForAutoStart();
       expect(queryByTestId('start-button')).toBeNull();
+    });
+  });
+
+  describe('LastWordRecall', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <LastWordRecall autoStart={true} />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('word-stream')).toBeTruthy();
     });
   });
 

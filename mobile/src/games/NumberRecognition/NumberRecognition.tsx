@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
-import { useAutoStart } from '../gameHooks';
+import { updateProgress } from '../../data/progressStore';
+import { useAutoStart, type Difficulty } from '../gameHooks';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
+import { colors } from '../../theme/colors';
 
 const GAME_ID = 'NumberRecognition';
 
@@ -13,32 +15,116 @@ type GameReportPayload = {
   finishedAtIso?: string;
   score?: number;
   accuracy?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 };
 
 type Props = {
   target?: number;
   stream?: number[];
   durationMs?: number;
+  difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
 type Phase = 'idle' | 'running' | 'ended';
 
-function generateStream(): number[] {
-  return Array.from({ length: 50 }, () => Math.floor(Math.random() * 10));
+type NumberRecognitionChallenge = {
+  durationMs: number;
+  digitCount: 1 | 2 | 3;
+  distractorSimilarity: 'low' | 'medium' | 'high';
+  stimulusCount: number;
+  displayCadenceMs: number;
+  defaultTarget: number;
+};
+
+const NUMBER_RECOGNITION_CHALLENGES: Record<
+  Difficulty,
+  NumberRecognitionChallenge
+> = {
+  easy: {
+    durationMs: 30_000,
+    digitCount: 1,
+    distractorSimilarity: 'low',
+    stimulusCount: 30,
+    displayCadenceMs: 1_600,
+    defaultTarget: 7,
+  },
+  medium: {
+    durationMs: 30_000,
+    digitCount: 2,
+    distractorSimilarity: 'medium',
+    stimulusCount: 50,
+    displayCadenceMs: 1_100,
+    defaultTarget: 37,
+  },
+  hard: {
+    durationMs: 30_000,
+    digitCount: 3,
+    distractorSimilarity: 'high',
+    stimulusCount: 70,
+    displayCadenceMs: 700,
+    defaultTarget: 873,
+  },
+};
+
+export function getNumberRecognitionChallenge(
+  difficulty: Difficulty
+): NumberRecognitionChallenge {
+  return NUMBER_RECOGNITION_CHALLENGES[difficulty];
 }
 
-export default function NumberRecognition({ target: initialTarget = 7, stream, durationMs = 20000, autoStart = false, onReportResult }: Props) {
+function randomNumberWithDigits(digitCount: number): number {
+  if (digitCount === 1) return Math.floor(Math.random() * 10);
+  const minimum = 10 ** (digitCount - 1);
+  return minimum + Math.floor(Math.random() * (9 * minimum));
+}
+
+function similarNumber(target: number): number {
+  const digits = String(target).split('');
+  const index = Math.floor(Math.random() * digits.length);
+  const original = Number(digits[index]);
+  digits[index] = String((original + (Math.random() < 0.5 ? 1 : 9)) % 10);
+  const candidate = Number(digits.join(''));
+  return candidate === target ? target + 1 : candidate;
+}
+
+function generateStream(
+  target: number,
+  challenge: NumberRecognitionChallenge
+): number[] {
+  return Array.from({ length: challenge.stimulusCount }, (_, index) => {
+    if (index % 5 === 1) return target;
+    if (challenge.distractorSimilarity === 'high') return similarNumber(target);
+
+    let candidate = randomNumberWithDigits(challenge.digitCount);
+    while (candidate === target) {
+      candidate = randomNumberWithDigits(challenge.digitCount);
+    }
+    return candidate;
+  });
+}
+
+export default function NumberRecognition({
+  target: targetProp,
+  stream,
+  durationMs: durationMsProp,
+  difficulty = 'medium',
+  autoStart = false,
+  onReportResult,
+}: Props) {
+  const challenge = getNumberRecognitionChallenge(difficulty);
+  const currentTarget = targetProp ?? challenge.defaultTarget;
+  const durationMs = durationMsProp ?? challenge.durationMs;
   const [phase, setPhase] = useState<Phase>('idle');
-  const [seq, setSeq] = useState<number[]>(() => stream ?? generateStream());
+  const [seq, setSeq] = useState<number[]>(() =>
+    stream ?? generateStream(currentTarget, challenge)
+  );
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [timeLeft, setTimeLeft] = useState(durationMs);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
-  const [currentTarget, setCurrentTarget] = useState(initialTarget);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
@@ -46,11 +132,18 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
   const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
+  const timedOutRef = useRef(0);
+  const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cadenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
+      if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+      if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
+      if (replayTimeoutRef.current) clearTimeout(replayTimeoutRef.current);
     };
   }, []);
 
@@ -58,13 +151,30 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
 
   const current = seq[Math.min(index, seq.length - 1)] ?? 0;
 
+  useEffect(() => {
+    if (phase !== 'running') return;
+    if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
+    cadenceTimeoutRef.current = setTimeout(
+      handleStimulusTimeout,
+      challenge.displayCadenceMs
+    );
+    return () => {
+      if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
+    };
+  }, [challenge.displayCadenceMs, index, phase]);
+
   function start() {
-    if (phase !== 'idle') return;
+    cancelledRef.current = false;
+    if (phase !== 'idle' && phase !== 'ended') return;
     reportedRef.current = false;
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
+    if (replayTimeoutRef.current) clearTimeout(replayTimeoutRef.current);
     scoreRef.current = 0;
     attemptsRef.current = 0;
+    timedOutRef.current = 0;
     // Generate fresh stream
-    setSeq(stream ?? generateStream());
+    setSeq(stream ?? generateStream(currentTarget, challenge));
     setPhase('running');
     setScore(0);
     setIndex(0);
@@ -88,23 +198,33 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
 
     const now = Date.now();
     const elapsedMs = now - startRef.current;
     const accuracy = attemptsRef.current > 0 ? Math.min(1, scoreRef.current / (10 * attemptsRef.current)) : 0;
 
+    setPhase('ended');
+    void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
+      () => undefined
+    );
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
       score: scoreRef.current,
       accuracy,
-      details: { target: currentTarget, total: seq.length, attempts: attemptsRef.current },
+      details: {
+        target: currentTarget,
+        total: seq.length,
+        attempts: attemptsRef.current,
+        timedOut: timedOutRef.current,
+        difficulty,
+        digitCount: challenge.digitCount,
+        distractorSimilarity: challenge.distractorSimilarity,
+        displayCadenceMs: challenge.displayCadenceMs,
+      },
     });
-
-    if (!onReportResult) {
-      setPhase('ended');
-    }
   }
 
   function evaluate(isMatchPressed: boolean) {
@@ -119,19 +239,29 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
       scoreRef.current += 10;
       setScore(scoreRef.current);
       setFeedback('correct');
-      // Change target after correct match
-      setCurrentTarget(Math.floor(Math.random() * 10));
     } else {
       setFeedback('wrong');
     }
 
-    setTimeout(() => setFeedback(null), 200);
-    setIndex((i) => Math.min(seq.length - 1, i + 1));
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 200);
+    setIndex((i) => (i + 1) % Math.max(1, seq.length));
+  }
+
+  function handleStimulusTimeout() {
+    if (phase !== 'running') return;
+    attemptsRef.current += 1;
+    timedOutRef.current += 1;
+    setAttempts(attemptsRef.current);
+    setFeedback('wrong');
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 200);
+    setIndex((i) => (i + 1) % Math.max(1, seq.length));
   }
 
   function playAgain() {
     setPhase('idle');
-    setTimeout(start, 50);
+    replayTimeoutRef.current = setTimeout(start, 50);
   }
 
   return (
@@ -194,10 +324,10 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
           </View>
 
           <View style={styles.buttonsRow}>
-            <Pressable testID="match" style={[styles.choiceBtn, styles.matchBtn]} onPress={() => evaluate(true)}>
+            <Pressable accessibilityRole="button" testID="match" style={[styles.choiceBtn, styles.matchBtn]} onPress={() => evaluate(true)}>
               <Text style={styles.choiceBtnText}>MATCH ✓</Text>
             </Pressable>
-            <Pressable testID="no" style={[styles.choiceBtn, styles.noBtn]} onPress={() => evaluate(false)}>
+            <Pressable accessibilityRole="button" testID="no" style={[styles.choiceBtn, styles.noBtn]} onPress={() => evaluate(false)}>
               <Text style={styles.choiceBtnText}>NO ✗</Text>
             </Pressable>
           </View>
@@ -212,7 +342,7 @@ export default function NumberRecognition({ target: initialTarget = 7, stream, d
           <Text style={styles.endMeta}>
             Accuracy: {attempts > 0 ? Math.round((score / (10 * attempts)) * 100) : 0}%
           </Text>
-          <Pressable style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>
         </View>
@@ -226,8 +356,8 @@ const styles = StyleSheet.create({
   header: { marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
   subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  targetHighlight: { color: '#F59E0B', fontWeight: '700' },
-  startBtn: { backgroundColor: '#F59E0B', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  targetHighlight: { color: colors.warningForeground, fontWeight: '700' },
+  startBtn: { backgroundColor: colors.warningForeground, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
@@ -255,9 +385,9 @@ const styles = StyleSheet.create({
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#F59E0B', marginVertical: 8 },
+  endScore: { fontSize: 48, fontWeight: '800', color: colors.warningForeground, marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#F59E0B', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  playAgainBtn: { marginTop: 16, backgroundColor: colors.warningForeground, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
   hiddenText: { position: 'absolute', opacity: 0 },
 });

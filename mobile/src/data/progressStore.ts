@@ -14,6 +14,8 @@ export type GameProgress = {
   bestScore?: number;
   /** Last played timestamp */
   lastPlayedAt?: string;
+  /** Difficulty of the current two-session adaptive qualification run. */
+  adaptiveQualificationDifficulty?: 'easy' | 'medium' | 'hard';
 };
 
 type ProgressStore = Record<string, GameProgress>;
@@ -29,10 +31,9 @@ const LEVEL_UP_THRESHOLD = 5; // Correct answers to level up
 const LEVEL_DOWN_THRESHOLD = 3; // Failures to level down
 
 export async function loadAllProgress(): Promise<ProgressStore> {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
-  if (!raw) return {};
-
   try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return {};
     const normalized: ProgressStore = {};
@@ -105,6 +106,49 @@ export async function updateProgress(
     progress: current,
     levelChanged: levelDelta !== 0,
     levelDelta,
+  };
+}
+
+/**
+ * Reading-skill activities use a transparent, between-session suggestion:
+ * two complete sessions at or above the task threshold suggest the next
+ * difficulty band. Manual difficulty remains untouched by this stored signal.
+ */
+export async function updateTwoSessionDifficultySuggestion(
+  gameId: string,
+  playedDifficulty: 'easy' | 'medium' | 'hard',
+  metThreshold: boolean,
+  score?: number
+): Promise<{ progress: GameProgress; suggestedDifficulty: 'easy' | 'medium' | 'hard' }> {
+  const current = await loadGameProgress(gameId);
+  current.totalPlays += 1;
+  current.lastPlayedAt = new Date().toISOString();
+  if (!metThreshold) {
+    current.streak = 0;
+    current.adaptiveQualificationDifficulty = undefined;
+  } else if (
+    current.adaptiveQualificationDifficulty === playedDifficulty
+  ) {
+    current.streak = Math.max(0, current.streak) + 1;
+  } else {
+    current.streak = 1;
+    current.adaptiveQualificationDifficulty = playedDifficulty;
+  }
+  if (score !== undefined) {
+    current.bestScore = Math.max(current.bestScore ?? 0, score);
+  }
+
+  if (metThreshold && current.streak >= 2) {
+    if (playedDifficulty === 'easy') current.level = Math.max(current.level, 6);
+    if (playedDifficulty === 'medium') current.level = Math.max(current.level, 11);
+    current.streak = 0;
+    current.adaptiveQualificationDifficulty = undefined;
+  }
+
+  await saveGameProgress(gameId, current);
+  return {
+    progress: current,
+    suggestedDifficulty: levelToDifficulty(current.level),
   };
 }
 

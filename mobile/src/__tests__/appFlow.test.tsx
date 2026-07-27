@@ -1,455 +1,218 @@
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  waitFor,
+} from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import App from '../../App';
 
-// Mock AsyncStorage for clean state in tests
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(() => Promise.resolve(null)),
-  setItem: jest.fn(() => Promise.resolve()),
-  removeItem: jest.fn(() => Promise.resolve()),
-  getAllKeys: jest.fn(() => Promise.resolve([])),
-  multiGet: jest.fn(() => Promise.resolve([])),
-  multiSet: jest.fn(() => Promise.resolve()),
-}));
-
-// Mock react-native-safe-area-context
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
   const { View } = require('react-native');
+  const insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  const frame = { x: 0, y: 0, width: 390, height: 844 };
   return {
-    SafeAreaProvider: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
-    SafeAreaView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
-    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    SafeAreaProvider: ({ children }: { children: React.ReactNode }) => (
+      <View>{children}</View>
+    ),
+    SafeAreaView: ({ children }: { children: React.ReactNode }) => (
+      <View>{children}</View>
+    ),
+    SafeAreaInsetsContext: React.createContext(insets),
+    SafeAreaFrameContext: React.createContext(frame),
+    initialWindowMetrics: { insets, frame },
+    useSafeAreaInsets: () => insets,
+    useSafeAreaFrame: () => frame,
   };
 });
 
-// Mock React Navigation
-jest.mock('@react-navigation/native', () => {
-  const React = require('react');
-  const actualNav = jest.requireActual('@react-navigation/native');
-  return {
-    ...actualNav,
-    NavigationContainer: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    useNavigation: () => ({
-      navigate: jest.fn(),
-      goBack: jest.fn(),
-    }),
-    useRoute: () => ({
-      params: {},
-    }),
-  };
-});
+import App from '../../App';
 
-jest.mock('@react-navigation/native-stack', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  
-  // Track the current screen (for navigation mocking)
-  let currentScreen = 'Home';
-  const screenComponents: Record<string, React.FC<any>> = {};
-  
-  return {
-    createNativeStackNavigator: () => ({
-      Navigator: ({ children, initialRouteName }: { children: React.ReactNode; initialRouteName?: string }) => {
-        // Get all Screen elements and find the one matching initialRouteName or first one
-        const screens = React.Children.toArray(children).filter(
-          (child: any) => child?.type?.displayName === 'Screen'
-        );
-        
-        // Find the Home screen and render only that
-        const homeScreen = screens.find((screen: any) => screen.props?.name === 'Home');
-        if (homeScreen) {
-          const { children: screenChildren } = (homeScreen as any).props;
-          if (typeof screenChildren === 'function') {
-            return <View>{screenChildren({ navigation: { navigate: jest.fn(), goBack: jest.fn() }, route: { params: {} } })}</View>;
-          }
-          return <View>{screenChildren}</View>;
-        }
-        
-        // Fallback - render first screen only
-        const firstScreen = screens[0];
-        if (firstScreen) {
-          const { children: screenChildren } = (firstScreen as any).props;
-          if (typeof screenChildren === 'function') {
-            return <View>{screenChildren({ navigation: { navigate: jest.fn(), goBack: jest.fn() }, route: { params: {} } })}</View>;
-          }
-          return <View>{screenChildren}</View>;
-        }
-        
-        return <View />;
-      },
-      Screen: Object.assign(
-        ({ name, children }: { name: string; children: React.ReactNode | ((props: any) => React.ReactNode) }) => {
-          // The Screen component itself doesn't render anything - Navigator handles it
-          return null;
-        },
-        { displayName: 'Screen' }
-      ),
-    }),
-  };
-});
+describe('real app navigation flows', () => {
+  let alertAction: 'keep' | 'leave';
 
-describe('App E2E Flow Tests', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date('2020-01-01T00:00:00.000Z'));
-    jest.clearAllMocks();
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    alertAction = 'leave';
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      const action = buttons?.find((button) =>
+        alertAction === 'leave'
+          ? button.text === 'Leave'
+          : button.text === 'Keep training'
+      );
+      action?.onPress?.();
+    });
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
-  describe('Home Screen', () => {
-    it('renders home screen with game cards on launch', async () => {
-      const { getByText, getAllByText } = render(<App />);
+  it('renders the complete searchable game catalog on Home', async () => {
+    const { getByTestId, getByText, queryByTestId } = render(<App />);
 
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Should show the welcome text
-      expect(getByText('Welcome back!')).toBeTruthy();
-      
-      // Should show game cards
-      expect(getByText('Words')).toBeTruthy();
-      expect(getByText('Jumble')).toBeTruthy();
-      expect(getByText('Eyes')).toBeTruthy();
+    await waitFor(() => {
+      expect(getByText('Welcome back')).toBeTruthy();
     });
-
-    it('displays difficulty indicators for each game', async () => {
-      const { getByText } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // All games display difficulty dots (rendered as Views with colored backgrounds)
-      // Just verify the component renders without checking for specific text
-      expect(getByText('Welcome back!')).toBeTruthy();
-    });
-
-    it('has history button', async () => {
-      const { getByTestId } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      expect(getByTestId('open-history')).toBeTruthy();
-    });
+    expect(getByTestId('open-game-MainIdeaSprint')).toBeTruthy();
+    expect(getByText('28 exercises')).toBeTruthy();
+    expect(queryByTestId('open-training-library')).toBeNull();
   });
 
-  // NOTE: The following tests require real navigation between screens.
-  // With React Navigation mocked, we can only test the initial Home screen.
-  // Navigation flow tests are covered in individual game and screen tests.
+  it('returns an untouched idle game without prompting', async () => {
+    const { getByLabelText, getByTestId, getByText } = render(<App />);
+    await waitFor(() => {
+      expect(getByTestId('open-game-MainIdeaSprint')).toBeTruthy();
+    });
 
-  describe('Home → Game Flow', () => {
-    it.skip('opens game with description screen and start button when tapping game card', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByText, getByTestId } = render(<App />);
+    fireEvent.press(getByTestId('open-game-MainIdeaSprint'));
+    await waitFor(() => {
+      expect(getByText('Training')).toBeTruthy();
+      expect(getByTestId('difficulty-control')).toBeTruthy();
+    });
 
-      await act(async () => {
-        await Promise.resolve();
-      });
+    fireEvent.press(getByLabelText('Go back'));
+    await act(async () => {
+      await Promise.resolve();
+    });
 
-      // Tap on Letter mixup game
-      const letterRecCard = getByText('Jumble');
-      fireEvent.press(letterRecCard);
+    await waitFor(() => {
+      expect(getByText('Welcome back')).toBeTruthy();
+    });
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
 
-      await act(async () => {
-        await Promise.resolve();
-      });
+  it('keeps an active game usable after Back → Keep training and completes it', async () => {
+    alertAction = 'keep';
+    const { getByLabelText, getByTestId, getByText } = render(<App />);
+    await waitFor(() => {
+      expect(getByTestId('open-game-StructureScan')).toBeTruthy();
+    });
 
-      // Should show start button (autoStart is false from home)
+    fireEvent.press(getByTestId('open-game-StructureScan'));
+    await waitFor(() => {
       expect(getByTestId('start-button')).toBeTruthy();
     });
+    fireEvent.press(getByTestId('start-button'));
+    expect(getByTestId('structure-scan-article')).toBeTruthy();
 
-    it.skip('starts game when start button is pressed', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByText, getByTestId, queryByTestId } = render(<App />);
+    fireEvent.press(getByLabelText('Go back'));
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(getByTestId('structure-scan-article')).toBeTruthy();
 
-      await act(async () => {
-        await Promise.resolve();
-      });
+    for (let round = 0; round < 3; round += 1) {
+      fireEvent.press(getByTestId('show-structure-choices'));
+      fireEvent.press(getByTestId('structure-choice-0'));
+      fireEvent.press(getByTestId('continue-structure-scan'));
+    }
 
-      // Tap on Letter mixup game
-      fireEvent.press(getByText('Jumble'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Press start button
-      fireEvent.press(getByTestId('start-button'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Start button should no longer be visible
-      expect(queryByTestId('start-button')).toBeNull();
-    });
-
-    it.skip('shows back button during game', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByText } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Tap on a game
-      fireEvent.press(getByText('Jumble'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Should see back button
-      expect(getByText('← Back')).toBeTruthy();
-    });
-
-    it.skip('returns to home when pressing back button', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByText } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Tap on a game
-      fireEvent.press(getByText('Jumble'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Press back
-      fireEvent.press(getByText('← Back'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Should be back on home
-      expect(getByText('Speed Reading Trainer')).toBeTruthy();
-      expect(getByText('Words')).toBeTruthy();
+    await waitFor(() => {
+      expect(getByText('Recent progress')).toBeTruthy();
     });
   });
 
-  describe('Game → Result Flow', () => {
-    it.skip('game starts when user presses start button', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByText, getByTestId, queryByTestId } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Tap on Letter mixup
-      fireEvent.press(getByText('Jumble'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Start button should be visible (coming from home)
+  it('leaves an active game after Back → Leave', async () => {
+    const { getByLabelText, getByTestId, getByText } = render(<App />);
+    await waitFor(() => {
+      expect(getByTestId('open-game-StructureScan')).toBeTruthy();
+    });
+    fireEvent.press(getByTestId('open-game-StructureScan'));
+    await waitFor(() => {
       expect(getByTestId('start-button')).toBeTruthy();
+    });
+    fireEvent.press(getByTestId('start-button'));
 
-      // Press start button
+    fireEvent.press(getByLabelText('Go back'));
+
+    await waitFor(() => {
+      expect(getByText('Welcome back')).toBeTruthy();
+    });
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['EvidenceHunt', 'ContextBuilder'])(
+    'guards and discards an active %s session through the shared Back flow',
+    async (gameId) => {
+      const { getByLabelText, getByTestId, getByText } = render(<App />);
+      await waitFor(() => {
+        expect(getByTestId(`open-game-${gameId}`)).toBeTruthy();
+      });
+      fireEvent.press(getByTestId(`open-game-${gameId}`));
+      await waitFor(() => {
+        expect(getByTestId('start-button')).toBeTruthy();
+      });
       fireEvent.press(getByTestId('start-button'));
+      fireEvent.press(getByLabelText('Go back'));
 
-      await act(async () => {
-        await Promise.resolve();
+      await waitFor(() => {
+        expect(getByText('Welcome back')).toBeTruthy();
       });
+      expect(Alert.alert).toHaveBeenCalledTimes(1);
+    }
+  );
 
-      // Start button should not be visible (game started)
-      expect(queryByTestId('start-button')).toBeNull();
+  it('guards an auto-started Result → Play Again session after Back → Keep training', async () => {
+    alertAction = 'keep';
+    const { getByLabelText, getByTestId, getByText } = render(<App />);
+    await waitFor(() => {
+      expect(getByTestId('open-game-StructureScan')).toBeTruthy();
     });
+    fireEvent.press(getByTestId('open-game-StructureScan'));
+    await waitFor(() => {
+      expect(getByTestId('start-button')).toBeTruthy();
+    });
+    fireEvent.press(getByTestId('start-button'));
+
+    for (let round = 0; round < 3; round += 1) {
+      fireEvent.press(getByTestId('show-structure-choices'));
+      fireEvent.press(getByTestId('structure-choice-0'));
+      fireEvent.press(getByTestId('continue-structure-scan'));
+    }
+    await waitFor(() => {
+      expect(getByText('Recent progress')).toBeTruthy();
+    });
+
+    fireEvent.press(getByLabelText('Play this game again'));
+    await waitFor(() => {
+      expect(getByTestId('structure-scan-article')).toBeTruthy();
+    });
+    fireEvent.press(getByLabelText('Go back'));
+
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(getByTestId('structure-scan-article')).toBeTruthy();
   });
 
-  describe('Result Screen Actions', () => {
-    it.skip('game back button returns to home', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByText } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Open a game
-      fireEvent.press(getByText('Jumble'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Press back button
-      fireEvent.press(getByText('← Back'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Should be on home
-      expect(getByText('Words')).toBeTruthy();
+  it('leaves an auto-started Result → Play Again session after Back → Leave', async () => {
+    const { getByLabelText, getByTestId, getByText } = render(<App />);
+    await waitFor(() => {
+      expect(getByTestId('open-game-StructureScan')).toBeTruthy();
     });
-  });
+    fireEvent.press(getByTestId('open-game-StructureScan'));
+    await waitFor(() => {
+      expect(getByTestId('start-button')).toBeTruthy();
+    });
+    fireEvent.press(getByTestId('start-button'));
 
-  describe('History Screen Flow', () => {
-    it.skip('opens history screen when pressing history button', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByTestId, getByText } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      fireEvent.press(getByTestId('open-history'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      expect(getByText('Progress & History')).toBeTruthy();
+    for (let round = 0; round < 3; round += 1) {
+      fireEvent.press(getByTestId('show-structure-choices'));
+      fireEvent.press(getByTestId('structure-choice-0'));
+      fireEvent.press(getByTestId('continue-structure-scan'));
+    }
+    await waitFor(() => {
+      expect(getByText('Recent progress')).toBeTruthy();
     });
 
-    it.skip('returns to home from history', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByTestId, getByText } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      fireEvent.press(getByTestId('open-history'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Verify we're in history
-      expect(getByText('Progress & History')).toBeTruthy();
-
-      // Press back
-      fireEvent.press(getByTestId('history-back'));
-
-      await act(async () => {
-        await Promise.resolve();
-        jest.runAllTimers();
-        await Promise.resolve();
-      });
-
-      // Should be back on home - look for game cards
-      expect(getByText('Words')).toBeTruthy();
+    fireEvent.press(getByLabelText('Play this game again'));
+    await waitFor(() => {
+      expect(getByTestId('structure-scan-article')).toBeTruthy();
     });
-  });
+    fireEvent.press(getByLabelText('Go back'));
 
-  describe('Progress Persistence', () => {
-    it('loads progress from AsyncStorage when games mount', async () => {
-      const { getByText } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Open a game - this should trigger progress loading
-      fireEvent.press(getByText('Jumble'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Progress store loads per-game when game mounts
-      expect(AsyncStorage.getItem).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getByText('Welcome back')).toBeTruthy();
     });
-
-    it.skip('saves results to AsyncStorage after game completion', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByText, getByTestId } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Play a quick game
-      fireEvent.press(getByText('Jumble'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Press start button since game doesn't auto-start from home
-      fireEvent.press(getByTestId('start-button'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Let game complete
-      act(() => {
-        jest.advanceTimersByTime(35000);
-      });
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // AsyncStorage should have been called to save progress
-      expect(AsyncStorage.setItem).toHaveBeenCalled();
-    });
-  });
-
-  describe('Multiple Games Navigation', () => {
-    it.skip('can navigate between different games', async () => {
-      // This test requires actual navigation - skipped with mocked navigation
-      const { getByText, queryByText } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Open first game
-      fireEvent.press(getByText('Jumble'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      expect(getByText('← Back')).toBeTruthy();
-
-      // Go back
-      fireEvent.press(getByText('← Back'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Open different game
-      fireEvent.press(getByText('Pattern Scanning'));
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      expect(getByText('← Back')).toBeTruthy();
-    });
-  });
-
-  describe('DifficultyStars Display', () => {
-    it('shows difficulty indicators on home screen for games', async () => {
-      const { getByText } = render(<App />);
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      // Difficulty indicators are now rendered as dots (View elements with colored backgrounds)
-      // Just verify the home screen renders correctly
-      expect(getByText('Welcome back!')).toBeTruthy();
-    });
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
   });
 });
