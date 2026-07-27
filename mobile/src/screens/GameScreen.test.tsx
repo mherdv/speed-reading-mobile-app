@@ -119,6 +119,9 @@ describe('GameScreen difficulty control', () => {
       });
       fireEvent.press(getByTestId('start-button'));
       act(() => {
+        jest.advanceTimersByTime(650);
+      });
+      act(() => {
         jest.advanceTimersByTime(25_100);
       });
 

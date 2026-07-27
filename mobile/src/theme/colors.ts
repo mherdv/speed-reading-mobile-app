@@ -141,6 +141,7 @@ export const typography = {
 // Game icon backgrounds based on category
 export const gameColors: Record<string, string> = {
   RepeatedReading: colors.categorySpeed,
+  WpmTest: colors.categorySpeed,
   MainIdeaSprint: colors.categoryMemory,
   StructureScan: colors.categoryFocus,
   EvidenceHunt: colors.categoryFocus,
@@ -151,6 +152,8 @@ export const gameColors: Record<string, string> = {
   EyeMovementTraining: colors.categoryVision,
   VisualSpanExpansion: colors.categoryVision,
   FlashReading: colors.categorySpeed,
+  WordsRecall: colors.categoryMemory,
+  SentenceRecall: colors.categoryMemory,
   ComprehensionTest: colors.categoryMemory,
   MemoryRecall: colors.categoryMemory,
   NumberRecognition: colors.categoryNumber,
@@ -197,12 +200,15 @@ export const gradients = {
 // Per-game icon gradient colors
 export const gameGradients: Record<string, readonly [string, string]> = {
   RepeatedReading: ['#1468C7', '#3446C8'],
+  WpmTest: ['#1468C7', '#3446C8'],
   MainIdeaSprint: ['#7140D8', '#9B35B8'],
   StructureScan: ['#087F8C', '#1468C7'],
   EvidenceHunt: ['#087F8C', '#1468C7'],
   ContextBuilder: ['#7140D8', '#9B35B8'],
   PowerReader: ['#E94B20', '#B93D17'],
   FlashReading: ['#E94B20', '#B93D17'],
+  WordsRecall: ['#7140D8', '#9B35B8'],
+  SentenceRecall: ['#7140D8', '#9B35B8'],
   EyeMovementTraining: ['#1F8A70', '#48A868'],
   SymbolRecognition: ['#E94B20', '#B93D17'],
 

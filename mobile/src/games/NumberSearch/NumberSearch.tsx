@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useAutoStart, type Difficulty } from '../gameHooks';
+
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
-import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
-import { StatsRow } from '../../ui/StatsRow';
 import { updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
+import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
+import { StatsRow } from '../../ui/StatsRow';
+import { useAutoStart, useTrackedTimeouts, type Difficulty } from '../gameHooks';
 
 const GAME_ID = 'NumberSearch';
 
@@ -20,107 +21,166 @@ type GameReportPayload = {
 
 type Props = {
   durationMs?: number;
+  previewMs?: number;
   gridSize?: number;
+  numberRange?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
-type Phase = 'idle' | 'running' | 'ended';
+type Phase = 'idle' | 'preview' | 'searching' | 'ended';
 
-function randomNum(max: number): number {
-  return Math.floor(Math.random() * max);
+type GridData = {
+  grid: number[][];
+  target: number;
+  targetPos: { row: number; col: number };
+};
+
+type DifficultyConfig = {
+  gridSize: number;
+  numberRange: number;
+  previewMs: number;
+  durationMs: number;
+};
+
+export function getNumberSearchConfig(difficulty: Difficulty): DifficultyConfig {
+  switch (difficulty) {
+    case 'easy':
+      return { gridSize: 4, numberRange: 50, previewMs: 1_200, durationMs: 45_000 };
+    case 'medium':
+      return { gridSize: 5, numberRange: 200, previewMs: 900, durationMs: 35_000 };
+    case 'hard':
+      return { gridSize: 6, numberRange: 1_000, previewMs: 650, durationMs: 25_000 };
+  }
 }
 
-function buildGrid(size: number): { grid: number[][]; target: number; targetPos: { row: number; col: number } } {
-  const target = randomNum(100);
-  const grid: number[][] = [];
-  
-  for (let r = 0; r < size; r++) {
-    const row: number[] = [];
-    for (let c = 0; c < size; c++) {
-      let num = randomNum(100);
-      while (num === target) num = randomNum(100);
-      row.push(num);
-    }
-    grid.push(row);
-  }
-  
-  const targetRow = randomNum(size);
-  const targetCol = randomNum(size);
-  grid[targetRow][targetCol] = target;
-  
-  return { grid, target, targetPos: { row: targetRow, col: targetCol } };
+function randomNumber(maxExclusive: number): number {
+  return Math.floor(Math.random() * maxExclusive);
+}
+
+export function buildNumberSearchGrid(size: number, numberRange: number): GridData {
+  const count = size * size;
+  const effectiveRange = Math.max(numberRange, count + 1);
+  const values = new Set<number>();
+  while (values.size < count) values.add(randomNumber(effectiveRange));
+  const flat = [...values];
+  const targetIndex = randomNumber(flat.length);
+  const target = flat[targetIndex];
+  return {
+    grid: Array.from({ length: size }, (_, row) =>
+      flat.slice(row * size, (row + 1) * size)
+    ),
+    target,
+    targetPos: {
+      row: Math.floor(targetIndex / size),
+      col: targetIndex % size,
+    },
+  };
 }
 
 export default function NumberSearch({
   durationMs: durationMsProp,
+  previewMs: previewMsProp,
   gridSize: gridSizeProp,
+  numberRange: numberRangeProp,
   difficulty = 'medium',
   autoStart = false,
   onReportResult,
 }: Props) {
-  const durationMs =
-    durationMsProp ?? (difficulty === 'easy' ? 45000 : difficulty === 'medium' ? 35000 : 25000);
-  const gridSize =
-    gridSizeProp ?? (difficulty === 'easy' ? 4 : difficulty === 'medium' ? 5 : 6);
+  const config = getNumberSearchConfig(difficulty);
+  const durationMs = durationMsProp ?? config.durationMs;
+  const previewMs = previewMsProp ?? config.previewMs;
+  const gridSize = gridSizeProp ?? config.gridSize;
+  const numberRange = numberRangeProp ?? config.numberRange;
   const [phase, setPhase] = useState<Phase>('idle');
-  const [gridData, setGridData] = useState(() => buildGrid(gridSize));
+  const [gridData, setGridData] = useState<GridData>(() =>
+    buildNumberSearchGrid(gridSize, numberRange)
+  );
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [timeLeftMs, setTimeLeftMs] = useState(durationMs);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
 
-  const startedAtRef = useRef<number>(0);
+  const startedAtRef = useRef(0);
+  const sessionEndsAtRef = useRef(0);
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
+  const roundLockedRef = useRef(true);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(() => {
-    if (phase !== 'running') return;
-    const endAt = startedAtRef.current + durationMs;
-    
+    if (
+      (phase !== 'searching' && phase !== 'preview') ||
+      startedAtRef.current === 0
+    ) {
+      return;
+    }
     const interval = setInterval(() => {
-      const left = Math.max(0, endAt - Date.now());
-      setTimeLeftMs(left);
-      if (left <= 0) {
+      const remaining = Math.max(0, sessionEndsAtRef.current - Date.now());
+      setTimeLeftMs(remaining);
+      if (remaining === 0) {
         clearInterval(interval);
-        finish();
+        finish(Date.now());
       }
     }, 100);
-    
-    return () => {
+
+    return () => clearInterval(interval);
+  }, [durationMs, phase]);
+
+  useEffect(
+    () => () => {
       cancelledRef.current = true;
-      clearInterval(interval);
-    };
-  }, [phase, durationMs]);
+      clearTrackedTimeouts();
+    },
+    // The tracked-timeout helpers intentionally do not participate in the
+    // lifecycle dependency list: this cleanup must run only on unmount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   useAutoStart(autoStart, phase, true, start);
 
+  function beginPreview(nextGrid: GridData) {
+    setGridData(nextGrid);
+    setFeedback(null);
+    setPhase('preview');
+    scheduleTimeout(() => {
+      if (cancelledRef.current || reportedRef.current) return;
+      if (startedAtRef.current === 0) {
+        startedAtRef.current = Date.now();
+        sessionEndsAtRef.current = startedAtRef.current + durationMs;
+        setTimeLeftMs(durationMs);
+      }
+      roundLockedRef.current = false;
+      setPhase('searching');
+    }, previewMs);
+  }
+
   function start() {
+    if (phase === 'searching' || phase === 'preview') return;
+    clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
-    setGridData(buildGrid(gridSize));
+    roundLockedRef.current = true;
+    startedAtRef.current = 0;
+    sessionEndsAtRef.current = 0;
     setScore(0);
     setAttempts(0);
     setTimeLeftMs(durationMs);
-    setFeedback(null);
-    startedAtRef.current = Date.now();
-    setPhase('running');
+    beginPreview(buildNumberSearchGrid(gridSize, numberRange));
   }
 
-  function finish() {
-    if (cancelledRef.current) return;
-    if (reportedRef.current) return;
+  function finish(now = Date.now()) {
+    if (cancelledRef.current || reportedRef.current) return;
     reportedRef.current = true;
-    
-    const now = Date.now();
-    const elapsedMs = now - startedAtRef.current;
-    const accuracy = attemptsRef.current > 0 ? scoreRef.current / attemptsRef.current : 0;
-    
+    clearTrackedTimeouts();
+    const accuracy =
+      attemptsRef.current > 0 ? scoreRef.current / attemptsRef.current : 0;
     setPhase('ended');
     void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
       () => undefined
@@ -128,7 +188,7 @@ export default function NumberSearch({
     onReportResult?.({
       startedAtIso: new Date(startedAtRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
-      elapsedMs,
+      elapsedMs: Math.max(0, now - startedAtRef.current),
       score: scoreRef.current,
       accuracy,
       details: {
@@ -136,106 +196,101 @@ export default function NumberSearch({
         correct: scoreRef.current,
         difficulty,
         gridSize,
+        numberRange,
+        previewMs,
+        durationMs,
       },
     });
   }
 
   function onCellPress(row: number, col: number) {
-    if (phase !== 'running') return;
-    
+    if (phase !== 'searching' || roundLockedRef.current) return;
+    const isCorrect =
+      row === gridData.targetPos.row && col === gridData.targetPos.col;
+    // Lock synchronously before updating refs. React state does not update
+    // quickly enough to protect this round from a rapid second press.
+    if (isCorrect) roundLockedRef.current = true;
     attemptsRef.current += 1;
     setAttempts(attemptsRef.current);
-    
-    const isCorrect = row === gridData.targetPos.row && col === gridData.targetPos.col;
-    
-    if (isCorrect) {
-      scoreRef.current += 1;
-      setScore(scoreRef.current);
-      setFeedback('correct');
-      
-      // Generate new grid with new target only on correct
-      
-        setFeedback(null);
-        setGridData(buildGrid(gridSize));
-    } else {
+    if (!isCorrect) {
       setFeedback('wrong');
-      
-      // Clear feedback but keep same grid on wrong
-      
-        setFeedback(null);
+      scheduleTimeout(() => setFeedback(null), 220);
+      return;
     }
+
+    scoreRef.current += 1;
+    setScore(scoreRef.current);
+    setFeedback('correct');
+    clearTrackedTimeouts();
+    scheduleTimeout(
+      () => beginPreview(buildNumberSearchGrid(gridSize, numberRange)),
+      260
+    );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Number Search</Text>
-        <Text style={styles.subtitle}>Find the target number in the grid</Text>
-      </View>
+      <Text style={styles.title}>Number Search</Text>
+      <Text style={styles.subtitle}>Remember the target, then find it after it hides.</Text>
 
       {phase === 'idle' && (
         <SimpleIdlePanel
           description={GAME_DESCRIPTIONS[GAME_ID]}
           onStart={start}
-          containerStyle={styles.idleContent}
-          descriptionStyle={styles.descriptionText}
-          buttonStyle={styles.startBtn}
-          buttonTextStyle={styles.startBtnText}
+          containerStyle={styles.idle}
+          descriptionStyle={styles.description}
+          buttonStyle={styles.primaryButton}
+          buttonTextStyle={styles.primaryButtonText}
         />
       )}
 
-      {phase === 'running' && (
-        <View style={styles.gameArea}>
+      {phase === 'preview' && (
+        <View testID="target-preview" style={styles.previewArea}>
+          <Text style={styles.previewLabel}>Remember this number</Text>
+          <Text testID="target-number" style={styles.previewNumber}>
+            {gridData.target}
+          </Text>
+          <Text style={styles.previewHint}>It will hide before the grid appears.</Text>
+        </View>
+      )}
+
+      {phase === 'searching' && (
+        <View testID="number-search-grid" style={styles.gameArea}>
           <StatsRow
-            style={styles.statsRow}
             items={[
-              {
-                key: 'found',
-                value: score,
-                label: 'Found',
-                containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
+              { key: 'found', value: score, label: 'Found' },
               {
                 key: 'time',
                 value: Math.ceil(timeLeftMs / 1000),
                 label: 'Seconds',
-                containerStyle: [styles.statBox, styles.timerBox],
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
               },
-              {
-                key: 'attempts',
-                value: attempts,
-                label: 'Attempts',
-                containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
+              { key: 'attempts', value: attempts, label: 'Attempts' },
             ]}
           />
-
-          <View style={[
-            styles.targetCard,
-            feedback === 'correct' && styles.targetCorrect,
-            feedback === 'wrong' && styles.targetWrong,
-          ]}>
-            <Text style={styles.targetLabel}>Find this number:</Text>
-            <Text style={styles.targetNumber}>{gridData.target}</Text>
+          <View
+            style={[
+              styles.hiddenTarget,
+              feedback === 'correct' && styles.correct,
+              feedback === 'wrong' && styles.wrong,
+            ]}
+          >
+            <Text testID="target-hidden" style={styles.hiddenTargetText}>
+              Target hidden — scan from memory
+            </Text>
           </View>
-
           <View style={styles.grid}>
-            {gridData.grid.map((row, rowIdx) => (
-              <View key={rowIdx} style={styles.gridRow}>
-                {row.map((num, colIdx) => (
-                  <Pressable accessibilityRole="button"
-                    key={`${rowIdx}-${colIdx}`}
-                    testID={`cell-${rowIdx}-${colIdx}`}
+            {gridData.grid.map((row, rowIndex) => (
+              <View key={rowIndex} style={styles.row}>
+                {row.map((number, columnIndex) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Number ${number}`}
+                    key={`${rowIndex}-${columnIndex}`}
+                    testID={`cell-${rowIndex}-${columnIndex}`}
                     style={styles.cell}
-                    onPress={() => onCellPress(rowIdx, colIdx)}
+                    onPress={() => onCellPress(rowIndex, columnIndex)}
                   >
-                    <Text style={styles.cellText}>{num}</Text>
+                    <Text style={styles.cellText}>{number}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -246,14 +301,18 @@ export default function NumberSearch({
 
       {phase === 'ended' && (
         <View testID="end" style={styles.endCard}>
-          <Text style={styles.endEmoji}>🔢</Text>
-          <Text style={styles.endTitle}>Time's Up!</Text>
-          <Text style={styles.endScore}>{score} Found</Text>
+          <Text style={styles.endTitle}>Session complete</Text>
+          <Text style={styles.endScore}>{score} found</Text>
           <Text style={styles.endMeta}>
-            Accuracy: {attempts > 0 ? Math.round((score / attempts) * 100) : 0}%
+            {attempts > 0 ? Math.round((score / attempts) * 100) : 0}% accuracy
           </Text>
-          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={start}>
-            <Text style={styles.playAgainText}>Play Again</Text>
+          <Pressable
+            accessibilityRole="button"
+            testID="play-again"
+            style={styles.primaryButton}
+            onPress={start}
+          >
+            <Text style={styles.primaryButtonText}>Play Again</Text>
           </Pressable>
         </View>
       )}
@@ -263,61 +322,61 @@ export default function NumberSearch({
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12 },
-  header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  idleContent: { flex: 1 },
-  descriptionText: {
-    fontSize: 14,
-    color: '#6B7280',
+  title: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
+  subtitle: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 2 },
+  idle: { flex: 1 },
+  description: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  startBtn: {
-    backgroundColor: colors.interactiveTeal,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
+  previewArea: { alignItems: 'center', flex: 1, justifyContent: 'center' },
+  previewLabel: { color: colors.textSecondary, fontSize: 16, fontWeight: '600' },
+  previewNumber: {
+    color: colors.interactivePrimary,
+    fontSize: 64,
+    fontWeight: '800',
+    marginVertical: 18,
   },
-  startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
-  gameArea: { flex: 1 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
-  statBox: { alignItems: 'center', backgroundColor: '#CCFBF1', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
-  timerBox: { backgroundColor: '#99F6E4' },
-  statValue: { fontSize: 16, fontWeight: '700', color: '#0F766E' },
-  statLabel: { fontSize: 10, color: colors.interactiveTeal },
-  targetCard: {
-    backgroundColor: '#F0FDFA',
-    borderRadius: 8,
-    padding: 12,
+  previewHint: { color: colors.textMuted, fontSize: 13 },
+  gameArea: { flex: 1, gap: 12, paddingTop: 12 },
+  hiddenTarget: {
     alignItems: 'center',
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#5EEAD4',
-  },
-  targetCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
-  targetWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
-  targetLabel: { fontSize: 12, color: colors.interactiveTeal },
-  targetNumber: { fontSize: 28, fontWeight: '800', color: '#134E4A' },
-  grid: { backgroundColor: '#F0FDFA', borderRadius: 8, padding: 4 },
-  gridRow: { flexDirection: 'row', justifyContent: 'center' },
-  cell: {
-    width: 40,
-    height: 40,
-    margin: 2,
-    backgroundColor: 'white',
-    borderRadius: 6,
-    alignItems: 'center',
+    backgroundColor: colors.surfaceTonal,
+    borderRadius: 10,
+    minHeight: 48,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
   },
-  cellText: { fontSize: 14, fontWeight: '700', color: '#0F766E' },
-  endCard: { alignItems: 'center', paddingVertical: 20 },
-  endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 32, fontWeight: '800', color: colors.interactiveTeal, marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
-  playAgainBtn: { marginTop: 16, backgroundColor: colors.interactiveTeal, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
-  playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
+  hiddenTargetText: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
+  correct: { backgroundColor: colors.successSurface },
+  wrong: { backgroundColor: colors.errorSurface },
+  grid: { gap: 6 },
+  row: { flexDirection: 'row', gap: 6 },
+  cell: {
+    alignItems: 'center',
+    backgroundColor: colors.cardBackground,
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  cellText: { color: colors.textPrimary, fontSize: 17, fontWeight: '700' },
+  primaryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.interactivePrimary,
+    borderRadius: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  primaryButtonText: { color: colors.onInteractive, fontSize: 16, fontWeight: '700' },
+  endCard: { alignItems: 'center', flex: 1, justifyContent: 'center', gap: 8 },
+  endTitle: { color: colors.textPrimary, fontSize: 22, fontWeight: '800' },
+  endScore: { color: colors.interactivePrimary, fontSize: 36, fontWeight: '800' },
+  endMeta: { color: colors.textSecondary, fontSize: 14, marginBottom: 12 },
 });

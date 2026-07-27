@@ -1,10 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useAutoStart, type Difficulty } from '../gameHooks';
+import { useAutoStart, useTrackedTimeouts, type Difficulty } from '../gameHooks';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { updateProgress } from '../../data/progressStore';
+import {
+  OPPOSITE_ITEMS,
+  type OppositeItem,
+} from '../../data/vocabularyPracticeContent';
+import { shuffleItems } from '../../data/flashPracticeContent';
 
 const GAME_ID = 'WordPairs';
 
@@ -30,11 +35,7 @@ type WordPairChallenge = {
   familiarity: 'common' | 'less-common' | 'advanced';
   distractorSimilarity: 'low' | 'medium' | 'high';
   optionCount: 2 | 3 | 4;
-  items: readonly {
-    word: string;
-    correct: string;
-    distractors: readonly string[];
-  }[];
+  items: readonly OppositeItem[];
 };
 
 const WORD_PAIR_CHALLENGES: Record<Difficulty, WordPairChallenge> = {
@@ -42,34 +43,19 @@ const WORD_PAIR_CHALLENGES: Record<Difficulty, WordPairChallenge> = {
     familiarity: 'common',
     distractorSimilarity: 'low',
     optionCount: 2,
-    items: [
-      { word: 'hot', correct: 'cold', distractors: ['open'] },
-      { word: 'open', correct: 'closed', distractors: ['early'] },
-      { word: 'early', correct: 'late', distractors: ['above'] },
-      { word: 'above', correct: 'below', distractors: ['hot'] },
-    ],
+    items: OPPOSITE_ITEMS.easy,
   },
   medium: {
     familiarity: 'less-common',
     distractorSimilarity: 'medium',
     optionCount: 3,
-    items: [
-      { word: 'scarce', correct: 'abundant', distractors: ['limited', 'rare'] },
-      { word: 'rigid', correct: 'flexible', distractors: ['firm', 'fixed'] },
-      { word: 'ancient', correct: 'modern', distractors: ['historic', 'aged'] },
-      { word: 'expand', correct: 'contract', distractors: ['extend', 'enlarge'] },
-    ],
+    items: OPPOSITE_ITEMS.medium,
   },
   hard: {
     familiarity: 'advanced',
     distractorSimilarity: 'high',
     optionCount: 4,
-    items: [
-      { word: 'optimistic', correct: 'pessimistic', distractors: ['realistic', 'idealistic', 'opportunistic'] },
-      { word: 'transparent', correct: 'opaque', distractors: ['translucent', 'reflective', 'colorless'] },
-      { word: 'voluntary', correct: 'compulsory', distractors: ['optional', 'willing', 'spontaneous'] },
-      { word: 'temporary', correct: 'permanent', distractors: ['brief', 'provisional', 'seasonal'] },
-    ],
+    items: OPPOSITE_ITEMS.hard,
   },
 };
 
@@ -89,9 +75,10 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 function buildRound(
-  challenge: WordPairChallenge
+  challenge: WordPairChallenge,
+  itemOverride?: OppositeItem
 ): { word: string; options: string[]; correctIndex: number } {
-  const item =
+  const item = itemOverride ??
     challenge.items[Math.floor(Math.random() * challenge.items.length)];
   const word = item.word;
   const correct = item.correct;
@@ -110,7 +97,8 @@ export default function WordPairs({
   onReportResult,
 }: Props) {
   const durationMs =
-    durationMsProp ?? 30_000;
+    durationMsProp ??
+    (difficulty === 'easy' ? 45_000 : difficulty === 'medium' ? 30_000 : 20_000);
   const challenge = getWordPairChallenge(difficulty);
   const [phase, setPhase] = useState<Phase>('idle');
   const [round, setRound] = useState(() => buildRound(challenge));
@@ -124,6 +112,10 @@ export default function WordPairs({
   const attemptsRef = useRef(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const answerLockedRef = useRef(false);
+  const deckRef = useRef<OppositeItem[]>([]);
+  const deckIndexRef = useRef(0);
+  const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(() => {
     if (phase !== 'running') return;
@@ -138,32 +130,55 @@ export default function WordPairs({
       }
     }, 100);
     
-    return () => {
-      cancelledRef.current = true;
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [phase, durationMs]);
+
+  useEffect(
+    () => () => {
+      cancelledRef.current = true;
+      clearTrackedTimeouts();
+    },
+    // This cleanup must run only on unmount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   useAutoStart(autoStart, phase, true, start);
 
   function start() {
+    clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
+    answerLockedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
     setScore(0);
     setAttempts(0);
     setTimeLeftMs(durationMs);
-    setRound(buildRound(challenge));
+    deckRef.current = shuffleItems(challenge.items);
+    deckIndexRef.current = 0;
+    setRound(buildNextRound());
     setFeedback(null);
     startedAtRef.current = Date.now();
     setPhase('running');
+  }
+
+  function buildNextRound() {
+    if (deckIndexRef.current >= deckRef.current.length) {
+      deckRef.current = shuffleItems(challenge.items);
+      deckIndexRef.current = 0;
+    }
+    const item = deckRef.current[deckIndexRef.current];
+    deckIndexRef.current += 1;
+    return buildRound(challenge, item);
   }
 
   function finish() {
     if (cancelledRef.current) return;
     if (reportedRef.current) return;
     reportedRef.current = true;
+    answerLockedRef.current = true;
+    clearTrackedTimeouts();
     
     const now = Date.now();
     const elapsedMs = now - startedAtRef.current;
@@ -183,12 +198,14 @@ export default function WordPairs({
         rounds: attemptsRef.current,
         correct: scoreRef.current,
         difficulty,
+        promptPoolSize: challenge.items.length,
       },
     });
   }
 
   function onSelect(index: number) {
-    if (phase !== 'running') return;
+    if (phase !== 'running' || answerLockedRef.current) return;
+    answerLockedRef.current = true;
     
     attemptsRef.current += 1;
     setAttempts(attemptsRef.current);
@@ -200,16 +217,19 @@ export default function WordPairs({
     } else {
       setFeedback('wrong');
     }
-    
-    
+
+    scheduleTimeout(() => {
+      if (cancelledRef.current || reportedRef.current) return;
       setFeedback(null);
-      setRound(buildRound(challenge));
+      setRound(buildNextRound());
+      answerLockedRef.current = false;
+    }, 450);
   }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Word Pairs</Text>
+        <Text style={styles.title}>Opposites</Text>
         <Text style={styles.subtitle}>Match the word with its opposite</Text>
       </View>
 
@@ -259,6 +279,15 @@ export default function WordPairs({
           <View style={[styles.wordCard, feedback === 'correct' && styles.cardCorrect, feedback === 'wrong' && styles.cardWrong]}>
             <Text style={styles.wordLabel}>Find the opposite of:</Text>
             <Text style={styles.word}>{round.word}</Text>
+            {feedback !== null && (
+              <Text
+                accessibilityLiveRegion="polite"
+                testID="opposites-feedback"
+                style={feedback === 'correct' ? styles.correctText : styles.wrongText}
+              >
+                {feedback === 'correct' ? 'Correct' : 'Not quite'}
+              </Text>
+            )}
           </View>
 
           <View style={styles.optionsGrid}>
@@ -267,6 +296,8 @@ export default function WordPairs({
                 key={`${opt}-${idx}`}
                 testID={`option-${idx}`}
                 style={styles.optionBtn}
+                accessibilityState={{ disabled: answerLockedRef.current }}
+                disabled={answerLockedRef.current}
                 onPress={() => onSelect(idx)}
               >
                 <Text style={styles.optionText}>{opt}</Text>
@@ -328,6 +359,8 @@ const styles = StyleSheet.create({
   },
   cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
   cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
+  correctText: { color: '#116149', fontSize: 12, fontWeight: '700', marginTop: 6 },
+  wrongText: { color: '#9F253A', fontSize: 12, fontWeight: '700', marginTop: 6 },
   wordLabel: { fontSize: 12, color: '#6366F1', marginBottom: 4 },
   word: { fontSize: 24, fontWeight: '700', color: '#312E81' },
   optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },

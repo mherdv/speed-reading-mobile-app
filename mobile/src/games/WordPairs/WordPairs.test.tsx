@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import WordPairs from './WordPairs';
+import { validateVocabularyPracticeContent } from '../../data/vocabularyPracticeContent';
+import WordPairs, { getWordPairChallenge } from './WordPairs';
 
 describe('WordPairs', () => {
   beforeEach(() => {
@@ -23,6 +24,43 @@ describe('WordPairs', () => {
     expect(queryByTestId('start-button')).toBeNull();
     expect(getByTestId('option-0')).toBeTruthy();
     expect(getByTestId('option-1')).toBeTruthy();
+  });
+
+  it('provides expanded, de-duplicated reviewed challenges', () => {
+    expect(validateVocabularyPracticeContent()).toEqual([]);
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      const challenge = getWordPairChallenge(difficulty);
+      expect(challenge.items.length).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  it('holds feedback and ignores a rapid second answer', () => {
+    const onReportResult = jest.fn();
+    const { getByTestId } = render(
+      <WordPairs durationMs={1_000} onReportResult={onReportResult} />
+    );
+    fireEvent.press(getByTestId('start-button'));
+
+    fireEvent.press(getByTestId('option-0'));
+    fireEvent.press(getByTestId('option-1'));
+    expect(getByTestId('opposites-feedback')).toBeTruthy();
+    expect(getByTestId('option-0')).toBeDisabled();
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    expect(getByTestId('opposites-feedback')).toBeTruthy();
+    act(() => {
+      jest.advanceTimersByTime(800);
+    });
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ rounds: 1 }),
+      })
+    );
+    expect(onReportResult.mock.calls[0][0].details).not.toHaveProperty(
+      'partOfSpeechMatchedOptions'
+    );
   });
 
   it('reports result on end', () => {

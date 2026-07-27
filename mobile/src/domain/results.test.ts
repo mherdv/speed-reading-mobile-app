@@ -51,7 +51,7 @@ describe('result helpers', () => {
     ).toEqual({ value: 40, label: 'Sec break' });
   });
 
-  it('does not claim comprehension was checked for guided pacing', () => {
+  it('infers legacy Power Reader WPM as a configured guide, not measured reading', () => {
     const summary = formatAttemptSummary(
       makeResult({
         sampleId: 'PowerReader',
@@ -59,7 +59,22 @@ describe('result helpers', () => {
       })
     );
 
-    expect(summary).toBe('Power Reader: 200 WPM');
+    expect(summary).toBe('Power Reader: 200 Guided pace');
+    expect(getResultComparison(makeResult({ sampleId: 'PowerReader' })).key)
+      .toContain('paced-reading|Guided pace');
+  });
+
+  it('falls back to the legacy Power Reader score when WPM was not stored', () => {
+    expect(
+      getResultMetric(
+        makeResult({
+          sampleId: 'PowerReader',
+          wordCount: 0,
+          wpm: 0,
+          score: 325,
+        })
+      )
+    ).toEqual({ value: 325, label: 'Guided pace' });
   });
 
   it('uses activity type instead of a title heuristic for new results', () => {
@@ -67,10 +82,12 @@ describe('result helpers', () => {
       formatAttemptSummary(
         makeResult({
           sampleId: 'future-pacer',
-          details: { activityType: 'paced-reading' },
+          wordCount: 12,
+          wpm: 0,
+          details: { activityType: 'paced-reading', targetWpm: 275 },
         })
       )
-    ).toBe('Focus & Pace: 200 Paced WPM');
+    ).toBe('Focus & Pace: 275 Guided pace');
 
     expect(
       formatAttemptSummary(
@@ -164,9 +181,13 @@ describe('result helpers', () => {
   it('labels configured pacing separately from measured WPM', () => {
     expect(
       getResultMetric(
-        makeResult({ details: { activityType: 'paced-reading' } })
+        makeResult({
+          wordCount: 24,
+          wpm: 0,
+          details: { activityType: 'paced-reading', targetWpm: 300 },
+        })
       )
-    ).toEqual({ value: 200, label: 'Paced WPM' });
+    ).toEqual({ value: 300, label: 'Guided pace' });
   });
 
   it('counts unique consecutive activity days', () => {

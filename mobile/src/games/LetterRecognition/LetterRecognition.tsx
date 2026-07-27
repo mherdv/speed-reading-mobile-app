@@ -281,7 +281,7 @@ export default function LetterRecognition({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Letter Recognition</Text>
+        <Text style={styles.title}>Letter Jumble</Text>
         <Text style={styles.subtitle}>Select all cells with the target letter</Text>
       </View>
 

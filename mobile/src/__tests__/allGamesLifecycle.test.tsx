@@ -16,6 +16,9 @@ import ComprehensionTest from '../games/ComprehensionTest/ComprehensionTest';
 import EvenNumbers from '../games/EvenNumbers/EvenNumbers';
 import EyeMovementTraining from '../games/EyeMovementTraining/EyeMovementTraining';
 import FlashReading from '../games/FlashReading/FlashReading';
+import WordsRecall from '../games/WordsRecall/WordsRecall';
+import SentenceRecall from '../games/SentenceRecall/SentenceRecall';
+import WpmTest from '../games/WpmTest/WpmTest';
 import LetterJumble from '../games/LetterJumble/LetterJumble';
 import LetterRecognition from '../games/LetterRecognition/LetterRecognition';
 import MainIdeaSprint from '../games/MainIdeaSprint/MainIdeaSprint';
@@ -116,6 +119,20 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
       fireEvent.press(view.getByTestId('submit-repeated-answer'));
     },
     activeTestId: 'repeated-passage',
+    endTestId: 'end',
+  },
+  {
+    id: 'WpmTest',
+    element: (report) => (
+      <WpmTest sample={READING_SAMPLE} difficulty="easy" onReportResult={report} />
+    ),
+    complete: (view) => {
+      advance(4_000);
+      fireEvent.press(view.getByTestId('finish-wpm-reading'));
+      fireEvent.press(view.getByTestId('wpm-question-0-option-2'));
+      fireEvent.press(view.getByTestId('submit-wpm-questions'));
+    },
+    activeTestId: 'wpm-reading',
     endTestId: 'end',
   },
   {
@@ -290,6 +307,49 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
     },
     activeTestId: 'flash-word',
     replayTestId: 'recall-input',
+    endTestId: 'end',
+  },
+  {
+    id: 'WordsRecall',
+    element: (report) => (
+      <WordsRecall
+        prompts={['quiet focus']}
+        displayMs={10}
+        totalRounds={1}
+        onReportResult={report}
+      />
+    ),
+    complete: (view) => {
+      advance(20);
+      fireEvent.changeText(view.getByTestId('recall-input'), 'quiet focus');
+      fireEvent.press(view.getByTestId('submit-recall'));
+      advance(600);
+    },
+    activeTestId: 'recall-display',
+    replayTestId: 'recall-entry',
+    endTestId: 'end',
+  },
+  {
+    id: 'SentenceRecall',
+    element: (report) => (
+      <SentenceRecall
+        prompts={['Readers remember useful ideas.']}
+        displayMs={10}
+        totalRounds={1}
+        onReportResult={report}
+      />
+    ),
+    complete: (view) => {
+      advance(20);
+      fireEvent.changeText(
+        view.getByTestId('recall-input'),
+        'Readers remember useful ideas.'
+      );
+      fireEvent.press(view.getByTestId('submit-recall'));
+      advance(600);
+    },
+    activeTestId: 'recall-display',
+    replayTestId: 'recall-entry',
     endTestId: 'end',
   },
   {
@@ -502,23 +562,33 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
   {
     id: 'NumberSearch',
     element: (report) => (
-      <NumberSearch durationMs={100} gridSize={2} onReportResult={report} />
+      <NumberSearch
+        durationMs={100}
+        previewMs={10}
+        gridSize={2}
+        onReportResult={report}
+      />
     ),
-    complete: () => advance(200),
-    activeTestId: 'cell-0-0',
+    complete: () => {
+      advance(20);
+      advance(200);
+    },
+    activeTestId: 'target-preview',
+    replayTestId: 'number-search-grid',
     endTestId: 'end',
   },
   {
     id: 'EvenNumbers',
     element: (report) => (
       <EvenNumbers
-        sequence={[2, 3]}
+        grid={[1, 2, 3, 4]}
+        gridSize={2}
         durationMs={100}
         onReportResult={report}
       />
     ),
     complete: () => advance(200),
-    activeTestId: 'current-number',
+    activeTestId: 'even-numbers-grid',
     endTestId: 'end',
   },
 ];

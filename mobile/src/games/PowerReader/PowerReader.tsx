@@ -23,8 +23,66 @@ const GAME_ID = 'PowerReader';
 const BOOK_PROGRESS_KEY = 'powerReaderBookProgress';
 const RECENT_BOOKS_KEY = 'powerReaderRecentBooks';
 const MAX_RECENT_BOOKS = 3;
+const PROGRESS_WRITE_DEBOUNCE_MS = 180;
+const COMPLETION_THRESHOLD = 0.9;
 
 type Intensity = 'beginner' | 'intermediate' | 'advanced';
+type PresentationMode = 'flow' | 'line' | 'rsvp';
+type StoredBookPosition = {
+  bookId: string;
+  pageIndex: number;
+  highlightIndex: number;
+};
+
+type ProgressStorage = {
+  getItem: (key: string) => Promise<string | null>;
+  setItem: (key: string, value: string) => Promise<void>;
+};
+
+/**
+ * Serializes progress writes so an older read-modify-write operation can
+ * never finish after and overwrite a newer position.
+ */
+export function createSerializedProgressWriter(
+  storage: ProgressStorage,
+  onSaved?: (
+    progress: Record<string, { pageIndex: number; highlightIndex: number }>
+  ) => void
+) {
+  let latest: StoredBookPosition | null = null;
+  let chain: Promise<void> = Promise.resolve();
+
+  return {
+    update(position: StoredBookPosition) {
+      latest = position;
+    },
+    flush(): Promise<void> {
+      const position = latest;
+      if (!position) return chain;
+      chain = chain
+        .catch(() => undefined)
+        .then(async () => {
+          const raw = await storage.getItem(BOOK_PROGRESS_KEY);
+          const parsed = raw
+            ? (JSON.parse(raw) as Record<
+                string,
+                { pageIndex: number; highlightIndex: number }
+              >)
+            : {};
+          const next = {
+            ...parsed,
+            [position.bookId]: {
+              pageIndex: position.pageIndex,
+              highlightIndex: position.highlightIndex,
+            },
+          };
+          await storage.setItem(BOOK_PROGRESS_KEY, JSON.stringify(next));
+          onSaved?.(next);
+        });
+      return chain;
+    },
+  };
+}
 
 const INTENSITY_CONFIG: Record<Intensity, { wpm: number; label: string; chunkSize: number; color: string }> = {
   beginner: { wpm: 150, label: 'Beginner', chunkSize: 2, color: '#10B981' },
@@ -105,6 +163,8 @@ export default function PowerReader({
   const [loadingMore, setLoadingMore] = useState(false);
   const [booksTotalCount, setBooksTotalCount] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [customText, setCustomText] = useState('');
+  const [presentationMode, setPresentationMode] = useState<PresentationMode>('flow');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [recentBooks, setRecentBooks] = useState<PowerReaderArticle[]>([]);
   const [resumeFromSaved, setResumeFromSaved] = useState(false);
@@ -137,17 +197,26 @@ export default function PowerReader({
   const [targetWpm, setTargetWpm] = useState(
     INTENSITY_CONFIG[selectedIntensity].wpm
   );
-  const [bestWpm, setBestWpm] = useState(0);
+  const [recentGuideWpm, setRecentGuideWpm] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
-    async function loadBestWpm() {
+    let mounted = true;
+    async function loadRecentGuide() {
       const results = await loadResults();
       const powerReaderResults = results.filter(r => r.sampleId === GAME_ID);
-      const maxWpm = powerReaderResults.reduce((max, r) => Math.max(max, r.wpm || r.score || 0), 0);
-      setBestWpm(maxWpm);
+      const latestTarget = powerReaderResults
+        .map((result) => result.details?.targetWpm)
+        .find(
+          (value): value is number =>
+            typeof value === 'number' && Number.isFinite(value)
+        );
+      if (mounted) setRecentGuideWpm(latestTarget ?? 0);
     }
-    loadBestWpm();
+    void loadRecentGuide().catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -173,12 +242,20 @@ export default function PowerReader({
 
   useEffect(() => {
     if (textProp) return;
+    let active = true;
     loadRecentBooks()
-      .then((items) => setRecentBooks(items))
+      .then((items) => {
+        if (active) setRecentBooks(items);
+      })
       .catch(() => undefined);
     loadRecentProgress()
-      .then((items) => setRecentProgress(items))
+      .then((items) => {
+        if (active) setRecentProgress(items);
+      })
       .catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, [textProp]);
 
   useEffect(() => {
@@ -226,21 +303,17 @@ export default function PowerReader({
     return list;
   }, [words]);
 
-  useEffect(() => {
-    if (!pendingStart) return;
-    if (!text.trim() || pages.length === 0 || phase !== 'idle') return;
-    setPendingStart(false);
-    start(true);
-  }, [pendingStart, text, pages.length, phase]);
-
   const [pageIndex, setPageIndex] = useState(0);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chunkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startRef = useRef<number>(0);
+  const progressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attemptStartedAtRef = useRef<number>(0);
+  const pausedDurationMsRef = useRef(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const mountedRef = useRef(true);
   const pageIndexRef = useRef(0);
   const highlightIndexRef = useRef(0);
   const pagesRef = useRef<string[][]>([]);
@@ -249,7 +322,21 @@ export default function PowerReader({
   const pausedRef = useRef(false);
   const pauseStartedAtRef = useRef<number | null>(null);
   const resumeFromSavedRef = useRef(false);
+  const presentedWordIndexesRef = useRef<Set<number>>(new Set());
+  const presentedChunkKeysRef = useRef<Set<string>>(new Set());
+  const presentedPageIndexesRef = useRef<Set<number>>(new Set());
   const wordLayoutsRef = useRef<Record<number, { x: number; y: number; width: number; height: number }>>({});
+  const progressWriterRef = useRef<ReturnType<
+    typeof createSerializedProgressWriter
+  > | null>(null);
+  if (!progressWriterRef.current) {
+    progressWriterRef.current = createSerializedProgressWriter(
+      AsyncStorage,
+      (next) => {
+        if (mountedRef.current) setRecentProgress(next);
+      }
+    );
+  }
 
   async function loadBookProgress(bookId: string) {
     const raw = await AsyncStorage.getItem(BOOK_PROGRESS_KEY);
@@ -258,15 +345,38 @@ export default function PowerReader({
     return parsed[bookId] ?? null;
   }
 
-  async function saveBookProgress(bookId: string, pageIndexValue: number, highlightIndexValue: number) {
-    const raw = await AsyncStorage.getItem(BOOK_PROGRESS_KEY);
-    const parsed = raw ? (JSON.parse(raw) as Record<string, { pageIndex: number; highlightIndex: number }>) : {};
-    const next = {
-      ...parsed,
-      [bookId]: { pageIndex: pageIndexValue, highlightIndex: highlightIndexValue },
-    };
-    await AsyncStorage.setItem(BOOK_PROGRESS_KEY, JSON.stringify(next));
-    setRecentProgress(next);
+  function updateLatestBookProgress(
+    pageIndexValue: number,
+    highlightIndexValue: number,
+    flushImmediately = false
+  ) {
+    const bookId = selectedArticleIdRef.current;
+    if (!bookId || !progressWriterRef.current) return;
+    progressWriterRef.current.update({
+      bookId,
+      pageIndex: pageIndexValue,
+      highlightIndex: highlightIndexValue,
+    });
+    if (progressDebounceRef.current) {
+      clearTimeout(progressDebounceRef.current);
+      progressDebounceRef.current = null;
+    }
+    if (flushImmediately) {
+      void progressWriterRef.current.flush().catch(() => undefined);
+      return;
+    }
+    progressDebounceRef.current = setTimeout(() => {
+      progressDebounceRef.current = null;
+      void progressWriterRef.current?.flush().catch(() => undefined);
+    }, PROGRESS_WRITE_DEBOUNCE_MS);
+  }
+
+  function flushLatestBookProgress() {
+    updateLatestBookProgress(
+      pageIndexRef.current,
+      highlightIndexRef.current,
+      true
+    );
   }
 
   async function loadRecentBooks() {
@@ -287,15 +397,30 @@ export default function PowerReader({
     const minimal: PowerReaderArticle = { ...book, text: '' };
     const next = [minimal, ...parsed.filter((item) => item.id !== minimal.id)].slice(0, MAX_RECENT_BOOKS);
     await AsyncStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(next));
-    setRecentBooks(next);
+    return next;
   }
 
   useEffect(() => {
     cancelledRef.current = false;
+    mountedRef.current = true;
     return () => {
       cancelledRef.current = true;
+      mountedRef.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
       if (chunkTimerRef.current) clearTimeout(chunkTimerRef.current);
+      if (progressDebounceRef.current) {
+        clearTimeout(progressDebounceRef.current);
+        progressDebounceRef.current = null;
+      }
+      const bookId = selectedArticleIdRef.current;
+      if (bookId && progressWriterRef.current) {
+        progressWriterRef.current.update({
+          bookId,
+          pageIndex: pageIndexRef.current,
+          highlightIndex: highlightIndexRef.current,
+        });
+        void progressWriterRef.current.flush().catch(() => undefined);
+      }
     };
   }, []);
 
@@ -313,6 +438,13 @@ export default function PowerReader({
   }, [pageIndex, highlightIndex]);
 
   useEffect(() => {
+    if (!pendingStart) return;
+    if (!text.trim() || pages.length === 0 || phase !== 'idle') return;
+    setPendingStart(false);
+    start(true);
+  }, [pendingStart, text, pages.length, phase]);
+
+  useEffect(() => {
     if (isPaused) return;
     setSelectionStart(null);
     setSelectionEnd(null);
@@ -326,16 +458,35 @@ export default function PowerReader({
 
   useEffect(() => {
     if (!selectedArticle?.id) return;
-    saveBookProgress(selectedArticle.id, pageIndex, highlightIndex).catch(() => undefined);
+    updateLatestBookProgress(pageIndex, highlightIndex);
   }, [selectedArticle?.id, pageIndex, highlightIndex]);
 
-  useEffect(() => {
-    return () => {
-      const id = selectedArticleIdRef.current;
-      if (!id) return;
-      saveBookProgress(id, pageIndexRef.current, highlightIndexRef.current).catch(() => undefined);
-    };
-  }, []);
+  function getActiveElapsedMs(now = Date.now()) {
+    const currentPauseMs =
+      pausedRef.current && pauseStartedAtRef.current !== null
+        ? now - pauseStartedAtRef.current
+        : 0;
+    return Math.max(
+      0,
+      now -
+        attemptStartedAtRef.current -
+        pausedDurationMsRef.current -
+        currentPauseMs
+    );
+  }
+
+  function recordPresentation(page: number, highlight: number) {
+    const pageWords = pagesRef.current[page] ?? [];
+    const start = Math.max(0, Math.min(highlight, pageWords.length));
+    const end = Math.min(start + chunkSize, pageWords.length);
+    if (end <= start) return;
+    presentedPageIndexesRef.current.add(page);
+    presentedChunkKeysRef.current.add(`${page}:${start}`);
+    const documentOffset = page * WORDS_PER_PAGE;
+    for (let index = start; index < end; index += 1) {
+      presentedWordIndexesRef.current.add(documentOffset + index);
+    }
+  }
 
   function scheduleNextChunk() {
     if (pausedRef.current) return;
@@ -355,10 +506,13 @@ export default function PowerReader({
         }
         pageIndexRef.current = nextPage;
         highlightIndexRef.current = 0;
+        recordPresentation(nextPage, 0);
+        updateLatestBookProgress(nextPage, 0, true);
         setPageIndex(nextPage);
         setHighlightIndex(0);
       } else {
         highlightIndexRef.current = nextHighlight;
+        recordPresentation(pageIndexRef.current, nextHighlight);
         setHighlightIndex(nextHighlight);
       }
       scheduleNextChunk();
@@ -378,9 +532,14 @@ export default function PowerReader({
     }
     targetWpmRef.current = intensityConfig.wpm;
     setTargetWpm(intensityConfig.wpm);
+    presentedWordIndexesRef.current = new Set();
+    presentedChunkKeysRef.current = new Set();
+    presentedPageIndexesRef.current = new Set();
+    recordPresentation(pageIndexRef.current, highlightIndexRef.current);
     setPhase('running');
     setElapsed(0);
-    startRef.current = Date.now();
+    attemptStartedAtRef.current = Date.now();
+    pausedDurationMsRef.current = 0;
     pausedRef.current = false;
     setIsPaused(false);
     pauseStartedAtRef.current = null;
@@ -388,7 +547,7 @@ export default function PowerReader({
     resumeFromSavedRef.current = false;
 
     timerRef.current = setInterval(() => {
-      setElapsed(Date.now() - startRef.current);
+      setElapsed(getActiveElapsedMs());
     }, 100);
 
     scheduleNextChunk();
@@ -403,15 +562,15 @@ export default function PowerReader({
   function togglePause() {
     if (phase !== 'running') return;
     if (pausedRef.current) {
+      const now = Date.now();
       pausedRef.current = false;
       setIsPaused(false);
-      if (pauseStartedAtRef.current) {
-        const pausedFor = Date.now() - pauseStartedAtRef.current;
-        startRef.current += pausedFor;
+      if (pauseStartedAtRef.current !== null) {
+        pausedDurationMsRef.current += now - pauseStartedAtRef.current;
         pauseStartedAtRef.current = null;
       }
       timerRef.current = setInterval(() => {
-        setElapsed(Date.now() - startRef.current);
+        setElapsed(getActiveElapsedMs());
       }, 100);
       scheduleNextChunk();
       return;
@@ -421,6 +580,7 @@ export default function PowerReader({
     pauseStartedAtRef.current = Date.now();
     if (timerRef.current) clearInterval(timerRef.current);
     if (chunkTimerRef.current) clearTimeout(chunkTimerRef.current);
+    flushLatestBookProgress();
   }
 
   function finish() {
@@ -428,30 +588,50 @@ export default function PowerReader({
     reportedRef.current = true;
 
     const now = Date.now();
-    const elapsedMs = Math.max(1, now - startRef.current);
-    const wordsRead = words.length;
-    const wpm = Math.round((wordsRead / elapsedMs) * 60000);
+    const elapsedMs = Math.max(1, getActiveElapsedMs(now));
+    const wordsPresented = presentedWordIndexesRef.current.size;
+    const chunksPresented = presentedChunkKeysRef.current.size;
+    const pagesPresented = presentedPageIndexesRef.current.size;
+    const pacedWpm = targetWpmRef.current;
+    const completionRate =
+      words.length > 0 ? wordsPresented / words.length : 0;
+    const completedEnoughForProgress =
+      completionRate >= COMPLETION_THRESHOLD;
 
-    // Save progress - completing the reading is always success
-    updateProgress(GAME_ID, true, wpm).then(({ progress }) => {
-      if (cancelledRef.current) return;
+    updateProgress(
+      GAME_ID,
+      completedEnoughForProgress,
+      wordsPresented
+    ).then(({ progress }) => {
+      if (cancelledRef.current || !mountedRef.current) return;
       setGameProgress(progress);
     }).catch(() => undefined);
+    flushLatestBookProgress();
 
+    setElapsed(elapsedMs);
     setPhase('ended');
     onReportResult?.({
-      startedAtIso: new Date(startRef.current).toISOString(),
+      startedAtIso: new Date(attemptStartedAtRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
       elapsedMs,
-      score: wpm,
+      score: wordsPresented,
       details: {
         activityType: 'paced-reading',
-        wordCount: wordsRead,
-        wpm,
-        wordsRead,
-        pagesShown: pages.length,
+        wordCount: wordsPresented,
+        wpm: 0,
+        targetWpm: pacedWpm,
+        configuredPaceOnly: true,
+        wordsPresented,
+        chunksPresented,
+        pagesPresented,
+        totalWords: words.length,
+        completionRate,
+        completedEnoughForProgress,
+        completionThreshold: COMPLETION_THRESHOLD,
         difficulty: selectedDifficulty,
         articleTitle: activeArticle?.title,
+        source: activeArticle?.source,
+        presentationMode,
       },
     });
   }
@@ -465,6 +645,8 @@ export default function PowerReader({
     const nextPage = pageIndexRef.current + 1;
     pageIndexRef.current = nextPage;
     highlightIndexRef.current = 0;
+    recordPresentation(nextPage, 0);
+    updateLatestBookProgress(nextPage, 0, true);
     setPageIndex(nextPage);
     setHighlightIndex(0);
   }
@@ -474,8 +656,36 @@ export default function PowerReader({
     const prevPage = pageIndexRef.current - 1;
     pageIndexRef.current = prevPage;
     highlightIndexRef.current = 0;
+    recordPresentation(prevPage, 0);
+    updateLatestBookProgress(prevPage, 0, true);
     setPageIndex(prevPage);
     setHighlightIndex(0);
+  }
+
+  function useCustomText() {
+    const normalized = customText.replace(/\s+/g, ' ').trim();
+    if (!normalized) {
+      setArticlesError('Paste some text before using it.');
+      return;
+    }
+    const customArticle: PowerReaderArticle = {
+      id: 'custom-paste',
+      title: 'My pasted text',
+      author: 'You',
+      description: 'Text pasted on this device.',
+      text: normalized,
+      source: 'Custom paste',
+      difficulty: selectedDifficulty,
+      wordCount: normalized.split(' ').length,
+    };
+    setArticlesError(null);
+    setResumeFromSaved(false);
+    resumeFromSavedRef.current = false;
+    setPageIndex(0);
+    setHighlightIndex(0);
+    pageIndexRef.current = 0;
+    highlightIndexRef.current = 0;
+    setSelectedArticle(customArticle);
   }
 
   async function handleSelectArticle(article: PowerReaderArticle) {
@@ -484,12 +694,14 @@ export default function PowerReader({
     setArticlesError(null);
     try {
       const textContent = article.text || (article.formats ? await fetchFreeBookText(article.formats) : '');
+      if (!mountedRef.current) return;
       if (!textContent) {
         setArticlesError('No readable text found for this book.');
         return;
       }
       const finalized = finalizeBookArticle(article, textContent);
       const saved = await loadBookProgress(finalized.id);
+      if (!mountedRef.current) return;
       if (saved) {
         setResumeFromSaved(true);
         resumeFromSavedRef.current = true;
@@ -506,22 +718,28 @@ export default function PowerReader({
         highlightIndexRef.current = 0;
       }
       setSelectedArticle(finalized);
-      await saveRecentBook(finalized);
+      const nextRecentBooks = await saveRecentBook(finalized);
+      if (!mountedRef.current) return;
+      setRecentBooks(nextRecentBooks);
       setPendingStart(true);
     } catch (error) {
-      setArticlesError('Unable to load book text. Try another book.');
+      if (mountedRef.current) {
+        setArticlesError('Unable to load book text. Try another book.');
+      }
     } finally {
-      setLoadingBook(false);
+      if (mountedRef.current) setLoadingBook(false);
     }
   }
 
   function handleDownloadBook(article: PowerReaderArticle) {
     if (!article.downloadUrl) {
-      setArticlesError('No download available for this book.');
+      setArticlesError('No source file is available for this book.');
       return;
     }
     Linking.openURL(article.downloadUrl).catch(() => {
-      setArticlesError('Unable to open download link.');
+      if (mountedRef.current) {
+        setArticlesError('Unable to open source file.');
+      }
     });
   }
 
@@ -530,20 +748,23 @@ export default function PowerReader({
     setLoadingMore(true);
     try {
       const response = await fetchFreeBooksPage(nextBooksPage, 12, debouncedQuery);
+      if (!mountedRef.current) return;
       setArticles((prev) => [...prev, ...response.items]);
       setNextBooksPage(response.nextPage);
       setBooksPage(nextBooksPage);
       setBooksTotalCount(response.totalCount);
     } catch (error) {
-      setArticlesError('Unable to load more books.');
+      if (mountedRef.current) setArticlesError('Unable to load more books.');
     } finally {
-      setLoadingMore(false);
+      if (mountedRef.current) setLoadingMore(false);
     }
   }
 
   const pageWords = pages[pageIndex] ?? [];
   const highlightStart = highlightIndex;
   const highlightEnd = Math.min(highlightIndex + chunkSize, pageWords.length);
+  const lineStart = Math.max(0, highlightStart - 4);
+  const lineEnd = Math.min(pageWords.length, highlightEnd + 4);
   const wordsRead = Math.min(words.length, pageIndex * WORDS_PER_PAGE + highlightEnd);
   const progress = words.length > 0 ? (wordsRead / words.length) * 100 : 0;
 
@@ -565,6 +786,7 @@ export default function PowerReader({
       return;
     }
     pageCardRef.current.measure((x, y, width, height, pageX, pageY) => {
+      if (!mountedRef.current) return;
       const rectWidth = Math.max(2, selectionBox.right - selectionBox.left);
       const rectHeight = Math.max(2, selectionBox.bottom - selectionBox.top);
       const left = pageX + selectionBox.left;
@@ -588,6 +810,7 @@ export default function PowerReader({
         );
         if (!response.ok) throw new Error('Translation failed');
         const data = (await response.json()) as { responseData?: { translatedText?: string } };
+        if (!mountedRef.current) return;
         setTranslateResult(data.responseData?.translatedText ?? '');
       } else {
         const response = await fetch('https://libretranslate.de/translate', {
@@ -599,12 +822,13 @@ export default function PowerReader({
           throw new Error('Translation failed');
         }
         const data = (await response.json()) as { translatedText?: string };
+        if (!mountedRef.current) return;
         setTranslateResult(data.translatedText ?? '');
       }
     } catch (error) {
-      setTranslateError('Translation unavailable.');
+      if (mountedRef.current) setTranslateError('Translation unavailable.');
     } finally {
-      setTranslateLoading(false);
+      if (mountedRef.current) setTranslateLoading(false);
     }
   }
 
@@ -773,9 +997,30 @@ export default function PowerReader({
                 </View>
               </View>
 
+              <Text style={styles.sectionLabel}>Paste your own text</Text>
+              <TextInput
+                testID="custom-text-input"
+                value={customText}
+                onChangeText={setCustomText}
+                placeholder="Paste an article, chapter, or study note"
+                placeholderTextColor={colors.textMuted}
+                style={styles.customTextInput}
+                multiline
+                textAlignVertical="top"
+              />
+              <Pressable
+                accessibilityRole="button"
+                testID="use-custom-text"
+                style={[styles.actionButtonOutline, styles.useCustomButton]}
+                onPress={useCustomText}
+              >
+                <Text style={styles.actionButtonOutlineText}>Use pasted text</Text>
+              </Pressable>
+
               {recentBooks.length > 0 && (
                 <View style={styles.recentSection}>
-                  <Text style={styles.sectionLabel}>Recently Read</Text>
+                  <Text style={styles.sectionLabel}>Recent online books</Text>
+                  <Text style={styles.networkNote}>A connection is required to reopen these titles.</Text>
                   <View style={styles.articleList}>
                     {recentBooks.map((article) => (
                       <View key={article.id} style={styles.articleCard}>
@@ -816,8 +1061,9 @@ export default function PowerReader({
               )}
 
               <Text style={styles.sectionLabel}>
-                Free Books{booksTotalCount ? ` (${booksTotalCount})` : ''}
+                Optional online books{booksTotalCount ? ` (${booksTotalCount})` : ''}
               </Text>
+              <Text style={styles.networkNote}>Project Gutenberg browsing and book text require a connection.</Text>
 
               {!booksRequested ? (
                 <Pressable
@@ -890,7 +1136,7 @@ export default function PowerReader({
                             style={styles.actionButtonOutline}
                             onPress={() => handleDownloadBook(article)}
                           >
-                            <Text style={styles.actionButtonOutlineText}>Download</Text>
+                            <Text style={styles.actionButtonOutlineText}>Open source file</Text>
                           </Pressable>
                         </View>
                       </View>
@@ -912,13 +1158,49 @@ export default function PowerReader({
             </View>
           )}
 
+          <View style={styles.modeSection}>
+            <Text style={styles.sectionLabel}>Presentation</Text>
+            <View style={styles.modeRow}>
+              {([
+                ['flow', 'Flow'],
+                ['line', 'Focus line'],
+                ['rsvp', 'RSVP'],
+              ] as const).map(([mode, label]) => {
+                const isSelected = presentationMode === mode;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    key={mode}
+                    testID={`mode-${mode}`}
+                    style={[styles.modeButton, isSelected && styles.modeButtonActive]}
+                    onPress={() => setPresentationMode(mode)}
+                  >
+                    <Text style={[styles.modeButtonText, isSelected && styles.modeButtonTextActive]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.modeHelp}>
+              {presentationMode === 'flow'
+                ? 'Read the full page with a moving highlight.'
+                : presentationMode === 'line'
+                  ? 'Keep one compact line in focus.'
+                  : 'See only the current word group at the focal point.'}
+            </Text>
+          </View>
+
           <GameDifficultyControl />
 
           {/* Stats Row */}
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{bestWpm || '—'}</Text>
-              <Text style={styles.statDescription}>Best WPM</Text>
+              <Text style={styles.statNumber}>
+                {recentGuideWpm ? `${recentGuideWpm}` : '—'}
+              </Text>
+              <Text style={styles.statDescription}>Recent WPM guide</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCard}>
@@ -1002,7 +1284,7 @@ export default function PowerReader({
             <Text style={styles.pauseButtonText}>{isPaused ? 'Resume' : 'Pause'}</Text>
           </Pressable>
 
-          {isPaused && (
+          {isPaused && presentationMode === 'flow' && (
             <View style={styles.selectionControls}>
               {(['word', 'phrase', 'sentence'] as const).map((mode) => (
                 <Pressable accessibilityRole="button"
@@ -1028,12 +1310,13 @@ export default function PowerReader({
             </View>
           )}
 
-          {isPaused && (
+          {isPaused && presentationMode === 'flow' && (
             <View style={styles.languageControls}>
               <Text style={styles.languageLabel}>From</Text>
               {['en', 'ru', 'es', 'fr', 'de'].map((lang) => (
                 <Pressable accessibilityRole="button"
                   key={`from-${lang}`}
+                  testID={`source-language-${lang}`}
                   style={[styles.languageChip, sourceLanguage === lang && styles.languageChipActive]}
                   onPress={() => setSourceLanguage(lang)}
                 >
@@ -1048,6 +1331,7 @@ export default function PowerReader({
               {['ru', 'en', 'es', 'fr', 'de'].map((lang) => (
                 <Pressable accessibilityRole="button"
                   key={`to-${lang}`}
+                  testID={`target-language-${lang}`}
                   style={[styles.languageChip, targetLanguage === lang && styles.languageChipActive]}
                   onPress={() => setTargetLanguage(lang)}
                 >
@@ -1061,7 +1345,7 @@ export default function PowerReader({
             </View>
           )}
 
-          {isPaused && selectionStart !== null && selectionEnd !== null && !translateAnchor && (
+          {isPaused && presentationMode === 'flow' && selectionStart !== null && selectionEnd !== null && !translateAnchor && (
             <Pressable accessibilityRole="button" style={styles.translateFallbackButton} onPress={handleTranslateHighlight}>
               <Text style={styles.translateFallbackText}>Translate</Text>
             </Pressable>
@@ -1089,54 +1373,85 @@ export default function PowerReader({
 
           <View
             testID="chunk-display"
-            style={styles.pageCard}
+            style={[styles.pageCard, presentationMode === 'rsvp' && styles.rsvpCard]}
             ref={pageCardRef}
-            onStartShouldSetResponder={() => isPaused && selectionMode === 'phrase'}
-            onMoveShouldSetResponder={() => isPaused && selectionMode === 'phrase'}
+            onStartShouldSetResponder={() => presentationMode === 'flow' && isPaused && selectionMode === 'phrase'}
+            onMoveShouldSetResponder={() => presentationMode === 'flow' && isPaused && selectionMode === 'phrase'}
             onResponderGrant={(event) => {
-              if (!isPaused || selectionMode !== 'phrase') return;
+              if (presentationMode !== 'flow' || !isPaused || selectionMode !== 'phrase') return;
               const { locationX, locationY } = event.nativeEvent;
               handleSelectionStart(locationX, locationY);
             }}
             onResponderMove={(event) => {
-              if (!isPaused || selectionMode !== 'phrase') return;
+              if (presentationMode !== 'flow' || !isPaused || selectionMode !== 'phrase') return;
               const { locationX, locationY } = event.nativeEvent;
               handleSelectionMove(locationX, locationY);
             }}
           >
-            <Text style={styles.pageText}>
-              {pageWords.map((word, index) => {
-                const isHighlighted = index >= highlightStart && index < highlightEnd;
-                const isSelected =
-                  selectionStart !== null &&
-                  selectionEnd !== null &&
-                  index >= Math.min(selectionStart, selectionEnd) &&
-                  index <= Math.max(selectionStart, selectionEnd);
-                return (
-                  <Text
-                    key={`${pageIndex}-${index}`}
-                    style={[
-                      styles.pageWord,
-                      isHighlighted && styles.highlightWord,
-                      isSelected && styles.selectedWord,
-                    ]}
-                    onPress={() => handleSelectWord(index)}
-                    onLayout={(event) => {
-                      const { x, y, width, height } = event.nativeEvent.layout;
-                      wordLayoutsRef.current[index] = { x, y, width, height };
-                      if (selectionStart !== null && selectionEnd !== null) {
-                        updateSelectionBox(selectionStart, selectionEnd);
-                      }
-                    }}
-                  >
-                    {word}{' '}
-                  </Text>
-                );
-              })}
-            </Text>
+            {presentationMode === 'flow' && (
+              <Text testID="flow-display" style={styles.pageText}>
+                {pageWords.map((word, index) => {
+                  const isHighlighted = index >= highlightStart && index < highlightEnd;
+                  const isSelected =
+                    selectionStart !== null &&
+                    selectionEnd !== null &&
+                    index >= Math.min(selectionStart, selectionEnd) &&
+                    index <= Math.max(selectionStart, selectionEnd);
+                  return (
+                    <Text
+                      key={`${pageIndex}-${index}`}
+                      style={[
+                        styles.pageWord,
+                        isHighlighted && styles.highlightWord,
+                        isSelected && styles.selectedWord,
+                      ]}
+                      onPress={() => handleSelectWord(index)}
+                      onLayout={(event) => {
+                        const { x, y, width, height } = event.nativeEvent.layout;
+                        wordLayoutsRef.current[index] = { x, y, width, height };
+                        if (selectionStart !== null && selectionEnd !== null) {
+                          updateSelectionBox(selectionStart, selectionEnd);
+                        }
+                      }}
+                    >
+                      {word}{' '}
+                    </Text>
+                  );
+                })}
+              </Text>
+            )}
 
-            {isPaused && selectionStart !== null && selectionEnd !== null && translateAnchor && (
+            {presentationMode === 'line' && (
+              <Text testID="line-display" style={styles.focusLineText}>
+                {pageWords.slice(lineStart, lineEnd).map((word, relativeIndex) => {
+                  const index = lineStart + relativeIndex;
+                  const isHighlighted = index >= highlightStart && index < highlightEnd;
+                  return (
+                    <Text
+                      key={`${pageIndex}-line-${index}`}
+                      style={[styles.lineWord, isHighlighted && styles.focusLineHighlight]}
+                    >
+                      {word}{' '}
+                    </Text>
+                  );
+                })}
+              </Text>
+            )}
+
+            {presentationMode === 'rsvp' && (
+              <View testID="rsvp-display" style={styles.rsvpDisplay}>
+                <View style={styles.rsvpGuide} />
+                <Text style={styles.rsvpText}>
+                  {pageWords.slice(highlightStart, highlightEnd).join(' ')}
+                </Text>
+                <View style={styles.rsvpGuide} />
+              </View>
+            )}
+
+            {presentationMode === 'flow' && isPaused && selectionStart !== null && selectionEnd !== null && translateAnchor && (
               <Pressable accessibilityRole="button"
+                accessibilityLabel="Translate selected text"
+                testID="translate-selection"
                 style={[
                   styles.translateIconButton,
                   {
@@ -1151,7 +1466,7 @@ export default function PowerReader({
               </Pressable>
             )}
 
-            {isPaused && translateVisible && translateAnchorRect && (
+            {presentationMode === 'flow' && isPaused && translateVisible && translateAnchorRect && (
               <Popover
                 isVisible={translateVisible}
                 onRequestClose={() => setTranslateVisible(false)}
@@ -1162,7 +1477,13 @@ export default function PowerReader({
                 <View>
                   <View style={styles.translateHeader}>
                     <Text style={styles.translateTitle}>Translation</Text>
-                    <Pressable accessibilityRole="button" onPress={() => setTranslateVisible(false)}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Close translation"
+                      testID="close-translation"
+                      style={styles.translateCloseButton}
+                      onPress={() => setTranslateVisible(false)}
+                    >
                       <Text style={styles.translateClose}>✕</Text>
                     </Pressable>
                   </View>
@@ -1189,8 +1510,11 @@ export default function PowerReader({
         <View testID="end-screen" style={styles.endCard}>
           <Text style={styles.endEmoji}>⚡</Text>
           <Text style={styles.endTitle}>Complete!</Text>
-          <Text style={styles.endScore}>{Math.round((words.length / elapsed) * 60000)} WPM</Text>
-          <Text style={styles.endMeta}>{words.length} words read</Text>
+          <Text style={styles.endScore}>Guide: {targetWpm} WPM</Text>
+          <Text style={styles.endMeta}>
+            {presentedWordIndexesRef.current.size} words presented ·{' '}
+            {(elapsed / 1000).toFixed(1)}s active guide time
+          </Text>
           <View style={styles.progressRow}>
             <Text style={styles.levelText}>Level {gameProgress.level}</Text>
             <Text style={styles.starsText}>
@@ -1342,10 +1666,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionButton: {
+    minHeight: 44,
     backgroundColor: '#6366F1',
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 14,
+    justifyContent: 'center',
   },
   actionButtonText: {
     color: 'white',
@@ -1353,11 +1679,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   actionButtonOutline: {
+    minHeight: 44,
     borderWidth: 1,
     borderColor: '#6366F1',
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 14,
+    justifyContent: 'center',
   },
   actionButtonOutlineText: {
     color: '#6366F1',
@@ -1365,6 +1693,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   loadMoreBtn: {
+    minHeight: 44,
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderStyle: 'dashed',
@@ -1397,6 +1726,65 @@ const styles = StyleSheet.create({
     color: '#111827',
     backgroundColor: '#FFFFFF',
     marginBottom: 12,
+  },
+  customTextInput: {
+    minHeight: 112,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#111827',
+    backgroundColor: '#FFFFFF',
+  },
+  useCustomButton: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    marginBottom: 22,
+  },
+  networkNote: {
+    marginTop: -6,
+    marginBottom: 10,
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  modeSection: {
+    marginBottom: 22,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modeButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+  },
+  modeButtonActive: {
+    borderColor: colors.interactivePrimary,
+    backgroundColor: '#EEF2FF',
+  },
+  modeButtonText: {
+    color: '#4B5563',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modeButtonTextActive: {
+    color: colors.interactivePrimary,
+  },
+  modeHelp: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 8,
   },
   intensityRow: {
     flexDirection: 'row',
@@ -1499,12 +1887,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   pauseButton: {
+    minHeight: 44,
     alignSelf: 'center',
     backgroundColor: '#111827',
     borderRadius: 999,
     paddingHorizontal: 18,
     paddingVertical: 8,
     marginBottom: 16,
+    justifyContent: 'center',
   },
   pauseButtonActive: {
     backgroundColor: '#4B5563',
@@ -1524,11 +1914,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   selectionChip: {
+    minHeight: 44,
     borderWidth: 1,
     borderColor: '#CBD5F5',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
+    justifyContent: 'center',
   },
   selectionChipActive: {
     backgroundColor: '#6366F1',
@@ -1544,8 +1936,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   selectionClear: {
+    minHeight: 44,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    justifyContent: 'center',
   },
   selectionClearText: {
     fontSize: 11,
@@ -1566,11 +1960,15 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   languageChip: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#CBD5F5',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
+    justifyContent: 'center',
   },
   languageChipActive: {
     backgroundColor: '#6366F1',
@@ -1585,10 +1983,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   translateIconButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
     backgroundColor: '#111827',
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    justifyContent: 'center',
   },
   translateIconText: {
     color: '#FFFFFF',
@@ -1596,12 +1998,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   translateFallbackButton: {
+    minHeight: 44,
     alignSelf: 'center',
     backgroundColor: '#111827',
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 6,
     marginBottom: 10,
+    justifyContent: 'center',
   },
   translateFallbackText: {
     color: '#FFFFFF',
@@ -1637,6 +2041,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
   },
+  translateCloseButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   translateSourceText: {
     fontSize: 12,
     color: '#6B7280',
@@ -1663,10 +2073,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pageButton: {
+    minHeight: 44,
     backgroundColor: '#E0E7FF',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
+    justifyContent: 'center',
   },
   pageButtonDisabled: {
     opacity: 0.5,
@@ -1732,6 +2144,45 @@ const styles = StyleSheet.create({
   },
   highlightWord: {
     color: '#4F46E5',
+  },
+  focusLineText: {
+    marginVertical: 'auto',
+    textAlign: 'center',
+    fontSize: 20,
+    lineHeight: 32,
+    color: colors.textMuted,
+  },
+  lineWord: {
+    color: colors.textMuted,
+  },
+  focusLineHighlight: {
+    color: '#111827',
+    backgroundColor: '#E0E7FF',
+    fontWeight: '800',
+  },
+  rsvpCard: {
+    justifyContent: 'center',
+    backgroundColor: '#111827',
+  },
+  rsvpDisplay: {
+    minHeight: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rsvpGuide: {
+    width: 2,
+    height: 18,
+    backgroundColor: '#818CF8',
+  },
+  rsvpText: {
+    minHeight: 54,
+    paddingHorizontal: 12,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    color: '#FFFFFF',
+    fontSize: 28,
+    lineHeight: 38,
+    fontWeight: '700',
   },
   selectedWord: {
     backgroundColor: '#FEF08A',

@@ -1,7 +1,14 @@
 /**
- * 4000 Essential English Words - Curated vocabulary database
- * Based on Academic Word List (AWL) and General Service List (GSL)
- * Words organized by difficulty level and category
+ * Original English practice vocabulary maintained for this application.
+ *
+ * Level rationale:
+ * - easy: common, concrete words, generally 4–6 letters;
+ * - medium: longer general/academic words, generally 6–9 letters;
+ * - hard: long or morphologically complex words, generally 9+ letters.
+ *
+ * Provenance: editorially assembled for the app using broad public frequency
+ * and academic-language conventions. It is not a copy of a named course,
+ * competitor pack, AWL, GSL, or "4000 Essential English Words" product.
  */
 
 export type VocabularyWord = {
@@ -11,8 +18,18 @@ export type VocabularyWord = {
   category?: string;
 };
 
+function uniqueReviewedWords(words: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return words.filter((word) => {
+    const key = word.trim().toLocaleLowerCase('en');
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // ============== BEGINNER WORDS (4-6 letters) ==============
-export const BEGINNER_WORDS: string[] = [
+const BEGINNER_WORD_SOURCE: string[] = [
   // Common nouns
   'apple', 'bread', 'chair', 'dream', 'earth', 'flame', 'glass', 'heart',
   'island', 'juice', 'knife', 'lemon', 'money', 'novel', 'ocean', 'paper',
@@ -31,9 +48,10 @@ export const BEGINNER_WORDS: string[] = [
   'rapid', 'sharp', 'thick', 'upper', 'valid', 'whole', 'young', 'basic',
   'brief', 'chief', 'daily', 'early', 'fresh', 'great', 'human', 'ideal',
 ];
+export const BEGINNER_WORDS = uniqueReviewedWords(BEGINNER_WORD_SOURCE);
 
 // ============== INTERMEDIATE WORDS (6-9 letters) ==============
-export const INTERMEDIATE_WORDS: string[] = [
+const INTERMEDIATE_WORD_SOURCE: string[] = [
   // Academic vocabulary
   'achieve', 'benefit', 'concept', 'develop', 'evident', 'feature', 'genuine',
   'harmony', 'insight', 'justify', 'kingdom', 'logical', 'measure', 'neutral',
@@ -56,9 +74,10 @@ export const INTERMEDIATE_WORDS: string[] = [
   'impulse', 'incident', 'include', 'increase', 'indicate', 'indirect', 'infinite',
   'influence', 'inherit', 'initial', 'initiate', 'innovate', 'inquiry', 'instance',
 ];
+export const INTERMEDIATE_WORDS = uniqueReviewedWords(INTERMEDIATE_WORD_SOURCE);
 
 // ============== ADVANCED WORDS (9+ letters) ==============
-export const ADVANCED_WORDS: string[] = [
+const ADVANCED_WORD_SOURCE: string[] = [
   // Complex academic vocabulary
   'acceleration', 'accomplishment', 'accountability', 'acknowledgment', 'acquisition',
   'administration', 'advantageous', 'advertisement', 'aesthetically', 'affirmative',
@@ -107,9 +126,10 @@ export const ADVANCED_WORDS: string[] = [
   'underestimation', 'understanding', 'unfortunately', 'unpredictability', 'unprecedented',
   'visualization', 'vulnerability', 'westernization', 'wholesomeness', 'worthwhile',
 ];
+export const ADVANCED_WORDS = uniqueReviewedWords(ADVANCED_WORD_SOURCE);
 
 // ============== WORD PAIRS (Antonyms/Opposites) ==============
-export const WORD_PAIRS: [string, string][] = [
+const WORD_PAIR_SOURCE: [string, string][] = [
   // Basic opposites
   ['hot', 'cold'], ['up', 'down'], ['fast', 'slow'], ['big', 'small'],
   ['day', 'night'], ['left', 'right'], ['open', 'close'], ['happy', 'sad'],
@@ -150,6 +170,24 @@ export const WORD_PAIRS: [string, string][] = [
   ['visible', 'invisible'], ['voluntary', 'compulsory'], ['war', 'peace'], ['wealth', 'poverty'],
   ['wisdom', 'folly'], ['zenith', 'nadir'],
 ];
+
+function uniqueUnorderedPairs(
+  pairs: readonly [string, string][]
+): [string, string][] {
+  const seen = new Set<string>();
+  return pairs.filter(([first, second]) => {
+    const key = [first, second]
+      .map((word) => word.toLocaleLowerCase('en'))
+      .sort()
+      .join('\u0000');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Legacy pair export, de-duplicated in both forward and reverse directions. */
+export const WORD_PAIRS = uniqueUnorderedPairs(WORD_PAIR_SOURCE);
 
 // ============== VOCABULARY WITH DEFINITIONS ==============
 export const VOCABULARY_WITH_DEFINITIONS: VocabularyWord[] = [

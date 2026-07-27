@@ -53,15 +53,24 @@ describe('adaptive-eligible game progress integration', () => {
 
   it.each([
     ['NumberRecognition', <NumberRecognition durationMs={100} />],
-    ['NumberSearch', <NumberSearch durationMs={100} />],
+    ['NumberSearch', <NumberSearch durationMs={100} previewMs={1} />],
     ['SymbolRecognition', <SymbolRecognition durationMs={100} />],
     ['WordPairs', <WordPairs durationMs={100} />],
   ])('persists %s progress after a timed attempt', async (gameId, component) => {
     const { getByTestId } = render(component);
     fireEvent.press(getByTestId('start-button'));
-    act(() => {
-      jest.advanceTimersByTime(100);
-    });
+    if (gameId === 'NumberSearch') {
+      act(() => {
+        jest.advanceTimersByTime(1);
+      });
+      act(() => {
+        jest.advanceTimersByTime(110);
+      });
+    } else {
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+    }
     await expectPersistedPlay(gameId);
   });
 

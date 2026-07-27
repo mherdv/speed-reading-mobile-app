@@ -10,6 +10,7 @@ describe('game catalog hierarchy', () => {
   it('keeps supporting visual-search labs separate from core reading practice', () => {
     expect(CORE_GAME_LIST.map((game) => game.id)).toEqual([
       'RepeatedReading',
+      'WpmTest',
       'MainIdeaSprint',
       'StructureScan',
       'EvidenceHunt',
@@ -27,6 +28,6 @@ describe('game catalog hierarchy', () => {
     expect(EYE_COMFORT_GAME_LIST.map((game) => game.title)).toEqual([
       'Eye Reset',
     ]);
-    expect(GAME_LIST).toHaveLength(11);
+    expect(GAME_LIST).toHaveLength(12);
   });
 });

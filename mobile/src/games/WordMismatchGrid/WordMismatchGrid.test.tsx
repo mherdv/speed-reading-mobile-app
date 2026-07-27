@@ -1,5 +1,8 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { Text } from 'react-native';
+
+type TextNode = { props: { children?: unknown } };
 import WordMismatchGrid from './WordMismatchGrid';
 
 describe('WordMismatchGrid (card-based similar words)', () => {
@@ -56,6 +59,42 @@ describe('WordMismatchGrid (card-based similar words)', () => {
     
     const payload = onReportResult.mock.calls[0][0];
     expect(payload.details.difficulty).toBe('easy');
+  });
+
+  it('applies an immediate penalty for a matching pair and does not select it', () => {
+    const { getAllByTestId, getByTestId } = render(
+      <WordMismatchGrid durationMs={30_000} difficulty="easy" />
+    );
+    fireEvent.press(getByTestId('start-button'));
+
+    const matchingCard = getAllByTestId(/^card-\d+$/).find((card) => {
+      const words = (card.findAllByType(Text) as TextNode[])
+        .map((node) => node.props.children)
+        .filter((value: unknown): value is string => typeof value === 'string');
+      return words.length >= 2 && words[0] === words[1];
+    });
+    expect(matchingCard).toBeTruthy();
+    fireEvent.press(matchingCard!);
+
+    expect(getByTestId('penalty-count')).toHaveTextContent('1 penalty');
+    expect(getByTestId('penalty-count').props.accessibilityLiveRegion).toBe(
+      'polite'
+    );
+    expect(matchingCard!.props.accessibilityState?.selected).not.toBe(true);
+  });
+
+  it('uses container-relative two-column cards that can shrink on narrow phones', () => {
+    const { getAllByTestId, getByTestId } = render(
+      <WordMismatchGrid difficulty="hard" />
+    );
+    fireEvent.press(getByTestId('start-button'));
+
+    expect(getAllByTestId(/^card-\d+$/)[0]).toHaveStyle({
+      flexBasis: '48%',
+      flexShrink: 1,
+      minWidth: 0,
+      maxWidth: '48%',
+    });
   });
 
   it('Level display and start button work', async () => {

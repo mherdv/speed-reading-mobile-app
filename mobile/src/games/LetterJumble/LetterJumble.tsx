@@ -1,13 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, TextInput as TextInputType } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
-import { getWordsByDifficulty } from '../../data/vocabulary';
+import { shuffleItems } from '../../data/flashPracticeContent';
+import { updateProgress } from '../../data/progressStore';
+import {
+  MIXUP_WORDS,
+  type MixupWord,
+} from '../../data/vocabularyPracticeContent';
+import { colors } from '../../theme/colors';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
-import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
-import { colors } from '../../theme/colors';
+import {
+  useAutoStart,
+  useGameProgress,
+  useTrackedTimeouts,
+  type Difficulty,
+} from '../gameHooks';
 
 const GAME_ID = 'LetterJumble';
 
@@ -21,6 +30,7 @@ type GameReportPayload = {
 };
 
 type Props = {
+  words?: readonly MixupWord[];
   durationMs?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
@@ -29,21 +39,55 @@ type Props = {
 
 type Phase = 'idle' | 'running' | 'ended';
 
-function getWordsForDifficulty(difficulty: Difficulty): string[] {
-  return getWordsByDifficulty(difficulty);
-}
+type Round = MixupWord & {
+  mixed: string;
+};
 
-function shuffle(word: string): string {
-  const arr = word.split('');
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+function candidateSwapIndexes(word: string, difficulty: Difficulty): number[] {
+  const all = Array.from({ length: word.length - 1 }, (_, index) => index).filter(
+    (index) => word[index] !== word[index + 1]
+  );
+  if (difficulty === 'easy') {
+    const edges = all.filter(
+      (index) => index <= 1 || index >= word.length - 3
+    );
+    return edges.length > 0 ? edges : all;
   }
-  const result = arr.join('');
-  return result === word ? shuffle(word) : result;
+  const internal = all.filter(
+    (index) => index >= 1 && index <= word.length - 3
+  );
+  if (difficulty === 'hard' && internal.length > 0) {
+    const center = (word.length - 2) / 2;
+    return [...internal].sort(
+      (first, second) =>
+        Math.abs(first - center) - Math.abs(second - center)
+    ).slice(0, Math.max(1, Math.ceil(internal.length / 2)));
+  }
+  return internal.length > 0 ? internal : all;
 }
 
-export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', autoStart = false, onReportResult }: Props) {
+/** Applies one controlled adjacent transposition rather than a random shuffle. */
+export function transposeWord(
+  word: string,
+  difficulty: Difficulty,
+  random: () => number = Math.random
+): string {
+  const candidates = candidateSwapIndexes(word, difficulty);
+  if (candidates.length === 0) return word;
+  const index =
+    candidates[Math.floor(random() * candidates.length)] ?? candidates[0];
+  const letters = [...word];
+  [letters[index], letters[index + 1]] = [letters[index + 1], letters[index]];
+  return letters.join('');
+}
+
+export default function LetterJumble({
+  words,
+  durationMs = 60_000,
+  difficulty = 'easy',
+  autoStart = false,
+  onReportResult,
+}: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
   const {
     gameProgress,
@@ -51,213 +95,225 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
     selectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
-
-  function pickWord(): { word: string; jumbled: string } {
-    const words = getWordsForDifficulty(selectedDifficulty);
-    const word = words[Math.floor(Math.random() * words.length)];
-    return { word, jumbled: shuffle(word) };
-  }
-
-  const [current, setCurrent] = useState(() => pickWord());
+  const [current, setCurrent] = useState<Round>(() => {
+    const first = words?.[0] ?? MIXUP_WORDS[difficulty][0]!;
+    return { ...first, mixed: transposeWord(first.word, difficulty) };
+  });
   const [input, setInput] = useState('');
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [timeLeftMs, setTimeLeftMs] = useState(durationMs);
   const [showHint, setShowHint] = useState(false);
 
-  const startedAtRef = useRef<number>(0);
+  const startedAtRef = useRef(0);
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
-  const inputRef = useRef<TextInputType>(null);
+  const deckRef = useRef<MixupWord[]>([]);
+  const deckIndexRef = useRef(0);
+  const previousWordRef = useRef('');
+  const inputRef = useRef<TextInput>(null);
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
+  const pool = words && words.length > 0 ? words : MIXUP_WORDS[selectedDifficulty];
 
   useEffect(() => {
     if (phase !== 'running') return;
     const endAt = startedAtRef.current + durationMs;
-    
     const interval = setInterval(() => {
       const left = Math.max(0, endAt - Date.now());
       setTimeLeftMs(left);
-      if (left <= 0) {
+      if (left === 0) {
         clearInterval(interval);
-        finish();
+        finish(Date.now());
       }
     }, 100);
-    
-    return () => {
+    return () => clearInterval(interval);
+  }, [durationMs, phase]);
+
+  useEffect(
+    () => () => {
       cancelledRef.current = true;
-      clearInterval(interval);
-    };
-  }, [phase, durationMs]);
+      clearTrackedTimeouts();
+    },
+    // Cleanup belongs to unmount, not helper identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
+  function takeNextRound(): Round {
+    if (deckIndexRef.current >= deckRef.current.length) {
+      deckRef.current = shuffleItems(pool);
+      if (
+        deckRef.current.length > 1 &&
+        deckRef.current[0]?.word === previousWordRef.current
+      ) {
+        [deckRef.current[0], deckRef.current[1]] = [
+          deckRef.current[1],
+          deckRef.current[0],
+        ];
+      }
+      deckIndexRef.current = 0;
+    }
+    const item =
+      deckRef.current[deckIndexRef.current] ??
+      pool[0] ??
+      MIXUP_WORDS.easy[0]!;
+    deckIndexRef.current += 1;
+    previousWordRef.current = item.word;
+    return {
+      ...item,
+      mixed: transposeWord(item.word, selectedDifficulty),
+    };
+  }
+
   function start() {
+    if (phase === 'running') return;
     clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
+    deckRef.current = shuffleItems(pool);
+    deckIndexRef.current = 0;
     setScore(0);
     setAttempts(0);
     setTimeLeftMs(durationMs);
-    setCurrent(pickWord());
+    setCurrent(takeNextRound());
     setInput('');
     setShowHint(false);
     startedAtRef.current = Date.now();
     setPhase('running');
   }
 
-  function finish() {
-    if (cancelledRef.current) return;
-    if (reportedRef.current) return;
+  function finish(now = Date.now()) {
+    if (cancelledRef.current || reportedRef.current) return;
     reportedRef.current = true;
     clearTrackedTimeouts();
-    
-    const now = Date.now();
-    const elapsedMs = now - startedAtRef.current;
-    const accuracy = attemptsRef.current > 0 ? scoreRef.current / attemptsRef.current : 0;
-    
-    // Update progress - success if accuracy >= 70%
-    const success = accuracy >= 0.7;
-    updateProgress(GAME_ID, success, scoreRef.current).then(({ progress }) => {
-      setGameProgress(progress);
-    });
-
+    const accuracy =
+      attemptsRef.current > 0 ? scoreRef.current / attemptsRef.current : 0;
+    setPhase('ended');
+    void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current)
+      .then(({ progress }) => {
+        if (!cancelledRef.current) setGameProgress(progress);
+      })
+      .catch(() => undefined);
     onReportResult?.({
       startedAtIso: new Date(startedAtRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
-      elapsedMs,
+      elapsedMs: Math.max(0, now - startedAtRef.current),
       score: scoreRef.current,
       accuracy,
-      details: { rounds: attemptsRef.current, correct: scoreRef.current },
+      details: {
+        rounds: attemptsRef.current,
+        correct: scoreRef.current,
+        difficulty: selectedDifficulty,
+        promptPoolSize: pool.length,
+        mutation: 'one-adjacent-transposition',
+        hints: 'definition-and-part-of-speech',
+      },
     });
-    setPhase('ended');
+  }
+
+  function nextRound() {
+    setCurrent(takeNextRound());
+    setInput('');
+    setShowHint(false);
+    scheduleTimeout(() => inputRef.current?.focus(), 50);
   }
 
   function onSubmit() {
     if (phase !== 'running') return;
-    
     attemptsRef.current += 1;
     setAttempts(attemptsRef.current);
-    
-    if (input.toLowerCase().trim() === current.word) {
+    if (
+      input.toLocaleLowerCase('en').trim() ===
+      current.word.toLocaleLowerCase('en')
+    ) {
       scoreRef.current += 1;
       setScore(scoreRef.current);
     }
-    
-    setCurrent(pickWord());
-    setInput('');
-    setShowHint(false);
-    // Refocus input after submit
-    scheduleTimeout(() => inputRef.current?.focus(), 50);
+    nextRound();
   }
 
   function onSkip() {
     if (phase !== 'running') return;
     attemptsRef.current += 1;
     setAttempts(attemptsRef.current);
-    setCurrent(pickWord());
-    setInput('');
-    setShowHint(false);
-    // Refocus input after skip
-    scheduleTimeout(() => inputRef.current?.focus(), 50);
-  }
-
-  function playAgain() {
-    clearTrackedTimeouts();
-    setPhase('idle');
-    scheduleTimeout(start, 50);
+    nextRound();
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Letter Jumble</Text>
-        <Text style={styles.subtitle}>Unscramble the letters to form a word</Text>
-      </View>
+      <Text style={styles.title}>Letter Mixup</Text>
+      <Text style={styles.subtitle}>Correct one pair of transposed letters</Text>
 
       {phase === 'idle' && (
         <GameIdlePanel
           description={GAME_DESCRIPTIONS[GAME_ID]}
           level={gameProgress.level}
-          stars={levelToStars(gameProgress.level)}
+          stars={Math.min(5, Math.max(1, Math.ceil(gameProgress.level / 3)))}
           onStart={start}
-          containerStyle={styles.idleContent}
-          descriptionStyle={styles.descriptionText}
-          progressInfoStyle={styles.progressInfo}
-          levelLabelStyle={styles.levelLabel}
-          starsStyle={styles.starsDisplay}
-          buttonStyle={styles.startBtn}
-          buttonTextStyle={styles.startBtnText}
+          containerStyle={styles.idle}
+          buttonStyle={styles.primaryButton}
+          buttonTextStyle={styles.primaryButtonText}
         />
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
           <StatsRow
-            style={styles.statsRow}
             items={[
-              {
-                key: 'solved',
-                value: score,
-                label: 'Solved',
-                containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-              {
-                key: 'time',
-                value: Math.ceil(timeLeftMs / 1000),
-                label: 'Seconds',
-                containerStyle: [styles.statBox, styles.timerBox],
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-              {
-                key: 'attempts',
-                value: attempts,
-                label: 'Attempts',
-                containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
+              { key: 'solved', value: score, label: 'Solved' },
+              { key: 'time', value: Math.ceil(timeLeftMs / 1000), label: 'Seconds' },
+              { key: 'attempts', value: attempts, label: 'Attempts' },
             ]}
           />
-
-          <View style={styles.jumbleCard}>
-            <Text style={styles.jumbleLetters}>{current.jumbled.toUpperCase()}</Text>
+          <View style={styles.mixupCard}>
+            <Text testID="mixed-word" style={styles.mixedWord}>
+              {current.mixed.toLocaleUpperCase('en')}
+            </Text>
+            <Text style={styles.mutationHint}>Exactly two neighboring letters changed places.</Text>
             {showHint && (
-              <Text style={styles.hint}>Hint: {current.word[0].toUpperCase()}...{current.word.slice(-1)}</Text>
+              <Text testID="definition-hint" style={styles.definition}>
+                {current.partOfSpeech}: {current.definition}
+              </Text>
             )}
           </View>
-
           <TextInput
             ref={inputRef}
             testID="answer-input"
-            style={styles.input}
             value={input}
             onChangeText={setInput}
-            placeholder="Type your answer..."
+            placeholder="Type the corrected word"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
-            autoFocus={true}
+            autoFocus
             onSubmitEditing={onSubmit}
-            blurOnSubmit={false}
+            style={styles.input}
           />
-
-          <View style={styles.buttonRow}>
-            <Pressable accessibilityRole="button" style={styles.hintBtn} onPress={() => setShowHint(true)}>
-              <Text style={styles.hintBtnText}>💡 Hint</Text>
+          <View style={styles.buttons}>
+            <Pressable
+              accessibilityRole="button"
+              testID="hint-button"
+              onPress={() => setShowHint(true)}
+              style={styles.secondaryButton}
+            >
+              <Text style={styles.secondaryButtonText}>Definition</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" style={styles.skipBtn} onPress={onSkip}>
-              <Text style={styles.skipBtnText}>Skip →</Text>
+            <Pressable accessibilityRole="button" onPress={onSkip} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>Skip</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" testID="submit-button" style={styles.submitBtn} onPress={onSubmit}>
-              <Text style={styles.submitBtnText}>Submit</Text>
+            <Pressable
+              accessibilityRole="button"
+              testID="submit-button"
+              onPress={onSubmit}
+              style={styles.primaryButton}
+            >
+              <Text style={styles.primaryButtonText}>Check</Text>
             </Pressable>
           </View>
         </View>
@@ -265,22 +321,18 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
 
       {phase === 'ended' && (
         <View testID="end" style={styles.endCard}>
-          <Text style={styles.endEmoji}>🧩</Text>
-          <Text style={styles.endTitle}>Time's Up!</Text>
-          <Text style={styles.endScore}>{score} Words</Text>
+          <Text style={styles.endTitle}>Mixup session complete</Text>
+          <Text style={styles.endScore}>{score} corrected</Text>
           <Text style={styles.endMeta}>
-            Accuracy: {attempts > 0 ? Math.round((score / attempts) * 100) : 0}%
+            {attempts > 0 ? Math.round((score / attempts) * 100) : 0}% accuracy
           </Text>
-          <Text style={styles.endDifficulty}>Difficulty: {selectedDifficulty}</Text>
-          <View style={styles.progressRow}>
-            <Text style={styles.levelText}>Level {gameProgress.level}</Text>
-            <Text style={styles.starsText}>
-              {'★'.repeat(levelToStars(gameProgress.level))}
-              {'☆'.repeat(5 - levelToStars(gameProgress.level))}
-            </Text>
-          </View>
-          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
-            <Text style={styles.playAgainText}>Play Again</Text>
+          <Pressable
+            accessibilityRole="button"
+            testID="play-again"
+            onPress={start}
+            style={styles.primaryButton}
+          >
+            <Text style={styles.primaryButtonText}>Play Again</Text>
           </Pressable>
         </View>
       )}
@@ -290,84 +342,67 @@ export default function LetterJumble({ durationMs = 60000, difficulty = 'easy', 
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12 },
-  header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  idleContent: { flex: 1 },
-  descriptionText: {
-    fontSize: 15,
-    color: '#4B5563',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
-  progressInfo: {
+  title: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
+  subtitle: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
+  idle: { flex: 1 },
+  gameArea: { flex: 1, gap: 14, paddingTop: 14 },
+  mixupCard: {
     alignItems: 'center',
-    marginBottom: 24,
+    backgroundColor: colors.warningSurface,
+    borderColor: colors.warningForeground,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    padding: 20,
   },
-  levelLabel: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  starsDisplay: {
-    fontSize: 24,
+  mixedWord: {
+    color: colors.warningForeground,
+    fontSize: 30,
+    fontWeight: '800',
     letterSpacing: 4,
   },
-  startBtn: {
-    backgroundColor: colors.warningForeground,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
-  gameArea: { flex: 1 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
-  statBox: { alignItems: 'center', backgroundColor: '#FEF3C7', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
-  timerBox: { backgroundColor: '#FDE68A' },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#92400E' },
-  statLabel: { fontSize: 10, color: '#B45309' },
-  jumbleCard: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#FCD34D',
-  },
-  jumbleLetters: { fontSize: 28, fontWeight: '800', color: '#92400E', letterSpacing: 6 },
-  hint: { marginTop: 8, fontSize: 12, color: '#B45309' },
-  input: {
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    textAlign: 'center',
+  mutationHint: { color: colors.textSecondary, fontSize: 12, textAlign: 'center' },
+  definition: {
+    color: colors.warningForeground,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 12,
+    lineHeight: 20,
+    textAlign: 'center',
   },
-  buttonRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  hintBtn: { backgroundColor: '#FEF3C7', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
-  hintBtnText: { fontSize: 14, fontWeight: '600', color: '#92400E' },
-  skipBtn: { backgroundColor: '#F3F4F6', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
-  skipBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
-  submitBtn: { backgroundColor: colors.warningForeground, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
-  submitBtnText: { fontSize: 14, fontWeight: '600', color: 'white' },
-  endCard: { alignItems: 'center', paddingVertical: 20 },
-  endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 32, fontWeight: '800', color: colors.warningForeground, marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
-  levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: colors.warningForeground },
-  playAgainBtn: { marginTop: 16, backgroundColor: colors.warningForeground, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
-  playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
+  input: {
+    backgroundColor: colors.cardBackground,
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    color: colors.textPrimary,
+    fontSize: 17,
+    minHeight: 48,
+    paddingHorizontal: 12,
+    textAlign: 'center',
+  },
+  buttons: { flexDirection: 'row', gap: 8 },
+  primaryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.interactivePrimary,
+    borderRadius: 10,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: 12,
+  },
+  primaryButtonText: { color: colors.onInteractive, fontSize: 15, fontWeight: '700' },
+  secondaryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceTonal,
+    borderRadius: 10,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: 10,
+  },
+  secondaryButtonText: { color: colors.interactivePrimary, fontSize: 14, fontWeight: '700' },
+  endCard: { alignItems: 'center', flex: 1, gap: 8, justifyContent: 'center' },
+  endTitle: { color: colors.textPrimary, fontSize: 22, fontWeight: '800' },
+  endScore: { color: colors.interactivePrimary, fontSize: 34, fontWeight: '800' },
+  endMeta: { color: colors.textSecondary, fontSize: 14, marginBottom: 12 },
 });

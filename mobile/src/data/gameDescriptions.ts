@@ -9,6 +9,9 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
   RepeatedReading:
     'Read the same short passage twice at a comfortable pace, then answer a comprehension question. Compare both attempts and improve fluency without trading away meaning.',
 
+  WpmTest:
+    'Read an original connected passage while the timer runs, then answer passage-dependent questions after reading time stops. The result uses the actual word count and reading duration, and flags attempts that are too brief or implausibly fast for a stable personal estimate.',
+
   MainIdeaSprint:
     'Read a short passage, hide it, and retrieve its central idea from memory. Immediate feedback helps you learn to separate the author’s main claim from supporting details.',
 
@@ -22,10 +25,10 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Infer an unfamiliar word from a connected paragraph and identify the clue that supports your meaning. This reports vocabulary-task accuracy, not reading speed.',
 
   PowerReader:
-    'Use a moving highlight to experiment with a steady reading pace. This is guided pacing practice, so its WPM reflects the chosen presentation speed and does not prove comprehension.',
+    'Use Flow, Focus line, or RSVP to experiment with a steady display guide. The configured target is stored separately from measured WPM, and the result counts only the words and chunks actually presented.',
 
   LetterRecognition:
-    'Scan a letter grid and select every copy of a target. This optional visual-search warm-up measures speed and accuracy, not reading comprehension.',
+    'Letter Jumble asks you to scan a crowded letter grid and select every copy of one target. This optional visual-search warm-up measures task speed and accuracy, not reading comprehension.',
 
   TextSearch:
     'Practice intentional scanning by locating every instance of a target word in a passage. Use this mode when your real reading goal is to find a known term quickly.',
@@ -39,8 +42,14 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
   FlashReading:
     'Identify briefly displayed words and track response accuracy. This is a recognition challenge and does not by itself demonstrate faster connected-text reading.',
 
+  WordsRecall:
+    'View exactly two English words, then type both from memory after they disappear. Difficulty changes only vocabulary and display time; comparison ignores case, punctuation, and extra whitespace.',
+
+  SentenceRecall:
+    'Read one natural English sentence briefly, then reconstruct it after it disappears. The large prompt deck avoids immediate repetition, and comparison ignores case, punctuation, and extra whitespace.',
+
   ComprehensionTest:
-    'Read a passage at a useful pace, then answer main-idea and detail questions. The result prioritizes understanding instead of rewarding speed without recall.',
+    'Follow a moving chunk highlight through a connected passage, pause or finish safely, then answer passage-dependent questions. The selected WPM is a configured pacing target, not a measured reading speed.',
 
   MemoryRecall:
     'Recall short number sequences as an optional working-memory challenge. Its accuracy describes this task only; it is not a reading-retention score.',
@@ -64,13 +73,13 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Follow a paced stream that stops unpredictably after 3–10 words, then identify the final word. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
 
   WordMismatchGrid:
-    'Find the word that differs in a grid of similar choices. This is an optional visual-discrimination task, not a comprehension exercise.',
+    'Compare same-or-different word pairs and find every mismatch. A tap on a matching pair costs time immediately, so guesses cannot be removed without consequence. This is an optional visual-discrimination task, not a comprehension exercise.',
 
   WordPairs:
-    'Match related or opposite words and track accuracy. Use it as a vocabulary warm-up; its score does not measure passage comprehension.',
+    'Match each prompt with its reviewed opposite and track accuracy. Use Opposites as an English vocabulary warm-up; its score does not measure passage comprehension.',
 
   LetterJumble:
-    'Unscramble letters to form words in an optional spelling and pattern challenge. The result is specific to the puzzle.',
+    'Repair an English word whose nearby letters have been transposed, then type the corrected spelling. Letter Mixup is a spelling and pattern challenge; its result is specific to the puzzle.',
 
   SchulteNumbers:
     'Find numbers in sequence in a grid to practice ordered visual search and sustained attention. Completion time measures this task only; use measured reads to check whether practice transfers to your reading.',
@@ -85,8 +94,8 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Find hidden words in a letter grid to practice orthographic recognition and systematic visual search. Its score describes word-search performance; use measured passages to evaluate reading transfer.',
 
   NumberSearch:
-    'Find target numbers in a grid and balance speed with accuracy. This optional drill is not used as a reading result.',
+    'Memorize a briefly shown target number, then find it after the target hides and the grid appears. This optional visual-search and recall drill is not used as a reading result.',
 
   EvenNumbers:
-    'Identify even numbers in a stream as an optional selective-attention challenge. Its score is specific to numerical classification.',
+    'Scan rows and columns to select every even number in a grid. Larger grids, wider ranges, and shorter sessions raise the difficulty; its score is specific to this numerical search task.',
 };

@@ -57,6 +57,13 @@ function encouragement(
         };
   }
 
+  if (result.details?.activityType === 'paced-reading') {
+    return {
+      title: 'Guided session complete',
+      body: 'This was a configured display pace. Use a measured read next to check speed with understanding.',
+    };
+  }
+
   if (isReadingResult(result)) {
     return {
       title: 'Pacing session complete',
@@ -166,7 +173,12 @@ export function ResultScreen({
   }
   resultMetrics.push({
     value: formatDuration(result.elapsedMs),
-    label: isReadingResult(result) ? 'Reading time' : 'Session time',
+    label:
+      activityType === 'paced-reading'
+        ? 'Active guide time'
+        : isReadingResult(result)
+          ? 'Reading time'
+          : 'Session time',
   });
 
   return (

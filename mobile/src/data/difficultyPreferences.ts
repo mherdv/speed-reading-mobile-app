@@ -23,6 +23,7 @@ const MANUAL_ONLY_GAME_IDS = new Set([
 
 const ADAPTIVE_DEFAULT_GAME_IDS = new Set([
   'RepeatedReading',
+  'WpmTest',
   'MainIdeaSprint',
   'StructureScan',
   'ComprehensionTest',

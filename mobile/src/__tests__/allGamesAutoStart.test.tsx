@@ -13,6 +13,9 @@ import TextSearch from '../games/TextSearch/TextSearch';
 import EyeMovementTraining from '../games/EyeMovementTraining/EyeMovementTraining';
 import VisualSpanExpansion from '../games/VisualSpanExpansion/VisualSpanExpansion';
 import FlashReading from '../games/FlashReading/FlashReading';
+import WordsRecall from '../games/WordsRecall/WordsRecall';
+import SentenceRecall from '../games/SentenceRecall/SentenceRecall';
+import WpmTest from '../games/WpmTest/WpmTest';
 import ComprehensionTest from '../games/ComprehensionTest/ComprehensionTest';
 import MemoryRecall from '../games/MemoryRecall/MemoryRecall';
 import NumberRecognition from '../games/NumberRecognition/NumberRecognition';
@@ -62,6 +65,15 @@ describe('All Games - AutoStart Functionality', () => {
       await waitForAutoStart();
       expect(queryByTestId('start-button')).toBeNull();
       expect(getByTestId('repeated-passage')).toBeTruthy();
+    });
+  });
+
+  describe('WpmTest', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(<WpmTest autoStart />);
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('wpm-reading')).toBeTruthy();
     });
   });
 
@@ -164,6 +176,28 @@ describe('All Games - AutoStart Functionality', () => {
       const { queryByTestId } = render(<FlashReading autoStart={true} />);
       await waitForAutoStart();
       expect(queryByTestId('start-button')).toBeNull();
+    });
+  });
+
+  describe('WordsRecall', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <WordsRecall autoStart prompts={['quiet focus']} />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('recall-display')).toBeTruthy();
+    });
+  });
+
+  describe('SentenceRecall', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <SentenceRecall autoStart prompts={['Readers remember useful ideas.']} />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('recall-display')).toBeTruthy();
     });
   });
 
@@ -301,10 +335,11 @@ describe('All Games - AutoStart Functionality', () => {
 
   describe('NumberSearch', () => {
     it('auto-starts when autoStart prop is true', async () => {
-      const { queryByTestId, getByTestId } = render(<NumberSearch autoStart={true} />);
+      const { queryByTestId, getByTestId } = render(
+        <NumberSearch autoStart={true} previewMs={10} />
+      );
       await waitForAutoStart();
       expect(queryByTestId('start-button')).toBeNull();
-      // NumberSearch uses cell-{row}-{col} pattern
       expect(getByTestId('cell-0-0')).toBeTruthy();
     });
   });
@@ -314,7 +349,7 @@ describe('All Games - AutoStart Functionality', () => {
       const { queryByTestId, getByTestId } = render(<EvenNumbers autoStart={true} durationMs={1000} />);
       await waitForAutoStart();
       expect(queryByTestId('start-button')).toBeNull();
-      expect(getByTestId('current-number')).toBeTruthy();
+      expect(getByTestId('even-numbers-grid')).toBeTruthy();
     });
   });
 });

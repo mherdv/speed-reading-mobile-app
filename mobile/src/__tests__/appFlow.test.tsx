@@ -57,7 +57,7 @@ describe('real app navigation flows', () => {
       expect(getByText('Welcome back')).toBeTruthy();
     });
     expect(getByTestId('open-game-MainIdeaSprint')).toBeTruthy();
-    expect(getByText('28 exercises')).toBeTruthy();
+    expect(getByText('31 exercises')).toBeTruthy();
     expect(queryByTestId('open-training-library')).toBeNull();
   });
 

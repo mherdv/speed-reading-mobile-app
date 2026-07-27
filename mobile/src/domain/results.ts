@@ -7,7 +7,7 @@ export type ResultMetric = {
   value: number;
   label:
     | 'WPM'
-    | 'Paced WPM'
+    | 'Guided pace'
     | 'Score'
     | 'Accuracy'
     | 'Sec break'
@@ -75,8 +75,29 @@ export function isMeasuredReadingResult(result: AttemptResult): boolean {
   return result.sampleId !== 'PowerReader';
 }
 
+function getInferredActivityType(result: AttemptResult): string {
+  return (
+    optionalDetailString(result.details, 'activityType') ??
+    (result.sampleId === 'PowerReader'
+      ? 'paced-reading'
+      : isMeasuredReadingResult(result)
+        ? 'measured-reading'
+        : 'legacy')
+  );
+}
+
 export function getResultMetric(result: AttemptResult): ResultMetric {
-  const activityType = result.details?.activityType;
+  const activityType = getInferredActivityType(result);
+  if (activityType === 'paced-reading') {
+    const targetWpm = result.details?.targetWpm;
+    const guide =
+      typeof targetWpm === 'number' && Number.isFinite(targetWpm)
+        ? targetWpm
+        : result.wpm > 0
+          ? result.wpm
+          : result.score ?? 0;
+    return { value: guide, label: 'Guided pace' };
+  }
   if (activityType === 'evidence-hunt') {
     const value = result.details?.answerAccuracy;
     if (typeof value === 'number') {
@@ -94,12 +115,6 @@ export function getResultMetric(result: AttemptResult): ResultMetric {
     typeof result.details.breakSeconds === 'number'
   ) {
     return { value: result.details.breakSeconds, label: 'Sec break' };
-  }
-  if (
-    result.details?.activityType === 'paced-reading' &&
-    isReadingResult(result)
-  ) {
-    return { value: result.wpm, label: 'Paced WPM' };
   }
   if (isReadingResult(result)) {
     return { value: result.wpm, label: 'WPM' };
@@ -141,9 +156,7 @@ export function getResultComparisonKeyForMetric(
   result: AttemptResult,
   metric: ResultMetric
 ): string {
-  const activity =
-    optionalDetailString(result.details, 'activityType') ??
-    (isMeasuredReadingResult(result) ? 'measured-reading' : 'legacy');
+  const activity = getInferredActivityType(result);
   const difficulty = optionalDetailString(result.details, 'difficulty');
   const comparisonBand =
     optionalDetailString(result.details, 'comparisonBand') ??
@@ -166,9 +179,7 @@ function optionalDetailString(
 
 export function getResultComparison(result: AttemptResult): ResultComparison {
   const metric = getResultMetric(result);
-  const activity =
-    optionalDetailString(result.details, 'activityType') ??
-    (isMeasuredReadingResult(result) ? 'measured-reading' : 'legacy');
+  const activity = getInferredActivityType(result);
   const difficulty = optionalDetailString(result.details, 'difficulty');
   const content =
     optionalDetailString(result.details, 'contentId') ??

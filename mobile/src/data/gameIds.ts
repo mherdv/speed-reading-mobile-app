@@ -1,11 +1,14 @@
 export const GAME_IDS = [
   'RepeatedReading',
+  'WpmTest',
   'MainIdeaSprint',
   'StructureScan',
   'EvidenceHunt',
   'ContextBuilder',
   'PowerReader',
   'FlashReading',
+  'WordsRecall',
+  'SentenceRecall',
   'ComprehensionTest',
   'SchulteNumbers',
   'SchulteLetters',
@@ -33,6 +36,7 @@ export type GameId = typeof GAME_IDS[number];
 
 export const CORE_GAME_IDS = [
   'RepeatedReading',
+  'WpmTest',
   'MainIdeaSprint',
   'StructureScan',
   'EvidenceHunt',

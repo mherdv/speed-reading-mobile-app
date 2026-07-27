@@ -13,6 +13,9 @@ Scope: mobile speed-reading practice, comprehension, scanning, recognition, and 
 | V4 | Complete | Added shuffled word decks, 240-session phrase template pools, adjustable/auto-stepping WPM, Last Word serial recall, persistent favorites/recent games, and an icon-first Home carousel. |
 | V5 | Complete | Removed category segregation and the separate Training Library; Home now presents the complete searchable 28-game catalog beneath the one-card reading-first plan, with Favorites as the only separate game collection. |
 | V6 | Complete | Made all flash-recognition sessions open-ended with a voluntary finish, a three-consecutive-miss stop rule, and upward-only WPM steps after 4 correct recalls or 8 correct recognition choices. Protected the game header so description cards cannot cover Back. |
+| V7 | Complete | Re-audited the requested competitor-style drills, corrected durable-name collisions, specified preview-before-search and multi-select scanning rules, separated one-word/two-word/sentence recall, and documented exact content-pool sizes and replay limits. |
+| V8 | Complete | Re-reviewed the report against the implementation, added a current 31-exercise source-of-truth inventory, made guided versus measured WPM explicit, documented Power Reader’s three modes and offline boundary, and corrected obsolete rules for Comprehension, Number Search, Opposites, Letter Mixup, Word Pair Scan, and Even Numbers. |
+| V9 | Complete | Completed two reviewer–implementer correction cycles, closed result-integrity and double-tap exploits, replaced overlapping hit areas with real phone-size targets, verified all 31 game lifecycles, and reran the full release checks plus live 320 px browser QA. |
 
 ## Executive decision
 
@@ -95,9 +98,10 @@ This is a comprehensive **actionable** catalog for the current product, not a cl
 | Exercise | Status | Tier | Core rule |
 | --- | --- | --- | --- |
 | Baseline measured read | Live | A | Read a passage once, stop timing before questions, then report WPM with comprehension |
+| WPM Test | Live | A | Read connected text, stop timing before questions, then report actual word count, measured WPM, comprehension, and quality flags |
 | Repeated Reading | Live | A | Read the same passage twice and compare pace only after a comprehension check |
 | Main Idea | Live | A | Read, hide the passage, retrieve the point, then choose and explain the best main idea |
-| Comprehension | Live | A | Read connected text and answer literal/main-idea questions |
+| Comprehension | Live | A | Follow an adjustable paced highlight, pause or finish safely, then answer passage-dependent questions |
 | Purposeful Text Search | Live | A | Find every requested term in connected text |
 | Structure Scan | Live | A | Preview a structured passage and choose the section most likely to answer a stated reading goal |
 | Pace Ladder | Next | A | Read equivalent passages at gradually higher target paces; keep only the fastest pace that preserves comprehension |
@@ -118,8 +122,10 @@ This is a comprehensive **actionable** catalog for the current product, not a cl
 
 | Exercise | Status | Tier | Core rule |
 | --- | --- | --- | --- |
-| Power Reader / guided highlight | Live | B | Follow highlighted chunks through real text; pause or adjust pace; do not call its configured rate measured WPM |
+| Power Reader | Live | B | Use Flow, Focus line, or RSVP with built-in or pasted text; pause or adjust pace; do not call its configured rate measured WPM |
 | Flash Recall | Live | C | View one word briefly, type it, and track recognition accuracy |
+| Words Recall | Live | B | View exactly two words, hide them, and type them back in order |
+| Sentence Recall | Live | B | View a natural sentence, hide it, and reconstruct its words in order |
 | Word Flash | Live | B | View a word, then choose it from distractors |
 | Phrase Flash | Live | B | View a phrase, then choose it from distractors |
 | Last Word | Live | B | Follow a paced word stream, then identify the final item |
@@ -139,11 +145,13 @@ This is a comprehensive **actionable** catalog for the current product, not a cl
 | Schulte Letters | Live | C | Tap shuffled letters from A upward |
 | Schulte Mix | Live | C | Alternate number and letter targets in order |
 | Pattern Scan | Live | C | Find target patterns among distractors |
-| Letter Hunt | Live | B | Select all copies of a target letter in a grid |
+| Letter Jumble | Live | B | Select all copies of a target letter in a grid |
 | Number Search | Live | C | Locate a target number in a changing grid |
 | Number Hunt | Live | C | Decide whether the current number matches the target |
 | Symbol Hunt | Live | C | Decide whether the current symbol matches the target |
 | Odd Word | Live | B | Identify the word that differs from similar words |
+| Word Pair Scan | Live | B | Select every mismatching word pair; a matching-pair tap immediately costs time |
+| Even Numbers | Live | C | Scan a number grid by rows or columns and select every even value |
 | Guided Row Scan | Later | C | Sweep rows left-to-right and reverse with accuracy targets |
 | Multi-Target Search | Later | B | Hold two target words and find both in connected text |
 | Distractor Resistance | Later | B | Find a meaningful target among visually similar nonwords |
@@ -152,11 +160,10 @@ This is a comprehensive **actionable** catalog for the current product, not a cl
 
 | Exercise | Status | Tier | Core rule |
 | --- | --- | --- | --- |
-| Word Pairs | Live | B | Match a word to its opposite/related pair |
-| Word Jumble | Live | B | Unscramble letters into a word |
+| Opposites | Live | B | Match a word to its reviewed opposite among plausible alternatives |
+| Letter Mixup | Live | B | Correct a real word whose two nearby letters were transposed |
 | Memory Recall | Live | B | Recall digit sequences that grow after success |
 | Visual Span | Live | C | Recall briefly shown items around a fixation point |
-| Even or Odd | Live | C | Classify displayed numbers quickly |
 | Vocabulary in Context | Next | A/B | Infer a word’s meaning from a sentence, then reveal context evidence |
 | Morphology Builder | Next | B | Combine roots, prefixes, and suffixes to decode unfamiliar words |
 | Collocation Match | Later | B | Match words that naturally occur together |
@@ -197,10 +204,14 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 ### 3. Power Reader
 
 - Choose the built-in article, custom text, or a public-domain book.
+- Choose Flow, Focus line, or centered RSVP presentation.
 - Follow the highlighted phrase; pause, resume, or adjust the guide speed.
 - Finish when the text is complete.
-- Result: configured pacing rate, words shown, article, and time; it is not a comprehension-verified WPM result.
+- Result: configured target, unique words/chunks/pages actually presented, article, and active guide time. Stored measured WPM is zero.
+- Progression integrity: the session is successful for mastery only when at least 90% of the document’s unique words were actually presented. Page-skipping still produces an honest result but cannot award successful progression.
+- Legacy history: older `PowerReader` records without an activity type are displayed as Guided pace, using their old WPM or score as the configured guide value rather than relabeling them measured WPM.
 - Difficulty: approximately 150 WPM/2-word chunks, 300 WPM/3-word chunks, or 500 WPM/5-word chunks.
+- Offline boundary: the built-in article and pasted text are local; browsing or reopening Project Gutenberg books requires a connection.
 
 ### 4. Flash Recall
 
@@ -213,11 +224,11 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 
 ### 5. Comprehension
 
-- Read the passage without a forced pace.
-- Move to the questions when ready.
+- Follow the moving chunk highlight at the displayed target pace.
+- Pause, resume, or finish the reading phase safely when ready.
 - Choose an answer and review feedback.
-- Result: percentage correct and session time.
-- Difficulty: 1, 2, or 3 questions.
+- Result: percentage correct, session time, and configured target pace; the target is not reported as measured WPM.
+- Difficulty: 180/260/340 WPM, 3/4/5-word chunks, and 1/2/3 questions.
 
 ### 6. Schulte Numbers
 
@@ -289,10 +300,10 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Result: actual attempts, final-word recall accuracy, ending failure streak, sequence length, initial/final WPM, and pace-change count.
 - Difficulty: 4 words at 180 WPM, 6 at 280 WPM, or 8 at 380 WPM.
 
-### 14. Word Pairs
+### 14. Opposites
 
 - Read the prompt word.
-- Choose its opposite or paired word.
+- Choose its reviewed opposite from the available alternatives.
 - Continue until time expires.
 - Result: matches and accuracy.
 - Difficulty: 45, 30, or 20 seconds.
@@ -303,6 +314,7 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Find every exact occurrence in the connected paragraph.
 - A correct tap marks the occurrence; wrong taps reduce accuracy.
 - Result: found count, errors, completion time, and accuracy.
+- Each word is a rendered, non-overlapping control at least 44 points high.
 - Difficulty: unlimited with visible count; 30 seconds; or 20 seconds with the total target count hidden.
 
 ### 16. Word Search
@@ -312,17 +324,18 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Words may run horizontally, vertically, backward, or diagonally according to difficulty.
 - Result: words found, incorrect traces/taps, speed, and accuracy.
 - Targets come from large shuffled difficulty pools and do not immediately repeat.
-- Difficulty: 6×6/common words/forward directions; 7×7/larger pool/orthogonal directions; or 9×9/longest pool/all directions.
+- Difficulty: 4×4/common four-letter words/forward directions/90 seconds; 5×5/words up to five letters/orthogonal directions/60 seconds; or 6×6/words up to six letters/all directions/45 seconds. Every rendered cell remains at least 44×44 points without overlapping hit areas.
 
 ### 17. Number Search
 
-- Find the displayed target number in the grid.
-- Tap it to generate the next target/grid; wrong taps count as attempts.
+- Memorize the target during a brief preview.
+- Find it only after the target hides and the grid appears.
+- Tap it to generate the next target preview/grid; wrong taps count as attempts.
 - Continue until time expires.
 - Result: correct finds and accuracy.
-- Difficulty: 4×4/45 s, 5×5/35 s, or 6×6/25 s.
+- Difficulty: 4×4/range 0–49/1.2 s preview/45 s; 5×5/0–199/0.9 s/35 s; or 6×6/0–999/0.65 s/25 s.
 
-### 18. Letter Hunt
+### 18. Letter Jumble
 
 - Find every copy of the target letter.
 - Select cells and submit the round.
@@ -346,13 +359,13 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Result: decisions, correct answers, and accuracy.
 - Difficulty: 30, 20, or 12 seconds.
 
-### 21. Word Jumble
+### 21. Letter Mixup
 
-- Unscramble the displayed letters.
-- Type the word or request the available hint.
+- Inspect a valid English word with exactly two nearby letters transposed.
+- Type the corrected word or request its part-of-speech and definition hint.
 - Continue until time expires.
 - Result: solved words and accuracy.
-- Difficulty: chooses easy, medium, or hard vocabulary lists.
+- Difficulty: common 4–6-letter edge transpositions; 6–9-letter internal transpositions; or subtle internal transpositions in 8+-letter words.
 
 ### 22. Odd Word
 
@@ -362,13 +375,12 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Result: correct rounds, selections, and accuracy.
 - Difficulty: 4 cards/35 s, 6/30 s, or 8/25 s.
 
-### 23. Even or Odd
+### 23. Even Numbers
 
-- Read the displayed number.
-- Tap Even or Odd.
-- The number changes after each decision.
-- Result: correct classifications and accuracy.
-- Difficulty: numbers up to 20/30 s, 99/20 s, or 999/15 s.
+- Scan the grid systematically by rows or columns.
+- Select every even number, then check the whole grid.
+- Result: correct selections, selected odd numbers, missed evens, and accuracy.
+- Difficulty: 4×4/range 0–40/45 s; 5×5/0–120/35 s; or 6×6/0–500/25 s.
 
 ### 24. Memory Recall
 
@@ -390,6 +402,48 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Review the correct heading and evidence before continuing.
 - Result: routes found, accuracy, and average decision time.
 - Difficulty: 3 untimed sections/3 rounds; 4 sections with a 35-second preview/4 rounds; or 5 sections with a 25-second preview/5 rounds.
+
+### 26. WPM Test
+
+- Start the timer only when the connected passage appears.
+- Tap Done before answering; reading time stops before the comprehension phase.
+- Result: actual passage word count, measured WPM, comprehension correct/total, and measurement-quality flags.
+- Difficulty: 1, 2, or 3 passage-dependent questions using difficulty-specific passage pools.
+
+### 27. Words Recall
+
+- View exactly two English words and type both back in the same order after they hide.
+- Case, punctuation, and repeated whitespace do not affect scoring.
+- Result: correct prompts, eight actual attempts, and accuracy.
+- Difficulty: common/intermediate/advanced vocabulary shown for 1.6/1.1/0.7 seconds. Each level has 120 prompt combinations and avoids replacement until its deck cycles.
+
+### 28. Sentence Recall
+
+- Read one natural English sentence and reconstruct it after it hides.
+- Preserve word identity and order; case, punctuation, and repeated whitespace do not affect scoring.
+- Result: correct reconstructions, eight actual attempts, and accuracy.
+- Difficulty: short/simple, longer, or complex sentences shown for 2.2/1.6/1.1 seconds. The generator validates at least 100 combinations per level.
+
+### 29. Evidence Hunt
+
+- Read an information question and scan a connected passage.
+- Select the required evidence sentence or sentences, then answer the question.
+- Result: answer accuracy, evidence accuracy, wrong evidence selections, and locate time remain separate.
+- Difficulty: direct single-sentence evidence; paraphrased evidence; or a bounded inference requiring outcome and limitation evidence.
+
+### 30. Context Builder
+
+- Read a paragraph with a marked target word.
+- Choose its meaning, then identify the context clue supporting that inference.
+- Result: meaning accuracy, clue accuracy, attempts, and optional confidence remain separate.
+- Difficulty: direct definition; close same-part-of-speech choices with contrast/consequence; or less-frequent vocabulary requiring two context spans.
+
+### 31. Word Pair Scan
+
+- Scan every same-or-different word pair and select each mismatching pair.
+- A tap on a matching pair immediately adds time and cannot be deselected without consequence.
+- Result: correct mismatches, missed mismatches, wrong taps, penalty time, and accuracy.
+- Difficulty: 4/6/8 cards, 35/30/25-second base time, and 1.5/2/2.5-second wrong-tap penalties.
 
 ## Review 1: defects found and corrections
 
@@ -507,9 +561,74 @@ Practice deciding **where to read next** from text structure. The task does not 
 - Whether optional lab users later improve measured reading relative to their own baseline; no transfer is assumed.
 - Search success in the library and time from opening the library to starting a chosen drill.
 
+## V8 current implementation audit
+
+This section is the authoritative snapshot for the current source. Earlier revision notes remain as history.
+
+### Availability and offline boundary
+
+- The registry contains **31 exercises**, and all 31 are available in the searchable Home collection. There is no subscription, checkout, or paid-feature gate in the current source.
+- The exercise engines, authored passages, vocabulary pools, built-in Power Reader article, and pasted-text workflow are local and usable without requesting network content.
+- Project Gutenberg discovery/book retrieval and Power Reader translation are optional network features. A recent Gutenberg title is metadata, not a falsely labeled offline copy.
+- Content in the implemented recall, vocabulary, and search pools is English-only; the interface must not imply multilingual exercise content.
+
+### Exact replay inventory and known cycle points
+
+| Content set | Easy | Medium | Hard | Replay behavior |
+| --- | ---: | ---: | ---: | --- |
+| Letter Mixup | 15 | 15 | 15 | Shuffled without replacement; a pool must cycle after 15 |
+| Opposites | 12 | 12 | 12 | Shuffled without replacement; a pool must cycle after 12 |
+| Text Search | 6 | 6 | 6 | No immediate passage repeat; a pool cycles after 6 |
+| Words Recall | 120 | 120 | 120 | Exact two-word prompts; shuffled without replacement |
+| Sentence Recall | ≥100 generated | ≥100 generated | ≥100 generated | Validator enforces the minimum and avoids immediate reuse |
+| WPM Test | 9 | 3 | 3 | No immediate passage repeat; medium/hard cycle after 3 |
+| Paced Comprehension | 9 | 3 | 3 | No immediate passage repeat; medium/hard cycle after 3 |
+
+These are honest limits, not “unlimited content” claims. The next content investment should expand the medium/hard measured-reading and comprehension pools before adding more generic reaction games.
+
+### Competitor parity and remaining delta
+
+Implemented now:
+
+- an actual timed WPM test whose timer stops before questions;
+- comprehension beside speed and visible measurement-quality flags;
+- guided Flow, Focus line, and centered RSVP modes;
+- adjustable guide speed, difficulty, and chunk size by level;
+- local pasted text, a built-in offline article, and optional Project Gutenberg discovery;
+- repeated reading, purposeful search, evidence, structure, context, recall, Schulte number/letter/mix, number preview search, letter-grid search, row/column even-number scanning, and word-pair discrimination;
+- task-specific results that keep configured pacing separate from measured connected-text WPM.
+
+Highest-value gaps:
+
+1. Import EPUB/PDF/web articles only after parsing, licensing, privacy, and offline-storage rules are specified.
+2. Add typography controls (font family, width, size, line height, spacing, theme, and reduced motion) across every connected-reading surface.
+3. Expand equivalent passage/question banks and version their readability before using personal pace trends for stronger recommendations.
+4. Add a durable offline book cache with explicit storage controls; do not relabel recent online metadata as downloaded content.
+5. Add goal-specific connected-reading drills—Gist–Detail Switch, Pace Ladder, Summary Recall, and Inference Bridge—before adding more number/symbol reaction variants.
+6. Validate narrow-screen, keyboard, focus, screen-reader, and reduced-motion behavior with device-level tests.
+
+### Report review pass 1
+
+The first re-read found naming collisions and obsolete rules. Durable IDs were retained while visible names were corrected: `WordMismatchGrid` is **Word Pair Scan**, `WordPairs` is **Opposites**, `LetterRecognition` is **Letter Jumble**, and `LetterJumble` is **Letter Mixup**. Number Search now explicitly previews then hides its target; Even Numbers is a whole-grid multi-select task; and wrong Word Pair Scan choices have an immediate penalty.
+
+### Report review pass 2
+
+The second re-read found two remaining claim risks: guided WPM could still be mistaken for measured WPM, and recent online books could be mistaken for an offline cache. The implementation/report now label Power Reader and paced Comprehension as configured pacing, reserve measured WPM for connected-text timing plus questions, and state the network boundary next to Gutenberg content. The pass also added exact pool counts and cycle points so replay limits are visible instead of hidden.
+
+### V9 final validation and reviewer signoff
+
+- The full strict TypeScript check passed.
+- The full Jest run passed: **65 suites and 416 tests**, including all-game lifecycle, auto-start, replay, difficulty, result-semantics, vocabulary-pool, accessibility, and narrow-layout coverage.
+- Expo Doctor passed **18/18** checks.
+- The production web export passed with 570 modules and a roughly 1.5 MB JavaScript bundle; the exported PWA manifest and icons were present.
+- Live browser QA passed at 320 px and 390 px widths: Home had no horizontal overflow, the description panel scrolled independently beneath a visible Back control, WPM Test started, pasted local text opened in Power Reader, and Word Search rendered non-overlapping 48 × 48 px cells.
+- The browser console had no runtime errors. React Native Web still emits its existing shadow-style deprecation warning.
+- Jest remains non-console-clean because asynchronous React tests emit `act(...)` warnings. They did not fail any assertion, but making unexpected `console.error` fail the suite remains test-hygiene work.
+- The final read-only reviewer pass found no remaining blocker or P1 issue in the changed exercise, result-integrity, touch-target, vocabulary, or Power Reader scope.
+
 # Research-cycle platform update
 
-The live catalog now contains 28 exercises. Two connected-reading exercises
+The live catalog now contains 31 exercises. Two connected-reading exercises
 were added because they train skills closer to real reading than another
 symbol-speed drill:
 
@@ -569,7 +688,7 @@ and skipped rounds are reported as omissions.
   choice. Home shows one Today card at a time with previous/next controls. The reading baseline is skippable and requires three different valid
   passages before showing a personal median-WPM estimate.
 - Home exercise discovery is icon-first at three items per row with a compact
-  level progress bar. All 28 exercises now share one searchable Home collection
+  level progress bar. All 31 exercises now share one searchable Home collection
   without category sections or a separate library route. Favorites persist
   locally as the only separate game collection.
 - Shared exercise description and difficulty panels scroll independently on
@@ -583,3 +702,9 @@ and skipped rounds are reported as omissions.
   enter personal estimates or trends.
 - The app shell now supports compact, medium, and expanded layouts, while
   reading text remains in a narrow 700 px column.
+
+## Final focused reviewer validation
+
+- Strict TypeScript typecheck passed.
+- Seven focused Jest suites passed with **63/63 tests** covering legacy/result semantics, Power Reader completion-gated progression and truthful presentation counts, 4×4/5×5/6×6 Word Search layouts, Text Search touch targets, Word Pair Scan penalty announcements, difficulty metadata, and contrast usage.
+- The focused run still emits existing non-failing React test `act(...)` warnings from asynchronous stored-progress updates. Those warnings were not treated as product failures and were intentionally left outside this correction cycle.

@@ -20,13 +20,13 @@ describe('meaningful difficulty contracts', () => {
     ]);
   });
 
-  it('changes comprehension reasoning while keeping two questions per level', () => {
+  it('changes comprehension reasoning, pace, and question depth by level', () => {
     const easy = getComprehensionChallenge('easy');
     const medium = getComprehensionChallenge('medium');
     const hard = getComprehensionChallenge('hard');
 
     expect([easy.questions.length, medium.questions.length, hard.questions.length]).toEqual([
-      2, 2, 2,
+      1, 2, 3,
     ]);
     expect([easy.challenge, medium.challenge, hard.challenge]).toEqual([
       'explicit-detail',
@@ -34,6 +34,9 @@ describe('meaningful difficulty contracts', () => {
       'inference',
     ]);
     expect(new Set([easy.id, medium.id, hard.id])).toHaveProperty('size', 3);
+    expect([easy.targetWpm, medium.targetWpm, hard.targetWpm]).toEqual([
+      180, 260, 340,
+    ]);
   });
 
   it('changes Word Pairs vocabulary and distractor similarity, not duration', () => {

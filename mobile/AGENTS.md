@@ -35,6 +35,15 @@
 - Store truthful score/accuracy values; do not derive placeholder percentages.
 - Curated exercises should practice a reading behavior directly. Describe visual or reaction drills as task-specific warm-ups, not proven reading-transfer methods.
 
+## Authored content contract
+
+- Use original, licensed, or public-domain material. Do not copy a competitor's proprietary passages, questions, word lists, or answer sets.
+- Keep authored pool sizes and replay limits in executable validators. A fixed count stated in the catalog or report must be enforced by a test.
+- Require stable unique IDs, a present correct answer, unique answer options, and computed rather than hand-maintained word counts for measured passages.
+- Shuffle without replacement when a game promises a deck, and avoid an immediate repeat when the pool permits it.
+- Label the implemented exercise language honestly. Network translation or book retrieval must not be presented as bundled multilingual or offline content.
+- When adding or changing a content pool, update its validator test, catalog description, and the exact replay inventory in `SPEED_READING_PLATFORM_REPORT.md`.
+
 ## Exercise catalog compatibility
 
 - `src/data/gameIds.ts` keeps every durable exercise ID used by saved results.

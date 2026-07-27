@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import ComprehensionTest from './ComprehensionTest';
+import { validateComprehensionPassages } from '../../data/comprehensionPassages';
 
 describe('ComprehensionTest', () => {
   beforeEach(() => {
@@ -27,6 +28,27 @@ describe('ComprehensionTest', () => {
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('passage')).toHaveTextContent('Test passage content');
+    expect(getByTestId('paced-chunk-0')).toBeTruthy();
+  });
+
+  it('can pause and safely finish the configured pacing guide', () => {
+    const view = render(
+      <ComprehensionTest
+        passage="One two three four five six."
+        questions={[{ question: 'Q?', options: ['A'], correctIndex: 0 }]}
+        targetWpm={300}
+        chunkSize={2}
+      />
+    );
+    fireEvent.press(view.getByTestId('start-button'));
+    fireEvent.press(view.getByTestId('toggle-pacing'));
+    expect(view.getByText('Resume guide')).toBeTruthy();
+    fireEvent.press(view.getByTestId('done-reading'));
+    expect(view.getByTestId('question-text')).toBeTruthy();
+  });
+
+  it('provides at least three reviewed passages with 1, 2, and 3 questions', () => {
+    expect(validateComprehensionPassages()).toEqual([]);
   });
 
   it('transitions to questions after done reading and allows answering', () => {
@@ -74,9 +96,13 @@ describe('ComprehensionTest', () => {
         score: 100,
         accuracy: 1,
         details: expect.objectContaining({
-          activityType: 'comprehension',
+          activityType: 'paced-comprehension',
           questionsTotal: 1,
           correctCount: 1,
+          targetWpm: 260,
+          configuredPaceOnly: true,
+          wordCount: 0,
+          wpm: 0,
         }),
       })
     );

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
@@ -80,11 +80,11 @@ const SIMILAR_PAIRS: [string, string][] = [
 function getDifficultyConfig(difficulty: Difficulty) {
   switch (difficulty) {
     case 'easy':
-      return { cardCount: 4, durationMs: 35000, columns: 2 };
+      return { cardCount: 4, durationMs: 35000, columns: 2, penaltyMs: 1500 };
     case 'medium':
-      return { cardCount: 6, durationMs: 30000, columns: 2 };
+      return { cardCount: 6, durationMs: 30000, columns: 2, penaltyMs: 2000 };
     case 'hard':
-      return { cardCount: 8, durationMs: 25000, columns: 2 };
+      return { cardCount: 8, durationMs: 25000, columns: 2, penaltyMs: 2500 };
   }
 }
 
@@ -137,24 +137,12 @@ function buildRound(cardCount: number): { cards: WordCard[]; differentIds: Set<n
   return { cards: shuffleArray(cards), differentIds };
 }
 
-// Calculate card width - always 2 columns with ~50% width each
-function getCardWidth(screenWidth: number) {
-  // Container has padding: 12 on each side = 24 total
-  // We want 2 cards with a small gap between them
-  const containerPadding = 24;
-  const gapBetweenCards = 8;
-  const availableWidth = screenWidth - containerPadding;
-  // Each card gets (available - gap) / 2
-  return Math.floor((availableWidth - gapBetweenCards) / 2);
-}
-
 export default function WordMismatchGrid({
   durationMs: durationMsProp,
   difficulty = 'medium',
   autoStart = false,
   onReportResult,
 }: Props) {
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [phase, setPhase] = useState<Phase>('idle');
   const {
     gameProgress,
@@ -167,6 +155,7 @@ export default function WordMismatchGrid({
   const [score, setScore] = useState(0);
   const [rounds, setRounds] = useState(0);
   const [timeLeftMs, setTimeLeftMs] = useState(0);
+  const [penalties, setPenalties] = useState(0);
   const [selectedCards, setSelectedCards] = useState<Set<number>>(new Set());
   const [round, setRound] = useState<{ cards: WordCard[]; differentIds: Set<number> }>({ cards: [], differentIds: new Set() });
   
@@ -174,10 +163,11 @@ export default function WordMismatchGrid({
   const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const roundsRef = useRef(0);
+  const correctTapRef = useRef(0);
+  const wrongTapRef = useRef(0);
+  const missedRef = useRef(0);
+  const penaltyMsRef = useRef(0);
   
-  // Calculate card width dynamically - always 2 columns
-  const cardWidth = getCardWidth(screenWidth);
-
   useAutoStart(autoStart, phase, progressLoaded, start);
 
   const currentConfig = getDifficultyConfig(selectedDifficulty);
@@ -189,11 +179,12 @@ export default function WordMismatchGrid({
     if (phase !== 'running') return;
     if (startedAtMs === null) return;
 
-    const endAtMs = startedAtMs + currentDurationMs;
-
     const interval = setInterval(() => {
       const now = Date.now();
-      const left = Math.max(0, endAtMs - now);
+      const left = Math.max(
+        0,
+        startedAtMs + currentDurationMs - penaltyMsRef.current - now
+      );
       setTimeLeftMs(left);
 
       if (left <= 0) {
@@ -202,12 +193,19 @@ export default function WordMismatchGrid({
       }
     }, 100);
 
-    return () => {
-      cancelledRef.current = true;
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, startedAtMs, currentDurationMs]);
+
+  useEffect(
+    () => () => {
+      cancelledRef.current = true;
+      clearTrackedTimeouts();
+    },
+    // Unmount-only cleanup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   function start() {
     clearTrackedTimeouts();
@@ -217,9 +215,14 @@ export default function WordMismatchGrid({
     reportedRef.current = false;
     scoreRef.current = 0;
     roundsRef.current = 0;
+    correctTapRef.current = 0;
+    wrongTapRef.current = 0;
+    missedRef.current = 0;
+    penaltyMsRef.current = 0;
     // Reset all state
     setScore(0);
     setRounds(0);
+    setPenalties(0);
     setRoundIndex(0);
     setTimeLeftMs(currentDurationMs);
     setStartedAtMs(Date.now());
@@ -242,13 +245,17 @@ export default function WordMismatchGrid({
 
     const finalScore = scoreRef.current;
     const finalRounds = roundsRef.current;
-    const accuracy = finalRounds > 0 ? finalScore / (finalRounds * round.differentIds.size) : 0;
+    const evaluated =
+      correctTapRef.current + wrongTapRef.current + missedRef.current;
+    const accuracy = evaluated > 0 ? correctTapRef.current / evaluated : 0;
 
     // Save progress - success if accuracy >= 70%
     const success = accuracy >= 0.7;
-    updateProgress(GAME_ID, success, finalScore).then(({ progress }) => {
-      setGameProgress(progress);
-    });
+    updateProgress(GAME_ID, success, finalScore)
+      .then(({ progress }) => {
+        if (!cancelledRef.current) setGameProgress(progress);
+      })
+      .catch(() => undefined);
 
     onReportResult?.({
       startedAtIso,
@@ -261,6 +268,10 @@ export default function WordMismatchGrid({
         wpm: 0,
         rounds: finalRounds,
         correct: finalScore,
+        correctTaps: correctTapRef.current,
+        wrongTaps: wrongTapRef.current,
+        missedPairs: missedRef.current,
+        timePenaltyMs: penaltyMsRef.current,
         difficulty: selectedDifficulty,
         durationMs: currentDurationMs,
       },
@@ -270,13 +281,20 @@ export default function WordMismatchGrid({
 
   function onSelectCard(cardId: number) {
     if (phase !== 'running') return;
-    
-    const newSelected = new Set(selectedCards);
-    if (newSelected.has(cardId)) {
-      newSelected.delete(cardId);
-    } else {
-      newSelected.add(cardId);
+
+    if (!round.differentIds.has(cardId)) {
+      wrongTapRef.current += 1;
+      penaltyMsRef.current += currentConfig.penaltyMs;
+      setPenalties(wrongTapRef.current);
+      setTimeLeftMs((left) => Math.max(0, left - currentConfig.penaltyMs));
+      return;
     }
+
+    // A correct selection is committed for the round. Ignoring a second tap
+    // prevents answer toggling from changing the recorded decision.
+    if (selectedCards.has(cardId)) return;
+    correctTapRef.current += 1;
+    const newSelected = new Set(selectedCards).add(cardId);
     setSelectedCards(newSelected);
 
     // Auto-submit: Check if all different cards are selected with no wrong selections
@@ -312,6 +330,7 @@ export default function WordMismatchGrid({
     // Score: +1 for each correct different card selected, -1 for wrong selections
     const wrongSelections = selected.size - correctSelections;
     const missedDifferent = round.differentIds.size - correctSelections;
+    missedRef.current += missedDifferent;
     const roundScore = Math.max(0, correctSelections - wrongSelections - missedDifferent);
     
     scoreRef.current += roundScore;
@@ -330,8 +349,8 @@ export default function WordMismatchGrid({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Word Mismatch</Text>
-      <Text style={styles.subtitle}>Select all cards where words are DIFFERENT</Text>
+      <Text style={styles.title}>Word Pair Scan</Text>
+      <Text style={styles.subtitle}>Select every pair whose two words are different</Text>
 
       {phase === 'idle' && (
         <GameIdlePanel
@@ -383,19 +402,28 @@ export default function WordMismatchGrid({
           />
 
           <Text style={styles.instruction}>
-            Tap cards with DIFFERENT words ({round.differentIds.size} different)
+            Tap DIFFERENT pairs ({round.differentIds.size} total) · matching pairs cost {currentConfig.penaltyMs / 1000}s
           </Text>
+          {penalties > 0 && (
+            <Text
+              accessibilityLiveRegion="polite"
+              testID="penalty-count"
+              style={styles.penaltyText}
+            >
+              {penalties} {penalties === 1 ? 'penalty' : 'penalties'}
+            </Text>
+          )}
 
           <View style={styles.cardsGrid}>
             {round.cards.map((card) => {
               const isSelected = selectedCards.has(card.id);
               return (
                   <Pressable accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
                     key={`${roundIndex}-${card.id}`}
                     testID={`card-${card.id}`}
                     style={[
                       styles.card,
-                      { width: cardWidth },
                       isSelected && styles.cardSelected,
                     ]}
                     onPress={() => onSelectCard(card.id)}
@@ -532,15 +560,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '500',
   },
+  penaltyText: {
+    color: colors.errorForeground,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
   cardsGrid: {
-    // flexDirection: 'row',
-    display: 'flex',
     justifyContent: 'space-between',
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
   card: {
-    // width is set dynamically via inline style
+    flexBasis: '48%',
+    flexGrow: 0,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '48%',
     backgroundColor: 'white',
     borderRadius: 12,
     borderWidth: 2,
@@ -549,7 +586,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     alignItems: 'center',
     position: 'relative',
-    maxWidth: '48%',
   },
   cardSelected: {
     borderColor: colors.warningForeground,

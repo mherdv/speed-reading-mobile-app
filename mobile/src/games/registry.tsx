@@ -1,6 +1,7 @@
 import React from 'react';
 
 import RepeatedReading from './RepeatedReading/RepeatedReading';
+import WpmTest from './WpmTest/WpmTest';
 import MainIdeaSprint from './MainIdeaSprint/MainIdeaSprint';
 import StructureScan from './StructureScan/StructureScan';
 import EvidenceHunt from './EvidenceHunt/EvidenceHunt';
@@ -11,6 +12,8 @@ import TextSearch from './TextSearch/TextSearch';
 import EyeMovementTraining from './EyeMovementTraining/EyeMovementTraining';
 import VisualSpanExpansion from './VisualSpanExpansion/VisualSpanExpansion';
 import FlashReading from './FlashReading/FlashReading';
+import WordsRecall from './WordsRecall/WordsRecall';
+import SentenceRecall from './SentenceRecall/SentenceRecall';
 import ComprehensionTest from './ComprehensionTest/ComprehensionTest';
 import MemoryRecall from './MemoryRecall/MemoryRecall';
 import NumberRecognition from './NumberRecognition/NumberRecognition';
@@ -71,12 +74,15 @@ const GAME_COMPONENTS: Record<
   React.ComponentType<GameComponentProps>
 > = {
   RepeatedReading,
+  WpmTest,
   MainIdeaSprint,
   StructureScan,
   EvidenceHunt,
   ContextBuilder,
   PowerReader,
   FlashReading,
+  WordsRecall,
+  SentenceRecall,
   ComprehensionTest,
   SchulteNumbers,
   SchulteLetters,

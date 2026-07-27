@@ -7,6 +7,7 @@ import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { colors } from '../../theme/colors';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
+import { TEXT_SEARCH_VARIATIONS } from '../../data/textSearchContent';
 
 const GAME_ID = 'TextSearch';
 
@@ -31,25 +32,6 @@ type Props = {
 
 type Phase = 'idle' | 'running' | 'ended';
 
-// 15 different text variations with target words
-const TEXT_VARIATIONS: { text: string; target: string }[] = [
-  { text: 'The quick brown fox jumps over the lazy dog. The fox is very quick and agile. Dogs often chase after the fox but rarely catch it. The fox hides in the forest.', target: 'fox' },
-  { text: 'A cat sat on the mat looking at the rat. The cat was very patient. Every cat knows how to wait. The other cat watched from the window.', target: 'cat' },
-  { text: 'The dog ran through the park chasing butterflies. Every dog loves to run. The neighbor dog joined in the fun. My dog is the fastest.', target: 'dog' },
-  { text: 'The sun rose over the mountains casting golden light. The morning sun warmed the valley. By noon the sun was bright. The setting sun painted the sky.', target: 'sun' },
-  { text: 'Rain fell softly on the roof throughout the night. The rain brought fresh air. After the rain stopped flowers bloomed. Children played in the rain puddles.', target: 'rain' },
-  { text: 'The bird sang a beautiful melody from the tree. Another bird joined in harmony. The small bird flew away. A colorful bird landed on the fence.', target: 'bird' },
-  { text: 'The book on the shelf was old and dusty. I love to read a good book. The library has every book you need. My favorite book is about adventure.', target: 'book' },
-  { text: 'The tree in the garden grew tall and strong. Under the tree we had picnics. The old tree had many stories. Birds nested in the tree branches.', target: 'tree' },
-  { text: 'A fish swam in the clear blue water. The little fish was curious. Bigger fish swam nearby. We watched the fish for hours.', target: 'fish' },
-  { text: 'The road stretched far into the distance. We traveled down the long road. Every road leads somewhere new. The dusty road was quiet today.', target: 'road' },
-  { text: 'Stars appeared one by one in the night sky. Countless stars sparkled above. The brightest star guided travelers. We made wishes on falling stars.', target: 'star' },
-  { text: 'The moon shone brightly over the ocean. A full moon lit up the night. The moon reflected on the water. We gazed at the moon together.', target: 'moon' },
-  { text: 'The wind blew through the open window. A gentle wind carried autumn leaves. The strong wind bent the trees. The cold wind signaled winter.', target: 'wind' },
-  { text: 'Fire crackled in the old stone fireplace. The campfire provided warmth. Fire danced in the darkness. We gathered around the fire to share stories.', target: 'fire' },
-  { text: 'Water flowed gently down the mountain stream. Clean water filled the glass. The water was cool and refreshing. We swam in the crystal clear water.', target: 'water' },
-];
-
 function getDifficultyConfig(difficulty: Difficulty) {
   switch (difficulty) {
     case 'easy':
@@ -61,10 +43,6 @@ function getDifficultyConfig(difficulty: Difficulty) {
   }
 }
 
-function getRandomVariation(): { text: string; target: string } {
-  return TEXT_VARIATIONS[Math.floor(Math.random() * TEXT_VARIATIONS.length)];
-}
-
 export default function TextSearch({ 
   paragraph: paragraphProp, 
   targetWord: targetWordProp, 
@@ -73,10 +51,10 @@ export default function TextSearch({
   onReportResult 
 }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(difficulty);
-  const [currentVariation, setCurrentVariation] = useState(getRandomVariation);
+  const variationPool = TEXT_SEARCH_VARIATIONS[difficulty];
+  const [currentVariation, setCurrentVariation] = useState(variationPool[0]!);
   
-  const config = getDifficultyConfig(selectedDifficulty);
+  const config = getDifficultyConfig(difficulty);
   const paragraph = paragraphProp ?? currentVariation.text;
   const targetWord = targetWordProp ?? currentVariation.target;
   
@@ -94,6 +72,10 @@ export default function TextSearch({
   const cancelledRef = useRef(false);
   const foundRef = useRef<number[]>([]);
   const errorsRef = useRef(0);
+  const previousVariationIdRef = useRef('');
+  const activeTargetRef = useRef(targetWord);
+  const activeTargetCountRef = useRef(0);
+  const activeContentIdRef = useRef('custom');
 
   const targetIndices = useMemo(() => {
     return words
@@ -114,8 +96,26 @@ export default function TextSearch({
   function start() {
     cancelledRef.current = false;
     if (phase !== 'idle' && phase !== 'ended') return;
-    // Pick a new random variation each game
-    setCurrentVariation(getRandomVariation());
+    const eligible = variationPool.filter(
+      (variation) => variation.id !== previousVariationIdRef.current
+    );
+    const nextVariation =
+      eligible[Math.floor(Math.random() * eligible.length)] ??
+      variationPool[0]!;
+    previousVariationIdRef.current = nextVariation.id;
+    setCurrentVariation(nextVariation);
+    const activeParagraph = paragraphProp ?? nextVariation.text;
+    const activeTarget = targetWordProp ?? nextVariation.target;
+    activeTargetRef.current = activeTarget;
+    activeContentIdRef.current =
+      paragraphProp || targetWordProp ? 'custom' : nextVariation.id;
+    activeTargetCountRef.current = activeParagraph
+      .split(/\s+/)
+      .filter(
+        (word) =>
+          word.toLocaleLowerCase('en').replace(/[^a-z]/g, '') ===
+          activeTarget.toLocaleLowerCase('en')
+      ).length;
     reportedRef.current = false;
     foundRef.current = [];
     errorsRef.current = 0;
@@ -149,11 +149,14 @@ export default function TextSearch({
     const elapsedMs = now - startRef.current;
     const accuracy = calculateSearchAccuracy(
       foundRef.current.length,
-      targetIndices.length,
+      activeTargetCountRef.current,
       errorsRef.current
     );
     const score = Math.round(accuracy * 100);
-    const missed = Math.max(0, targetIndices.length - foundRef.current.length);
+    const missed = Math.max(
+      0,
+      activeTargetCountRef.current - foundRef.current.length
+    );
 
     setElapsed(elapsedMs);
     setPhase('ended');
@@ -166,13 +169,16 @@ export default function TextSearch({
       accuracy,
       details: {
         activityType: 'scanning',
-        targetWord,
-        totalTargets: targetIndices.length,
+        targetWord: activeTargetRef.current,
+        totalTargets: activeTargetCountRef.current,
         found: foundRef.current.length,
         errors: errorsRef.current,
         missed,
         accuracyFormula: 'found / (total targets + errors)',
-        difficulty: selectedDifficulty,
+        difficulty,
+        contentId: activeContentIdRef.current,
+        contentPoolSize: variationPool.length,
+        language: 'en',
       },
     });
   }
@@ -225,9 +231,9 @@ export default function TextSearch({
           buttonTextStyle={styles.startBtnText}
         >
           <Text style={styles.sectionLabel}>
-            {selectedDifficulty === 'easy'
+            {difficulty === 'easy'
               ? 'No time limit'
-              : selectedDifficulty === 'medium'
+              : difficulty === 'medium'
                 ? '30-second limit'
                 : '20-second limit'}
           </Text>
@@ -290,9 +296,20 @@ export default function TextSearch({
                 const isFound = found.includes(i);
                 const isFeedback = feedback === i;
                 return (
-                  <Pressable accessibilityRole="button" key={i} onPress={() => tapWord(i)}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={word}
+                    accessibilityState={{
+                      selected: isFound,
+                      disabled: isFound,
+                    }}
+                    disabled={isFound}
+                    key={i}
+                    testID={`word-${i}`}
+                    onPress={() => tapWord(i)}
+                    style={styles.wordTouch}
+                  >
                     <Text
-                      testID={`word-${i}`}
                       style={[
                         styles.word,
                         isFound && styles.wordFound,
@@ -300,7 +317,7 @@ export default function TextSearch({
                         wrongFeedback === i && styles.wordWrongFeedback,
                       ]}
                     >
-                      {word}{' '}
+                      {word}
                     </Text>
                   </Pressable>
                 );
@@ -356,7 +373,14 @@ const styles = StyleSheet.create({
   textBox: { flex: 1, backgroundColor: colors.infoSurface, borderRadius: 12, padding: 12, borderWidth: 2, borderColor: colors.focusRing },
   readingArea: { flex: 1 },
   wordWrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  word: { fontSize: 16, color: colors.infoForeground, lineHeight: 28 },
+  wordTouch: {
+    minHeight: 44,
+    justifyContent: 'center',
+    marginRight: 4,
+    marginBottom: 4,
+    paddingHorizontal: 2,
+  },
+  word: { fontSize: 16, color: colors.infoForeground, lineHeight: 24 },
   wordFound: { backgroundColor: colors.infoSurface, borderRadius: 4, color: colors.infoForeground },
   wordFeedback: { backgroundColor: colors.successSurface, color: colors.successForeground },
   wordWrongFeedback: {

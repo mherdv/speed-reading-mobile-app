@@ -121,7 +121,7 @@ describe('Home Today plan', () => {
     );
 
     await waitFor(() => {
-      expect(view.getByText('28 exercises')).toBeTruthy();
+      expect(view.getByText('31 exercises')).toBeTruthy();
     });
     expect(view.getByTestId('open-game-RepeatedReading')).toBeTruthy();
     expect(view.getByTestId('open-game-LastWordRecall')).toBeTruthy();

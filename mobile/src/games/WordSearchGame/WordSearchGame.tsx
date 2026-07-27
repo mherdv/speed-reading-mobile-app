@@ -8,6 +8,7 @@ import {
   getFlashWordPool,
   uniqueStrings,
 } from '../../data/flashPracticeContent';
+import { WORD_PAIRS } from '../../data/vocabulary';
 import { borderRadius, colors, shadows, spacing } from '../../theme/colors';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
@@ -57,11 +58,11 @@ const ALL_DIRECTIONS: readonly Direction[] = [
 function getDifficultyConfig(difficulty: Difficulty) {
   switch (difficulty) {
     case 'easy':
-      return { gridSize: 6, durationMs: 90000, directions: FORWARD_DIRECTIONS };
+      return { gridSize: 4, durationMs: 90000, directions: FORWARD_DIRECTIONS };
     case 'medium':
-      return { gridSize: 7, durationMs: 60000, directions: ORTHOGONAL_DIRECTIONS };
+      return { gridSize: 5, durationMs: 60000, directions: ORTHOGONAL_DIRECTIONS };
     case 'hard':
-      return { gridSize: 9, durationMs: 45000, directions: ALL_DIRECTIONS };
+      return { gridSize: 6, durationMs: 45000, directions: ALL_DIRECTIONS };
   }
 }
 
@@ -73,10 +74,22 @@ export function getWordSearchPool(difficulty: Difficulty): string[] {
       : difficulty === 'medium'
         ? ['easy', 'medium']
         : ['medium', 'hard'];
+  const reviewedPairWords = WORD_PAIRS.slice(
+    0,
+    difficulty === 'easy' ? 40 : difficulty === 'medium' ? 80 : undefined
+  ).flat();
   return uniqueStrings(
-    levels.flatMap((level) => getFlashWordPool(level))
+    [
+      ...reviewedPairWords,
+      ...levels.flatMap((level) => getFlashWordPool(level)),
+    ]
   )
-    .filter((word) => word.length >= 4 && word.length <= gridSize)
+    .filter(
+      (word) =>
+        /^[a-z]+$/i.test(word) &&
+        word.length >= 4 &&
+        word.length <= gridSize
+    )
     .map((word) => word.toLocaleUpperCase());
 }
 
@@ -299,10 +312,10 @@ export default function WordSearch({
     }
   }
 
-  const availableGridWidth = screenWidth - 64;
+  const availableGridWidth = screenWidth - 24;
   const availableGridHeight = screenHeight - 360;
   const cellSize = Math.max(
-    28,
+    44,
     Math.floor(
       Math.min(
         (availableGridWidth - 8) / gridSize - 2,
@@ -391,17 +404,12 @@ export default function WordSearch({
                 <View key={rowIdx} style={styles.gridRow}>
                   {row.map((letter, colIdx) => {
                     const key = `${rowIdx}-${colIdx}`;
-                    const targetIndex = gridData.wordPositions.indexOf(key);
-                    const isWordPart = targetIndex >= 0;
                     const isSelected = selectedCells.has(key);
-                    const accessibilityLabel = isWordPart
-                      ? `${letter}, target position ${targetIndex + 1}`
-                      : `${letter}, distractor`;
 
                     return (
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={accessibilityLabel}
+                        accessibilityLabel={`Row ${rowIdx + 1}, column ${colIdx + 1}, letter ${letter}`}
                         accessibilityState={{ selected: isSelected }}
                         key={key}
                         testID={`cell-${rowIdx}-${colIdx}`}
