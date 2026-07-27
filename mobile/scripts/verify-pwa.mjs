@@ -28,19 +28,26 @@ assert(
   'index.html does not link the iPhone Home Screen icon.'
 );
 assert(
-  indexHtml.includes(".register('/sw.js')"),
+  indexHtml.includes(".register('./sw.js')"),
   'index.html does not register the service worker.'
 );
 assert(manifest.name === 'SpeedRead', 'The PWA manifest has the wrong app name.');
 assert(manifest.display === 'standalone', 'The PWA must launch in standalone mode.');
-assert(manifest.start_url === '/', 'The PWA must start at the application root.');
+assert(
+  manifest.start_url === './',
+  'The PWA must start relative to its hosting scope.'
+);
+assert(
+  manifest.scope === './',
+  'The PWA scope must follow the directory where it is hosted.'
+);
 assert(
   Array.isArray(manifest.icons) && manifest.icons.length >= 2,
   'The PWA manifest must provide install icons.'
 );
 
 for (const icon of manifest.icons) {
-  await access(resolve(distDirectory, icon.src.replace(/^\//, '')));
+  await access(resolve(distDirectory, icon.src.replace(/^\.?\//, '')));
 }
 
 await access(resolve(distDirectory, 'apple-touch-icon.png'));

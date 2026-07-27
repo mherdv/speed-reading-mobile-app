@@ -15,6 +15,17 @@ npm run build:pwa
 The complete static application is written to `dist/`. It can be hosted by any
 static HTTPS host.
 
+## GitHub Pages
+
+The production site is deployed automatically from `main` to:
+
+`https://mherdv.github.io/speed-reading-mobile-app/`
+
+The deployment workflow sets `GITHUB_PAGES_BASE_URL` while exporting so Expo's
+JavaScript and asset paths include the repository subdirectory. The manifest
+and service worker use scope-relative URLs, so the same PWA build also works at
+a root domain or another HTTPS subdirectory.
+
 For a production-like check on the same Mac:
 
 ```bash
