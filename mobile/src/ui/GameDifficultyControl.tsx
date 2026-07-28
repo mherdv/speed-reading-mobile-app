@@ -19,6 +19,7 @@ type DifficultyControlValue = {
   mode: DifficultyMode;
   difficulty: Difficulty;
   adaptiveDifficulty: Difficulty;
+  adaptiveHelper: string;
   allowsAdaptive: boolean;
   options: readonly DifficultyOption[];
   onChange: (mode: DifficultyMode, difficulty: Difficulty) => void;
@@ -94,7 +95,7 @@ export function GameDifficultyControl() {
           <DifficultyButton
             selected={control.mode === 'adaptive'}
             label="Adaptive"
-            helper={`Tracks your level · currently ${control.adaptiveDifficulty}`}
+            helper={`${control.adaptiveHelper} · currently ${control.adaptiveDifficulty}`}
             testID="difficulty-choice-adaptive"
             onPress={() =>
               control.onChange('adaptive', control.adaptiveDifficulty)

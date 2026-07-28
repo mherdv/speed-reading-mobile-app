@@ -201,6 +201,7 @@ export function RootNavigator() {
             <HistoryScreen
               refreshToken={refreshToken}
               optimisticResult={route.params?.optimisticResult}
+              onDataRestored={refreshResults}
               onBack={() => navigation.goBack()}
             />
           </SafeAreaView>

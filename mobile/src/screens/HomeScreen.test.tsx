@@ -70,7 +70,7 @@ describe('Home Today plan', () => {
     });
   });
 
-  it('pins favorite games across refreshes without a separate recent section', async () => {
+  it('pins favorite games across refreshes in one favorites and recent area', async () => {
     const onOpenGame = jest.fn();
     const view = render(
       <HomeScreen
@@ -86,7 +86,7 @@ describe('Home Today plan', () => {
 
     fireEvent.press(view.getByTestId('favorite-game-LastWordRecall'));
     await waitFor(() => {
-      expect(view.getByText('Favorites')).toBeTruthy();
+      expect(view.getByText('Favorites & recent')).toBeTruthy();
     });
     expect(
       view.getAllByTestId('favorite-game-LastWordRecall')[0]
@@ -106,8 +106,29 @@ describe('Home Today plan', () => {
       />
     );
     await waitFor(() => {
-      expect(remounted.getByText('Favorites')).toBeTruthy();
+      expect(remounted.getByText('Favorites & recent')).toBeTruthy();
     });
+  });
+
+  it('pins recently played exercises near the top of Home', async () => {
+    await AsyncStorage.setItem(
+      'speed-reading:game-pins:v1',
+      JSON.stringify({ favorites: [], recent: ['LastWordRecall'] })
+    );
+    const view = render(
+      <HomeScreen
+        onStart={jest.fn()}
+        onOpenHistory={jest.fn()}
+        onOpenGame={jest.fn()}
+        refreshToken={0}
+      />
+    );
+
+    await waitFor(() => {
+      expect(view.getByText('Favorites & recent')).toBeTruthy();
+    });
+    expect(view.getByText('RECENTLY PLAYED')).toBeTruthy();
+    expect(view.getAllByTestId('open-game-LastWordRecall')).toHaveLength(2);
   });
 
   it('searches the complete game catalog from Home', async () => {

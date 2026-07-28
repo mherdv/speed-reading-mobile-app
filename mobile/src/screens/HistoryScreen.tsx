@@ -19,10 +19,16 @@ import {
   isValidProgressMeasurement,
 } from '../domain/results';
 import {
-  calculatePersonalPracticeEstimate,
+  calculateReadingPerformanceProfile,
+  calculateTrainingSkillProfile,
   getComprehensionCounts,
 } from '../domain/readingPlan';
 import { clearResults, loadResults } from '../data/resultsStore';
+import {
+  downloadDataBackup,
+  pickDataBackup,
+  restoreDataBackup,
+} from '../data/dataBackup';
 import { getGameCatalogEntry } from '../data/gameCatalog';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
@@ -32,6 +38,7 @@ import { colors } from '../theme/colors';
 
 type Props = {
   onBack: () => void;
+  onDataRestored?: () => void;
   refreshToken: number;
   optimisticResult?: AttemptResult;
 };
@@ -81,6 +88,7 @@ export function calculateAverageValidMeasuredSpeed(
 
 export function HistoryScreen({
   onBack,
+  onDataRestored,
   refreshToken,
   optimisticResult,
 }: Props) {
@@ -88,10 +96,20 @@ export function HistoryScreen({
   const [activeTab, setActiveTab] = useState<Tab>('charts');
   const [historyFilter, setHistoryFilter] =
     useState<HistoryFilter>('reading');
+  const [dataTransferBusy, setDataTransferBusy] = useState(false);
+  const [dataTransferMessage, setDataTransferMessage] = useState<string | null>(
+    null
+  );
+  const [showDataTools, setShowDataTools] = useState(false);
   const filteredResults = results.filter(
     (result) => classifyHistoryResult(result) === historyFilter
   );
-  const personalEstimate = calculatePersonalPracticeEstimate(results);
+  const readingProfile = calculateReadingPerformanceProfile(results);
+  const weakestMeasuredSkill = calculateTrainingSkillProfile(results)
+    .filter((skill) => skill.score !== undefined)
+    .sort(
+      (first, second) => (first.score ?? 101) - (second.score ?? 101)
+    )[0];
 
   useEffect(() => {
     let cancelled = false;
@@ -138,6 +156,40 @@ export function HistoryScreen({
     );
   }
 
+  async function exportData() {
+    if (dataTransferBusy) return;
+    setDataTransferBusy(true);
+    setDataTransferMessage(null);
+    try {
+      await downloadDataBackup();
+      setDataTransferMessage('Backup downloaded.');
+    } catch {
+      setDataTransferMessage('Unable to create the backup file.');
+    } finally {
+      setDataTransferBusy(false);
+    }
+  }
+
+  async function importData() {
+    if (dataTransferBusy) return;
+    setDataTransferBusy(true);
+    setDataTransferMessage(null);
+    try {
+      const backup = await pickDataBackup();
+      await restoreDataBackup(backup);
+      setResults(await loadResults());
+      onDataRestored?.();
+      setDataTransferMessage('Backup restored. Your saved data is ready.');
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      setDataTransferMessage(
+        error instanceof Error ? error.message : 'Unable to restore this backup.'
+      );
+    } finally {
+      setDataTransferBusy(false);
+    }
+  }
+
   return (
     <View style={styles.screen}>
     <ResponsiveShell style={styles.container}>
@@ -153,30 +205,40 @@ export function HistoryScreen({
         <View testID="reading-history-summary">
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Personal practice estimate</Text>
+              <Text style={styles.summaryLabel}>Sustainable pace</Text>
               <Text style={styles.summaryValue}>
-                {personalEstimate.ready
-                  ? `${personalEstimate.medianWpm} wpm`
+                {readingProfile.sustainableWpm !== undefined
+                  ? `${readingProfile.sustainableWpm} wpm`
+                  : readingProfile.ready
+                    ? 'Build comprehension'
                   : 'Not enough readings'}
               </Text>
             </View>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Comprehension</Text>
               <Text style={styles.summaryValue}>
-                {personalEstimate.correct}/{personalEstimate.total}
+                {readingProfile.total > 0
+                  ? `${readingProfile.comprehensionPercent}%`
+                  : '—'}
               </Text>
             </View>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Valid passages</Text>
+              <Text style={styles.summaryLabel}>Confidence</Text>
               <Text style={styles.summaryValue}>
-                {personalEstimate.validPassageCount}/3
+                {readingProfile.confidence[0].toUpperCase() +
+                  readingProfile.confidence.slice(1)}
+              </Text>
+              <Text style={styles.summaryDetail}>
+                {readingProfile.validPassageCount} valid passage
+                {readingProfile.validPassageCount === 1 ? '' : 's'}
               </Text>
             </View>
           </View>
           <Text style={styles.uncertaintyText}>
-            {personalEstimate.ready
-              ? 'A median across different valid passages is a personal practice estimate, not a diagnostic score.'
-              : 'Not enough readings for a personal estimate. Complete three different valid passages; short or extreme attempts remain visible but are excluded.'}
+            {readingProfile.recommendation}{' '}
+            {readingProfile.ready
+              ? 'This is a personal training estimate, not a diagnostic score.'
+              : 'Short or extreme attempts remain visible but are excluded.'}
           </Text>
         </View>
       ) : (
@@ -191,6 +253,75 @@ export function HistoryScreen({
               {calculateTotalTime(filteredResults)}
             </Text>
           </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Next focus</Text>
+            <Text style={styles.summaryValue}>
+              {weakestMeasuredSkill?.label ?? 'Build a baseline'}
+            </Text>
+            {weakestMeasuredSkill && (
+              <Text style={styles.summaryDetail}>
+                {weakestMeasuredSkill.score}% ·{' '}
+                {weakestMeasuredSkill.sessionCount} scored session
+                {weakestMeasuredSkill.sessionCount === 1 ? '' : 's'}
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      {Platform.OS === 'web' && (
+        <View style={styles.dataCard}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showDataTools }}
+            onPress={() => setShowDataTools((visible) => !visible)}
+            style={styles.dataToggle}
+            testID="toggle-data-tools"
+          >
+            <Text style={styles.dataTitle}>Backup & restore</Text>
+            <Text style={styles.dataToggleIcon}>
+              {showDataTools ? '−' : '+'}
+            </Text>
+          </Pressable>
+          {showDataTools && (
+            <>
+              <Text style={styles.dataDescription}>
+                Download history, levels, preferences, favorites, and your
+                offline reading library. Restore it after changing browsers or
+                reinstalling the app.
+              </Text>
+              {dataTransferMessage && (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={styles.dataMessage}
+                >
+                  {dataTransferMessage}
+                </Text>
+              )}
+              <View style={styles.dataActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={dataTransferBusy}
+                  onPress={exportData}
+                  style={styles.dataButton}
+                  testID="export-app-data"
+                >
+                  <Text style={styles.dataButtonText}>Download backup</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={dataTransferBusy}
+                  onPress={importData}
+                  style={[styles.dataButton, styles.dataButtonSecondary]}
+                  testID="import-app-data"
+                >
+                  <Text style={styles.dataButtonSecondaryText}>
+                    Restore backup
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          )}
         </View>
       )}
 
@@ -381,6 +512,72 @@ const styles = StyleSheet.create({
     marginTop: -8,
     marginBottom: 16,
   },
+  dataCard: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    backgroundColor: colors.cardBackground,
+  },
+  dataToggle: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dataTitle: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  dataToggleIcon: {
+    color: colors.primaryDark,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  dataDescription: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 10,
+  },
+  dataMessage: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  dataActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingBottom: 8,
+  },
+  dataButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 11,
+    backgroundColor: colors.interactivePrimary,
+  },
+  dataButtonSecondary: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
+  },
+  dataButtonText: {
+    color: colors.onInteractive,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dataButtonSecondaryText: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: '800',
+  },
   filterRow: {
     minHeight: 52,
     flexDirection: 'row',
@@ -417,6 +614,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: colors.textPrimary,
+  },
+  summaryDetail: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
   },
   tabRow: {
     flexDirection: 'row',

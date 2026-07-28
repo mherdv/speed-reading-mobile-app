@@ -103,6 +103,13 @@
         'serviceWorker' in navigator &&
         (window.location.protocol === 'https:' || window.location.hostname === 'localhost')
       ) {
+        var hadServiceWorkerController = Boolean(navigator.serviceWorker.controller);
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (hadServiceWorkerController) {
+            window.dispatchEvent(new Event('speedread:update-ready'));
+          }
+          hadServiceWorkerController = true;
+        });
         document.documentElement.dataset.pwaStatus = 'registering';
         window.addEventListener('load', function () {
           navigator.serviceWorker

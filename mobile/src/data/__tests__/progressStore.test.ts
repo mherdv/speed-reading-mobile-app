@@ -9,6 +9,7 @@ import {
   difficultyToLevel,
   levelToStars,
   MAX_LEVEL,
+  describeAdaptiveProgress,
   type GameProgress,
 } from '../progressStore';
 
@@ -61,6 +62,17 @@ describe('progressStore', () => {
   });
 
   describe('updateProgress', () => {
+    it('explains exactly how adaptive level changes work', () => {
+      expect(
+        describeAdaptiveProgress({ level: 4, streak: 3, totalPlays: 8 })
+      ).toBe('2 more successful sessions in a row to raise the level');
+      expect(
+        describeAdaptiveProgress({ level: 4, streak: -2, totalPlays: 8 })
+      ).toBe(
+        '1 more below-target session in a row before the level is reduced'
+      );
+    });
+
     it('increments streak on correct answer', async () => {
       const { progress } = await updateProgress('TestGame', true);
       expect(progress.streak).toBe(1);

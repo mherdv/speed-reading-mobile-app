@@ -27,8 +27,24 @@ const DEFAULT_PROGRESS: GameProgress = {
 };
 
 const MAX_LEVEL = 15;
-const LEVEL_UP_THRESHOLD = 5; // Correct answers to level up
-const LEVEL_DOWN_THRESHOLD = 3; // Failures to level down
+export const LEVEL_UP_THRESHOLD = 5;
+export const LEVEL_DOWN_THRESHOLD = 3;
+
+export function describeAdaptiveProgress(progress: GameProgress): string {
+  if (progress.streak > 0) {
+    const remaining = Math.max(1, LEVEL_UP_THRESHOLD - progress.streak);
+    return `${remaining} more successful ${
+      remaining === 1 ? 'session' : 'sessions'
+    } in a row to raise the level`;
+  }
+  if (progress.streak < 0) {
+    const remaining = Math.max(1, LEVEL_DOWN_THRESHOLD + progress.streak);
+    return `${remaining} more below-target ${
+      remaining === 1 ? 'session' : 'sessions'
+    } in a row before the level is reduced`;
+  }
+  return `${LEVEL_UP_THRESHOLD} successful sessions in a row raise the level · ${LEVEL_DOWN_THRESHOLD} below-target sessions in a row reduce it`;
+}
 
 export async function loadAllProgress(): Promise<ProgressStore> {
   try {

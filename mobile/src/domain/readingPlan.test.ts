@@ -6,9 +6,12 @@ import {
 import {
   buildTodayPlan,
   calculatePersonalPracticeEstimate,
+  calculateReadingPerformanceProfile,
+  calculateTrainingSkillProfile,
   estimateReadingMinutes,
   formatReadingEstimate,
   isBaselineEligibleResult,
+  recommendSkillPractice,
 } from './readingPlan';
 
 function reading(
@@ -68,6 +71,72 @@ describe('reading-first Today and baseline model', () => {
       correct: 6,
       total: 9,
     });
+  });
+
+  it('protects the reported training pace with an 80% comprehension floor', () => {
+    const strongProfile = calculateReadingPerformanceProfile([
+      reading('1', 'sample-1', 210, 3),
+      reading('2', 'sample-2', 230, 2),
+      reading('3', 'sample-3', 260, 3),
+    ]);
+    expect(strongProfile).toMatchObject({
+      ready: true,
+      measuredMedianWpm: 230,
+      sustainableWpm: 230,
+      comprehensionPercent: 89,
+      confidence: 'developing',
+      paceRange: { lowerWpm: 210, upperWpm: 260 },
+    });
+
+    const rushedProfile = calculateReadingPerformanceProfile([
+      reading('1', 'sample-1', 300, 1),
+      reading('2', 'sample-2', 330, 2),
+      reading('3', 'sample-3', 360, 2),
+    ]);
+    expect(rushedProfile).toMatchObject({
+      ready: true,
+      measuredMedianWpm: 330,
+      comprehensionPercent: 56,
+    });
+    expect(rushedProfile.sustainableWpm).toBeUndefined();
+    expect(rushedProfile.recommendation).toContain('80%');
+  });
+
+  it('scores skills separately and recommends the weakest measured skill', () => {
+    const contextResult: AttemptResult = {
+      ...reading('context', 'ContextBuilder', 0, 0),
+      details: {
+        meaningAccuracy: 1,
+        clueAccuracy: 0.8,
+      },
+    };
+    const evidenceResult: AttemptResult = {
+      ...reading('evidence', 'EvidenceHunt', 0, 0),
+      details: {
+        answerAccuracy: 0.5,
+        evidenceAccuracy: 0.25,
+      },
+    };
+    const skillProfile = calculateTrainingSkillProfile([
+      contextResult,
+      evidenceResult,
+    ]);
+    expect(
+      skillProfile.find((skill) => skill.id === 'vocabulary')
+    ).toMatchObject({ score: 90, sessionCount: 1 });
+    expect(skillProfile.find((skill) => skill.id === 'evidence')).toMatchObject({
+      score: 38,
+      sessionCount: 1,
+    });
+    expect(
+      recommendSkillPractice([contextResult, evidenceResult])
+    ).toMatchObject({
+      gameId: 'EvidenceHunt',
+      skill: { id: 'evidence', score: 38 },
+    });
+    expect(
+      recommendSkillPractice([contextResult, evidenceResult], 1).gameId
+    ).not.toBe('EvidenceHunt');
   });
 
   it('builds an explained deterministic plan that swaps and skips without mutating results', () => {

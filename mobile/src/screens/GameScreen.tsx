@@ -26,6 +26,7 @@ import {
   type DifficultyPreference,
 } from '../data/difficultyPreferences';
 import {
+  describeAdaptiveProgress,
   levelToDifficulty,
   loadGameProgress,
 } from '../data/progressStore';
@@ -63,6 +64,9 @@ export function GameScreen({
   const [controlLoaded, setControlLoaded] = useState(false);
   const [adaptiveDifficulty, setAdaptiveDifficulty] =
     useState<Difficulty>('easy');
+  const [adaptiveHelper, setAdaptiveHelper] = useState(() =>
+    describeAdaptiveProgress({ level: 1, streak: 0, totalPlays: 0 })
+  );
   const [preference, setPreference] = useState<DifficultyPreference>({
     mode: getDefaultDifficultyPreference(normalizedGameId).mode,
     difficulty: difficulty ?? 'easy',
@@ -78,6 +82,9 @@ export function GameScreen({
   useEffect(() => {
     let active = true;
     setControlLoaded(false);
+    setAdaptiveHelper(
+      describeAdaptiveProgress({ level: 1, streak: 0, totalPlays: 0 })
+    );
 
     Promise.all([
       loadDifficultyPreference(normalizedGameId),
@@ -87,6 +94,7 @@ export function GameScreen({
         if (!active) return;
         const nextAdaptiveDifficulty = levelToDifficulty(progress.level);
         setAdaptiveDifficulty(nextAdaptiveDifficulty);
+        setAdaptiveHelper(describeAdaptiveProgress(progress));
         setPreference({
           mode: savedPreference.mode,
           difficulty:
@@ -145,12 +153,14 @@ export function GameScreen({
           ? adaptiveDifficulty
           : preference.difficulty,
       adaptiveDifficulty,
+      adaptiveHelper,
       allowsAdaptive: allowsAdaptiveDifficulty(normalizedGameId),
       options: getDifficultyOptions(normalizedGameId),
       onChange: handleDifficultyChange,
     }),
     [
       adaptiveDifficulty,
+      adaptiveHelper,
       handleDifficultyChange,
       normalizedGameId,
       preference,

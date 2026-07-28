@@ -32,6 +32,10 @@ assert(
   'index.html does not register the service worker.'
 );
 assert(
+  indexHtml.includes("'speedread:update-ready'"),
+  'index.html does not notify the app when a new offline version takes control.'
+);
+assert(
   indexHtml.includes('id="app-loading"') &&
     indexHtml.includes('./launch-logo.svg'),
   'index.html does not include the branded loading state.'

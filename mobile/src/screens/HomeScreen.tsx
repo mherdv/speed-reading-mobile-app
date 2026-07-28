@@ -46,7 +46,7 @@ import {
 } from '../domain/results';
 import {
   buildTodayPlan,
-  calculatePersonalPracticeEstimate,
+  calculateReadingPerformanceProfile,
 } from '../domain/readingPlan';
 import {
   borderRadius,
@@ -238,8 +238,8 @@ export function HomeScreen({
       }),
     [readingSwapOffset, results, skillSwapOffset, skippedPlanItems]
   );
-  const personalEstimate = useMemo(
-    () => calculatePersonalPracticeEstimate(results),
+  const readingProfile = useMemo(
+    () => calculateReadingPerformanceProfile(results),
     [results]
   );
   const visibleTodayIndex =
@@ -250,6 +250,11 @@ export function HomeScreen({
   const favoriteGames = gamePins.favorites
     .map((id) => ALL_GAME_LIST.find((game) => game.id === id))
     .filter((game): game is GameMeta => Boolean(game));
+  const recentGames = gamePins.recent
+    .filter((id) => !gamePins.favorites.includes(id))
+    .map((id) => ALL_GAME_LIST.find((game) => game.id === id))
+    .filter((game): game is GameMeta => Boolean(game))
+    .slice(0, 4);
   const filteredGames = useMemo(() => {
     const query = gameSearch.trim().toLocaleLowerCase();
     if (!query) return ALL_GAME_LIST;
@@ -404,9 +409,11 @@ export function HomeScreen({
             accessibilityLiveRegion="polite"
             style={styles.trainingDescription}
           >
-            {personalEstimate.ready
-              ? `Personal practice estimate: ${personalEstimate.medianWpm} WPM · ${personalEstimate.correct}/${personalEstimate.total} comprehension across ${personalEstimate.validPassageCount} passages`
-              : `Not enough readings for a personal estimate · ${personalEstimate.validPassageCount} of 3 valid passages`}
+            {readingProfile.sustainableWpm !== undefined
+              ? `Sustainable pace: ${readingProfile.sustainableWpm} WPM · ${readingProfile.comprehensionPercent}% comprehension · ${readingProfile.confidence} confidence`
+              : readingProfile.ready
+                ? `Measured pace: ${readingProfile.measuredMedianWpm} WPM · ${readingProfile.comprehensionPercent}% comprehension · protect meaning before increasing speed`
+                : `Not enough readings for a personal estimate · ${readingProfile.validPassageCount} of 3 valid passages`}
           </Text>
 
           {activeTodayItem && (() => {
@@ -555,24 +562,43 @@ export function HomeScreen({
           )}
         </View>
 
-        {!loading && favoriteGames.length > 0 && (
+        {!loading &&
+          (favoriteGames.length > 0 || recentGames.length > 0) && (
           <>
             <View style={styles.sectionHeader}>
               <View>
-                <Text style={styles.sectionTitle}>Favorites</Text>
+                <Text style={styles.sectionTitle}>Favorites & recent</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Your pinned exercises
+                  Keep your preferred and last-played exercises close
                 </Text>
               </View>
             </View>
-            <GameGrid
-              games={favoriteGames}
-              progress={progress}
-              preferences={preferences}
-              favorites={gamePins.favorites}
-              onOpenGame={handleOpenGame}
-              onToggleFavorite={handleToggleFavorite}
-            />
+            {favoriteGames.length > 0 && (
+              <>
+                <Text style={styles.pinGroupLabel}>FAVORITES</Text>
+                <GameGrid
+                  games={favoriteGames}
+                  progress={progress}
+                  preferences={preferences}
+                  favorites={gamePins.favorites}
+                  onOpenGame={handleOpenGame}
+                  onToggleFavorite={handleToggleFavorite}
+                />
+              </>
+            )}
+            {recentGames.length > 0 && (
+              <>
+                <Text style={styles.pinGroupLabel}>RECENTLY PLAYED</Text>
+                <GameGrid
+                  games={recentGames}
+                  progress={progress}
+                  preferences={preferences}
+                  favorites={gamePins.favorites}
+                  onOpenGame={handleOpenGame}
+                  onToggleFavorite={handleToggleFavorite}
+                />
+              </>
+            )}
           </>
         )}
 
@@ -999,6 +1025,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginTop: 3,
+  },
+  pinGroupLabel: {
+    paddingHorizontal: spacing.md,
+    marginBottom: 8,
+    color: colors.primaryDark,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.9,
   },
   catalogTools: {
     marginTop: spacing.xl,

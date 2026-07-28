@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Popover, { PopoverPlacement, Rect } from 'react-native-popover-view';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,6 +19,13 @@ import {
   type FreeBooksPage,
   type PowerReaderArticle,
 } from './powerReaderContent';
+import {
+  createLocalArticle,
+  loadLocalArticles,
+  pickLocalTextFile,
+  removeLocalArticle,
+  saveLocalArticle,
+} from './powerReaderLibrary';
 
 const GAME_ID = 'PowerReader';
 const BOOK_PROGRESS_KEY = 'powerReaderBookProgress';
@@ -177,7 +184,10 @@ export default function PowerReader({
   const [loadingMore, setLoadingMore] = useState(false);
   const [booksTotalCount, setBooksTotalCount] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [customTitle, setCustomTitle] = useState('');
   const [customText, setCustomText] = useState('');
+  const [localArticles, setLocalArticles] = useState<PowerReaderArticle[]>([]);
+  const [importingText, setImportingText] = useState(false);
   const [presentationMode, setPresentationMode] = useState<PresentationMode>('flow');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [recentBooks, setRecentBooks] = useState<PowerReaderArticle[]>([]);
@@ -269,6 +279,11 @@ export default function PowerReader({
     loadRecentProgress()
       .then((items) => {
         if (active) setRecentProgress(items);
+      })
+      .catch(() => undefined);
+    loadLocalArticles()
+      .then((items) => {
+        if (active) setLocalArticles(items);
       })
       .catch(() => undefined);
     return () => {
@@ -713,16 +728,11 @@ export default function PowerReader({
       setArticlesError('Paste some text before using it.');
       return;
     }
-    const customArticle: PowerReaderArticle = {
-      id: 'custom-paste',
-      title: 'My pasted text',
-      author: 'You',
-      description: 'Text pasted on this device.',
+    const customArticle = createLocalArticle({
+      name: `${customTitle.trim() || 'My pasted text'}.txt`,
       text: normalized,
-      source: 'Custom paste',
       difficulty: selectedDifficulty,
-      wordCount: normalized.split(' ').length,
-    };
+    });
     setArticlesError(null);
     setResumeFromSaved(false);
     resumeFromSavedRef.current = false;
@@ -731,6 +741,86 @@ export default function PowerReader({
     pageIndexRef.current = 0;
     highlightIndexRef.current = 0;
     setSelectedArticle(customArticle);
+    setCustomTitle('');
+    setCustomText('');
+    void saveLocalArticle(customArticle)
+      .then(setLocalArticles)
+      .catch(() => {
+        if (mountedRef.current) {
+          setArticlesError(
+            'The text is ready, but this device could not save it for later.'
+          );
+        }
+      });
+  }
+
+  async function importLocalText() {
+    if (importingText) return;
+    setImportingText(true);
+    setArticlesError(null);
+    try {
+      const file = await pickLocalTextFile();
+      const article = createLocalArticle({
+        ...file,
+        difficulty: selectedDifficulty,
+      });
+      const next = await saveLocalArticle(article);
+      if (!mountedRef.current) return;
+      setLocalArticles(next);
+      setSelectedArticle(article);
+      setResumeFromSaved(false);
+      resumeFromSavedRef.current = false;
+      setPageIndex(0);
+      setHighlightIndex(0);
+      pageIndexRef.current = 0;
+      highlightIndexRef.current = 0;
+    } catch (error) {
+      if (mountedRef.current) {
+        if (error instanceof Error && error.name === 'AbortError') return;
+        setArticlesError(
+          error instanceof Error ? error.message : 'Unable to import this file.'
+        );
+      }
+    } finally {
+      if (mountedRef.current) setImportingText(false);
+    }
+  }
+
+  function confirmRemoveLocalArticle(article: PowerReaderArticle) {
+    const remove = async () => {
+      try {
+        const next = await removeLocalArticle(article.id);
+        if (!mountedRef.current) return;
+        setLocalArticles(next);
+        if (selectedArticle?.id === article.id) {
+          const fallback = offlineArticles[0] ?? STARTER_ARTICLE;
+          setSelectedArticle(fallback);
+          setPageIndex(0);
+          setHighlightIndex(0);
+          pageIndexRef.current = 0;
+          highlightIndexRef.current = 0;
+        }
+      } catch {
+        if (mountedRef.current) {
+          setArticlesError('Unable to remove this text from the device.');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (globalThis.confirm(`Remove “${article.title}” from this device?`)) {
+        void remove();
+      }
+      return;
+    }
+    Alert.alert(
+      'Remove saved text?',
+      `${article.title} will be removed from this device.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: remove },
+      ]
+    );
   }
 
   async function handleSelectArticle(article: PowerReaderArticle) {
@@ -763,7 +853,7 @@ export default function PowerReader({
         highlightIndexRef.current = 0;
       }
       setSelectedArticle(finalized);
-      if (finalized.source !== 'Built-in library') {
+      if (finalized.source === 'Project Gutenberg') {
         const nextRecentBooks = await saveRecentBook(finalized);
         if (!mountedRef.current) return;
         setRecentBooks(nextRecentBooks);
@@ -1021,7 +1111,8 @@ export default function PowerReader({
 
           {/* Description */}
           <Text style={styles.heroDescription}>
-            Start with an offline article, or choose a free book to train guided pacing.
+            Train guided pacing with a built-in article, your own saved text, or
+            a free book.
           </Text>
 
           <GameDifficultyControl />
@@ -1093,7 +1184,92 @@ export default function PowerReader({
                 })}
               </View>
 
-              <Text style={styles.sectionLabel}>Paste your own text</Text>
+              <Text style={styles.sectionLabel}>My offline library</Text>
+              <Text style={styles.networkNote}>
+                Import a .txt, .md, or simple .html file. Its text stays on this device and works offline.
+              </Text>
+              {Platform.OS === 'web' && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Import a text file"
+                  disabled={importingText}
+                  testID="import-local-text"
+                  style={[
+                    styles.actionButtonOutline,
+                    styles.importTextButton,
+                    importingText && styles.loadMoreBtnDisabled,
+                  ]}
+                  onPress={importLocalText}
+                >
+                  <Text style={styles.actionButtonOutlineText}>
+                    {importingText ? 'Importing…' : 'Import text file'}
+                  </Text>
+                </Pressable>
+              )}
+              {localArticles.length > 0 && (
+                <View style={styles.articleList}>
+                  {localArticles.map((article) => (
+                    <View key={article.id} style={styles.articleCard}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Read ${article.title}, ${article.wordCount} words`}
+                        style={styles.articleMain}
+                        testID={`local-article-${article.id}`}
+                        onPress={() => handleSelectArticle(article)}
+                      >
+                        <View style={styles.articleCoverFallback}>
+                          <Text style={styles.articleCoverText}>
+                            {article.title.slice(0, 1)}
+                          </Text>
+                        </View>
+                        <View style={styles.articleInfo}>
+                          <Text style={styles.articleTitle}>{article.title}</Text>
+                          <Text style={styles.articleAuthor}>{article.author}</Text>
+                          <Text style={styles.articleDescription}>
+                            {article.wordCount} words · available offline
+                          </Text>
+                          {recentProgress[article.id] && (
+                            <Text style={styles.articleProgress}>
+                              Page {recentProgress[article.id].pageIndex + 1}
+                            </Text>
+                          )}
+                        </View>
+                      </Pressable>
+                      <View style={styles.articleActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${article.title} from this device`}
+                          style={styles.actionButtonOutline}
+                          onPress={() => confirmRemoveLocalArticle(article)}
+                        >
+                          <Text style={styles.actionButtonOutlineText}>
+                            Remove
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          style={styles.actionButton}
+                          onPress={() => handleSelectArticle(article)}
+                        >
+                          <Text style={styles.actionButtonText}>
+                            {recentProgress[article.id] ? 'Resume' : 'Read'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <Text style={styles.sectionLabel}>Or paste your own text</Text>
+              <TextInput
+                testID="custom-text-title"
+                value={customTitle}
+                onChangeText={setCustomTitle}
+                placeholder="Title (optional)"
+                placeholderTextColor={colors.textMuted}
+                style={styles.customTitleInput}
+              />
               <TextInput
                 testID="custom-text-input"
                 value={customText}
@@ -1110,7 +1286,7 @@ export default function PowerReader({
                 style={[styles.actionButtonOutline, styles.useCustomButton]}
                 onPress={useCustomText}
               >
-                <Text style={styles.actionButtonOutlineText}>Use pasted text</Text>
+                <Text style={styles.actionButtonOutlineText}>Save and use text</Text>
               </Pressable>
 
               {recentBooks.length > 0 && (
@@ -1840,10 +2016,25 @@ const styles = StyleSheet.create({
     color: '#111827',
     backgroundColor: '#FFFFFF',
   },
+  customTitleInput: {
+    minHeight: 48,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    color: '#111827',
+    backgroundColor: '#FFFFFF',
+  },
   useCustomButton: {
     alignSelf: 'flex-start',
     marginTop: 10,
     marginBottom: 22,
+  },
+  importTextButton: {
+    alignSelf: 'flex-start',
+    marginBottom: 12,
   },
   networkNote: {
     marginTop: -6,
