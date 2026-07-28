@@ -3,6 +3,7 @@ import { getMainIdeaChallenge } from './MainIdeaSprint/MainIdeaSprint';
 import { getNumberRecognitionChallenge } from './NumberRecognition/NumberRecognition';
 import { getSymbolRecognitionChallenge } from './SymbolRecognition/SymbolRecognition';
 import { getWordPairChallenge } from './WordPairs/WordPairs';
+import { getVisualSpanConfig } from './VisualSpanExpansion/visualSpanContent';
 
 describe('meaningful difficulty contracts', () => {
   it('changes Main Idea reasoning depth without changing the work count', () => {
@@ -101,5 +102,24 @@ describe('meaningful difficulty contracts', () => {
       hard.displayCadenceMs,
     ]).toEqual([1_600, 1_100, 700]);
     expect(hard.symbols).toEqual(expect.arrayContaining(['●', '○', '◉']));
+  });
+
+  it('widens Visual Span while reducing display time and adding choices', () => {
+    const easy = getVisualSpanConfig('easy');
+    const medium = getVisualSpanConfig('medium');
+    const hard = getVisualSpanConfig('hard');
+
+    expect([easy.spanSize, medium.spanSize, hard.spanSize]).toEqual([3, 5, 7]);
+    expect([easy.displayMs, medium.displayMs, hard.displayMs]).toEqual([
+      1_600, 1_200, 850,
+    ]);
+    expect([easy.optionCount, medium.optionCount, hard.optionCount]).toEqual([
+      3, 4, 5,
+    ]);
+    expect([easy.spread, medium.spread, hard.spread]).toEqual([
+      'compact',
+      'standard',
+      'wide',
+    ]);
   });
 });

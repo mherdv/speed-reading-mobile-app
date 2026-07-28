@@ -265,11 +265,18 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 
 ### 10. Visual Span
 
-- Keep attention near the center while a sequence appears briefly.
-- Enter the sequence after it disappears.
-- Correct recalls increase the sequence length; the session ends after the configured rounds/failure path.
-- Result: correct recalls and task accuracy.
-- Difficulty: starts with 4/6/8 items shown for 1500/1200/1000 ms.
+- Keep attention near the center + while equal-length words appear at distinct
+  surrounding positions.
+- After the flash, identify which word occupied one prompted position. Choices
+  include other displayed words, so position memory—not word length—is needed.
+- A miss costs 5 points and temporarily removes one position. Three correct
+  position recalls restore one position up to the manually selected ceiling;
+  three consecutive misses end the set after the correction is reviewed.
+- Result: position-recall accuracy, score, widest/final span, misses, and actual
+  presentation duration. This remains an optional spatial-attention drill, not
+  a measured-reading result.
+- Difficulty: 3/5/7 positions, compact/standard/wide spread,
+  1600/1200/850 ms, and 3/4/5 equal-length choices.
 
 ### 11. Pattern Scan
 
@@ -775,12 +782,32 @@ and skipped rounds are reported as omissions.
   civic, history, narrative, and practical topics. Every form has separate
   main-idea, detail/evidence, and inference/purpose questions with explanations.
 - Words Recall, Sentence Recall, Flash Recall, Visual Span, and keypad Memory
-  Recall now preserve the learner’s submitted response and reveal the correct
-  response after a miss. Incorrect feedback remains visible for 2.8–5.2 seconds,
-  increasing with sentence or sequence length; correct feedback remains brief.
+  Recall now preserve the learner’s submitted or selected response and reveal
+  the correct response after a miss. Incorrect feedback remains visible for
+  2.8–5.2 seconds, increasing with sentence or sequence length; correct feedback
+  remains brief.
 - A third consecutive miss no longer hides the correction behind the result
   screen. The correction is reviewed first, then the session ends.
-- Final validation passed strict TypeScript, all 476 Jest tests across 71
+- Final validation passed strict TypeScript, all 479 Jest tests across 71
   suites, all 18 Expo Doctor checks, production PWA export/offline
   verification, and a 390 × 844 browser interaction check with no horizontal
   overflow or runtime errors.
+
+## V12 Visual Span differentiation
+
+- Visual Span is now a spatial word-position exercise rather than a second
+  serial-recall keypad game. A 650 ms fixation cue precedes an equal-length word
+  flash around the center; the learner then identifies the word that occupied
+  one prompted location.
+- Memory Recall remains the serial digit-recall exercise with a phone-style
+  keypad. The two activities now train and report distinct interactions.
+- Manual Easy/Medium/Hard settings control 3/5/7 positions,
+  compact/standard/wide spread, 1600/1200/850 ms presentation time, and 3/4/5
+  similar-length choices. A miss costs 5 points and narrows the next glance by
+  one position; three correct answers restore one position and three
+  consecutive misses end the set after correction review.
+- Deterministic unit coverage checks the generated layouts, equal-length
+  distractors, fixation timing, recall feedback, difficulty reduction, failure
+  ending, reporting, replay, and lifecycle completion. Phone-width browser QA
+  confirmed that the seven-position Hard flash and five recall choices fit at
+  390 × 844 with no horizontal overflow or console errors.

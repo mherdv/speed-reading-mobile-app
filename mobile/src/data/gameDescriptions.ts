@@ -37,7 +37,7 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Take a short visual-comfort break with gentle blinking and distance focus. This routine may help you pause during screen use, but it does not improve eyesight, diagnose eye health, or measure reading speed.',
 
   VisualSpanExpansion:
-    'Recognize a brief number sequence, then type it from memory. A miss pauses on your entry and the correct sequence so you can compare each position. Treat its score as drill performance, not evidence of a wider reading span.',
+    'Keep your eyes near a central fixation mark while equal-length words flash at several surrounding positions. After they disappear, select the word that occupied one prompted position. A miss shows both choices, costs 5 points, and temporarily narrows the next glance. Treat its score as spatial word-recall performance, not proof of faster connected-text reading.',
 
   FlashReading:
     'Type a briefly displayed word from memory and track response accuracy. A miss keeps your entry and the correct word visible before continuing. This challenge does not by itself demonstrate faster connected-text reading.',

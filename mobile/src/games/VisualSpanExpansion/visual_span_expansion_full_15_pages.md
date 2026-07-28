@@ -28,9 +28,10 @@ Visual Span Expansion trains the ability to perceive multiple symbols/letters/wo
 **Page 3: Core Mechanics**
 
 **Trial structure:**
-1. Fixation cue appears (center dot or cross).
-2. A set of items flashes briefly around center.
-3. User responds by selecting/typing what they saw.
+1. A center cross appears for 650 ms so the eyes can settle.
+2. Equal-length words flash at several positions around the cross.
+3. The words disappear and one position is marked.
+4. The user selects which word occupied that position.
 
 **Stimulus Types:**
 - Letters.
@@ -42,9 +43,11 @@ Visual Span Expansion trains the ability to perceive multiple symbols/letters/wo
 
 **Page 4: Modes**
 
-1) **Flash + Recall (Primary):**
-- Display array for a short duration.
-- User recalls items in order or selects from choices.
+1) **Spatial Word Recall (implemented primary mode):**
+- Display words around a fixed center.
+- Mark one position after the flash.
+- User selects that position’s word from equal-length choices that include other
+  displayed words.
 
 2) **Flash + Multiple Choice:**
 - Show 4 options, user chooses which array matched.
@@ -73,8 +76,8 @@ Visual Span Expansion trains the ability to perceive multiple symbols/letters/wo
 │   A     7     K             │
 │      (flash)                │
 ├─────────────────────────────┤
-│ Recall: [ _ ] [ _ ] [ _ ]   │
-│        [ Submit ]           │
+│ Which word was upper right? │
+│ [ amber ] [ stone ] [ field ]│
 └─────────────────────────────┘
 ```
 
@@ -102,13 +105,11 @@ Visual Span Expansion trains the ability to perceive multiple symbols/letters/wo
 
 **Page 7: Scoring System**
 
-Per-trial scoring example:
+Per-trial scoring:
 | Event | Points |
 |------|--------|
-| Correct item | +5 |
-| Incorrect item | -2 |
-| Perfect trial bonus | +10 |
-| Fast response bonus | +0–5 |
+| Correct position | +10 × active positions |
+| Incorrect position | -5, never below zero |
 
 **Accuracy:**
 - Item-level accuracy and trial-level accuracy.
@@ -117,15 +118,10 @@ Per-trial scoring example:
 
 **Page 8: Adaptive Difficulty**
 
-Adjust:
-- Number of items shown (span size).
-- Flash duration (ms).
-- Similarity of distractors.
-- Spatial spread of items.
-
-Rules:
-- If last 10 trials ≥ 85% item accuracy → add an item or reduce duration.
-- If last 5 trials < 70% → remove an item or increase duration.
+The selected difficulty controls the maximum span, flash duration, choice count,
+and spatial spread. A miss temporarily removes one position, down to three.
+Three consecutive correct recalls restore one position up to the selected
+ceiling. Three consecutive misses end the set after the correction is reviewed.
 
 ---
 
@@ -152,9 +148,9 @@ Audio cues optional.
 
 Summary:
 - Max span achieved.
-- Average item accuracy.
-- Flash duration progression.
-- Reaction time.
+- Position-recall accuracy.
+- Final span and presentation duration.
+- Consecutive misses and finish reason.
 
 ---
 
@@ -168,18 +164,21 @@ Summary:
 **Page 13: Thorough Acceptance Criteria**
 
 **AC-1 Fixation + Flash**
-- Given a trial starts, when the fixation cue is displayed, then the flash stimulus appears after a consistent delay and remains visible for the configured duration.
+- Given a trial starts, the fixation cue appears for 650 ms, then the word
+  stimulus remains visible for the difficulty’s configured duration.
 
 **AC-2 Response Capture**
-- Given the flash ends, when the user enters/selects items and presses Submit, then the system evaluates item correctness and records accuracy.
+- Given the flash ends, one position is marked and the user selects its word
+  from equal-length alternatives.
 
 **AC-3 Scoring**
-- Given a correct item, when scoring occurs, then points are added.
-- Given an incorrect item, then points are deducted (or not added) according to rules.
+- A correct position adds points according to the active span.
+- A miss deducts five points without producing a negative score.
 
 **AC-4 Adaptation**
-- Given sustained high accuracy, when adaptation is applied, then the span size increases or flash duration decreases.
-- Given low accuracy, then span size decreases or flash duration increases.
+- A miss removes one position temporarily.
+- Three correct recalls restore one position without exceeding the selected
+  difficulty ceiling.
 
 **AC-5 Accessibility**
 - Given longer-flash mode is enabled, when stimuli present, then durations use the longer configuration.
@@ -207,7 +206,8 @@ Edge cases:
 - Keep evaluation pure and deterministic.
 
 **Summary:**
-Visual Span Expansion trains multi-item recognition per fixation with adaptive span size, robust UI, and thorough acceptance criteria.
+Visual Span now uses spatial word-position recall around a central fixation
+point. It no longer duplicates keypad Memory Recall’s serial digit mechanic.
 
 ---
 

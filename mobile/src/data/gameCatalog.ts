@@ -337,20 +337,20 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
   VisualSpanExpansion: {
     id: 'VisualSpanExpansion',
     title: 'Visual Span',
-    shortDescription: 'Recall items shown around the center.',
+    shortDescription: 'Match a briefly shown word to its spatial position.',
     category: 'memory',
     tier: 'experimental',
     rules: [
-      'Keep attention near the center while items appear briefly.',
-      'Enter the sequence after it disappears.',
-      'Correct recalls increase the sequence length.',
+      'Keep your eyes near the center + while equal-length words appear around it.',
+      'After the words disappear, identify which word occupied the prompted position.',
+      'A miss costs 5 points and temporarily removes one position; three consecutive misses end the set.',
     ],
     difficulty: {
-      easy: option('Easy', 'Starts at 4 items · 1500 ms display'),
-      medium: option('Medium', 'Starts at 6 items · 1200 ms display'),
-      hard: option('Hard', 'Starts at 8 items · 1000 ms display'),
+      easy: option('Easy', '3 positions · 1600 ms · 3 choices'),
+      medium: option('Medium', '5 positions · 1200 ms · 4 choices'),
+      hard: option('Hard', '7 wide positions · 850 ms · 5 similar choices'),
     },
-    keywords: ['peripheral', 'recall', 'sequence', 'visual span'],
+    keywords: ['peripheral', 'spatial', 'words', 'fixation', 'visual span'],
   },
   PatternScanning: {
     id: 'PatternScanning',

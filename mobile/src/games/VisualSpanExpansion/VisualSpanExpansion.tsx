@@ -1,15 +1,37 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from 'react-native';
 
-import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { levelToStars, updateProgress } from '../../data/progressStore';
+import { colors } from '../../theme/colors';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
-import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
-import { colors } from '../../theme/colors';
+import {
+  useAutoStart,
+  useGameProgress,
+  useTrackedTimeouts,
+  type Difficulty,
+} from '../gameHooks';
 import { getRecallFeedbackDurationMs } from '../recallFeedback';
+import {
+  createVisualSpanTrial,
+  getVisualSpanConfig,
+  VISUAL_SPAN_FIXATION_CUE_MS,
+  type VisualSpanPositionId,
+  type VisualSpanSpread,
+  type VisualSpanTrial,
+} from './visualSpanContent';
 
 const GAME_ID = 'VisualSpanExpansion';
+const FAILURE_PENALTY = 5;
+const MAX_CONSECUTIVE_FAILURES = 3;
+const CORRECT_RUN_TO_RESTORE_SPAN = 3;
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -21,31 +43,120 @@ type GameReportPayload = {
 };
 
 type Props = {
-  startingLength?: number;
+  itemCount?: number;
   displayMs?: number;
+  totalRounds?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
+  random?: () => number;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
-type Phase = 'idle' | 'show' | 'recall' | 'feedback' | 'ended';
+type Phase =
+  | 'idle'
+  | 'fixate'
+  | 'show'
+  | 'recall'
+  | 'feedback'
+  | 'ended';
+type FinishReason = 'round-limit' | 'three-misses';
 
-function getDifficultyConfig(difficulty: Difficulty) {
-  switch (difficulty) {
-    case 'easy':
-      return { startingLength: 4, displayMs: 1500 };
-    case 'medium':
-      return { startingLength: 6, displayMs: 1200 };
-    case 'hard':
-      return { startingLength: 8, displayMs: 1000 };
+type Review = {
+  selectedWord: string;
+  correctWord: string;
+  positionLabel: string;
+  correct: boolean;
+  shouldFinish: boolean;
+  previousSpan: number;
+  nextSpan: number;
+};
+
+const POSITION_STYLES: Record<VisualSpanPositionId, ViewStyle> = {
+  'upper-left': { left: 0, top: 20 },
+  'upper-center': { left: '39%', top: 0 },
+  'upper-right': { right: 0, top: 20 },
+  'center-left': { left: 0, top: '42%' },
+  'center-right': { right: 0, top: '42%' },
+  'lower-left': { bottom: 20, left: 0 },
+  'lower-center': { bottom: 0, left: '39%' },
+  'lower-right': { bottom: 20, right: 0 },
+};
+
+function boardStyleForSpread(spread: VisualSpanSpread): ViewStyle {
+  switch (spread) {
+    case 'compact':
+      return { height: 220, width: '78%' };
+    case 'standard':
+      return { height: 250, width: '90%' };
+    case 'wide':
+      return { height: 280, width: '100%' };
   }
 }
 
-function generateSequence(length: number): string {
-  return Array.from({ length }, () => Math.floor(Math.random() * 10)).join('');
+type SpatialBoardProps = {
+  trial: VisualSpanTrial;
+  spread: VisualSpanSpread;
+  revealWords: boolean;
+  showTarget?: boolean;
+  testID?: string;
+};
+
+function SpatialBoard({
+  trial,
+  spread,
+  revealWords,
+  showTarget = false,
+  testID,
+}: SpatialBoardProps) {
+  return (
+    <View
+      testID={testID ?? (revealWords ? 'span-board' : 'span-recall-board')}
+      style={[styles.spatialBoard, boardStyleForSpread(spread)]}
+    >
+      {trial.items.map((item) => {
+        const isTarget = showTarget && item.positionId === trial.targetPositionId;
+        return (
+          <View
+            key={item.positionId}
+            testID={`span-position-${item.positionId}`}
+            style={[
+              styles.positionSlot,
+              POSITION_STYLES[item.positionId],
+              isTarget && styles.targetSlot,
+            ]}
+          >
+            <Text
+              testID={
+                revealWords ? `span-item-${item.positionId}` : undefined
+              }
+              style={[
+                styles.positionText,
+                !revealWords && styles.hiddenPositionText,
+                isTarget && styles.targetPositionText,
+              ]}
+            >
+              {revealWords ? item.word : isTarget ? '?' : '•'}
+            </Text>
+          </View>
+        );
+      })}
+      <View testID="span-fixation" style={styles.fixation}>
+        <Text style={styles.fixationMark}>+</Text>
+        <Text style={styles.fixationLabel}>FOCUS</Text>
+      </View>
+    </View>
+  );
 }
 
-export default function VisualSpanExpansion({ startingLength: startingLengthProp, displayMs: displayMsProp, difficulty = 'easy', autoStart = false, onReportResult }: Props) {
+export default function VisualSpanExpansion({
+  itemCount: itemCountProp,
+  displayMs: displayMsProp,
+  totalRounds: totalRoundsProp,
+  difficulty = 'easy',
+  autoStart = false,
+  random = Math.random,
+  onReportResult,
+}: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
   const {
     gameProgress,
@@ -53,112 +164,178 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
     selectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
-  const [level, setLevel] = useState(3);
-  const [sequence, setSequence] = useState('');
-  const [input, setInput] = useState('');
+  const initialConfig = getVisualSpanConfig(difficulty);
+  const [trial, setTrial] = useState<VisualSpanTrial>(() =>
+    createVisualSpanTrial(difficulty, itemCountProp, random)
+  );
+  const [spanSize, setSpanSize] = useState(
+    itemCountProp ?? initialConfig.spanSize
+  );
   const [score, setScore] = useState(0);
-  const [attempts, setAttempts] = useState(0);
-  const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [round, setRound] = useState(0);
+  const [correctStreak, setCorrectStreak] = useState(0);
+  const [failureStreak, setFailureStreak] = useState(0);
+  const [review, setReview] = useState<Review | null>(null);
+  const [finishReason, setFinishReason] =
+    useState<FinishReason>('round-limit');
 
-  const startRef = useRef<number>(0);
+  const startRef = useRef(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
-  const levelRef = useRef(3);
-  const showTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const correctRef = useRef(0);
+  const failuresRef = useRef(0);
+  const correctStreakRef = useRef(0);
+  const failureStreakRef = useRef(0);
+  const spanRef = useRef(itemCountProp ?? initialConfig.spanSize);
+  const maxSpanRef = useRef(itemCountProp ?? initialConfig.spanSize);
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
-  const currentConfig = getDifficultyConfig(selectedDifficulty);
-  const startingLength = startingLengthProp ?? currentConfig.startingLength;
-  const displayMs = displayMsProp ?? currentConfig.displayMs;
+  const config = getVisualSpanConfig(selectedDifficulty);
+  const maximumSpan = Math.max(
+    config.minimumSpan,
+    Math.min(config.spanSize, itemCountProp ?? config.spanSize)
+  );
+  const displayMs = displayMsProp ?? config.displayMs;
+  const totalRounds = totalRoundsProp ?? config.totalRounds;
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       cancelledRef.current = true;
-      if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
-    };
-  }, []);
+      clearTrackedTimeouts();
+    },
+    // Cleanup belongs to unmount, not helper identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
+  function showRound(nextSpan: number) {
+    const nextTrial = createVisualSpanTrial(
+      selectedDifficulty,
+      nextSpan,
+      random
+    );
+    setTrial(nextTrial);
+    setReview(null);
+    setPhase('fixate');
+    scheduleTimeout(() => {
+      if (cancelledRef.current) return;
+      setPhase('show');
+      scheduleTimeout(() => {
+        if (!cancelledRef.current) setPhase('recall');
+      }, displayMs);
+    }, VISUAL_SPAN_FIXATION_CUE_MS);
+  }
+
   function start() {
+    if (phase !== 'idle' && phase !== 'ended') return;
     clearTrackedTimeouts();
     cancelledRef.current = false;
-    if (phase !== 'idle' && phase !== 'ended') return;
     reportedRef.current = false;
     scoreRef.current = 0;
     attemptsRef.current = 0;
-    levelRef.current = startingLength;
-    setPhase('show');
-    setLevel(startingLength);
+    correctRef.current = 0;
+    failuresRef.current = 0;
+    correctStreakRef.current = 0;
+    failureStreakRef.current = 0;
+    spanRef.current = maximumSpan;
+    maxSpanRef.current = maximumSpan;
     setScore(0);
-    setAttempts(0);
-    setInput('');
-    setFeedback(null);
+    setRound(0);
+    setCorrectStreak(0);
+    setFailureStreak(0);
+    setSpanSize(maximumSpan);
+    setReview(null);
     startRef.current = Date.now();
-
-    const seq = generateSequence(startingLength);
-    setSequence(seq);
-
-    showTimeoutRef.current = setTimeout(() => {
-      setPhase('recall');
-    }, displayMs);
+    showRound(maximumSpan);
   }
 
-  function submit() {
+  function chooseAnswer(selectedWord: string) {
     if (phase !== 'recall') return;
 
+    const isCorrect = selectedWord === trial.correctWord;
     attemptsRef.current += 1;
-    setAttempts(attemptsRef.current);
-    const isCorrect = input === sequence;
+    setRound(attemptsRef.current);
+    const previousSpan = spanRef.current;
+    let nextSpan = spanRef.current;
 
     if (isCorrect) {
-      scoreRef.current += levelRef.current * 10;
-      setScore(scoreRef.current);
-      setFeedback('correct');
+      correctRef.current += 1;
+      correctStreakRef.current += 1;
+      failureStreakRef.current = 0;
+      scoreRef.current += spanRef.current * 10;
+      if (
+        correctStreakRef.current >= CORRECT_RUN_TO_RESTORE_SPAN &&
+        nextSpan < maximumSpan
+      ) {
+        nextSpan += 1;
+        correctStreakRef.current = 0;
+      }
     } else {
-      setFeedback('wrong');
+      failuresRef.current += 1;
+      correctStreakRef.current = 0;
+      failureStreakRef.current += 1;
+      scoreRef.current = Math.max(0, scoreRef.current - FAILURE_PENALTY);
+      nextSpan = Math.max(config.minimumSpan, nextSpan - 1);
     }
+
+    spanRef.current = nextSpan;
+    maxSpanRef.current = Math.max(maxSpanRef.current, nextSpan);
+    setSpanSize(nextSpan);
+    setScore(scoreRef.current);
+    setCorrectStreak(correctStreakRef.current);
+    setFailureStreak(failureStreakRef.current);
+
+    const reachedRoundLimit = attemptsRef.current >= totalRounds;
+    const reachedFailureLimit =
+      failureStreakRef.current >= MAX_CONSECUTIVE_FAILURES;
+    const shouldFinish = reachedRoundLimit || reachedFailureLimit;
+    setReview({
+      selectedWord,
+      correctWord: trial.correctWord,
+      positionLabel: trial.targetPositionLabel,
+      correct: isCorrect,
+      shouldFinish,
+      previousSpan,
+      nextSpan,
+    });
     setPhase('feedback');
 
     scheduleTimeout(() => {
       if (cancelledRef.current) return;
-      if (isCorrect) {
-        setFeedback(null);
-        levelRef.current += 1;
-        setLevel(levelRef.current);
-        setInput('');
-
-        const seq = generateSequence(levelRef.current);
-        setSequence(seq);
-        setPhase('show');
-
-        showTimeoutRef.current = setTimeout(() => {
-          setPhase('recall');
-        }, displayMs);
+      if (shouldFinish) {
+        finish(reachedFailureLimit ? 'three-misses' : 'round-limit');
       } else {
-        finish();
+        showRound(nextSpan);
       }
-    }, getRecallFeedbackDurationMs(sequence, isCorrect));
+    }, getRecallFeedbackDurationMs(trial.correctWord, isCorrect));
   }
 
-  function finish() {
-    if (cancelledRef.current) return;
-    if (reportedRef.current) return;
+  function finish(reason: FinishReason) {
+    if (cancelledRef.current || reportedRef.current) return;
     reportedRef.current = true;
     clearTrackedTimeouts();
 
     const now = Date.now();
-    const elapsedMs = now - startRef.current;
-    const maxLevel = levelRef.current;
-    const accuracy = attemptsRef.current > 0 ? (attemptsRef.current - 1) / attemptsRef.current : 0;
+    const elapsedMs = Math.max(0, now - startRef.current);
+    const accuracy =
+      attemptsRef.current > 0 ? correctRef.current / attemptsRef.current : 0;
+    setFinishReason(reason);
+    setPhase('ended');
 
-    // Update progress - success if accuracy >= 70%
-    const success = accuracy >= 0.7;
-    updateProgress(GAME_ID, success, scoreRef.current).then(({ progress }) => {
-      setGameProgress(progress);
-    });
+    void updateProgress(
+      GAME_ID,
+      accuracy >= 0.7,
+      scoreRef.current,
+      selectedDifficulty
+    )
+      .then(({ progress }) => {
+        if (!cancelledRef.current) setGameProgress(progress);
+      })
+      .catch(() => undefined);
 
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
@@ -166,9 +343,22 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
       elapsedMs,
       score: scoreRef.current,
       accuracy,
-      details: { maxLevel, attempts: attemptsRef.current, difficulty: selectedDifficulty },
+      details: {
+        activityType: 'spatial-word-position-recall',
+        correct: correctRef.current,
+        attempts: attemptsRef.current,
+        failures: failuresRef.current,
+        endingFailureStreak: failureStreakRef.current,
+        maximumConfiguredSpan: maximumSpan,
+        maxSpan: maxSpanRef.current,
+        finalSpan: spanRef.current,
+        displayMs,
+        optionCount: config.optionCount,
+        fixationCueMs: VISUAL_SPAN_FIXATION_CUE_MS,
+        finishReason: reason,
+        difficulty: selectedDifficulty,
+      },
     });
-    setPhase('ended');
   }
 
   function playAgain() {
@@ -177,11 +367,48 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
     scheduleTimeout(start, 50);
   }
 
+  const stats = (
+    <StatsRow
+      style={styles.statsRow}
+      items={[
+        {
+          key: 'score',
+          value: score,
+          label: 'Score',
+          testID: 'span-score',
+          containerStyle: styles.statBox,
+          valueStyle: styles.statValue,
+          labelStyle: styles.statLabel,
+        },
+        {
+          key: 'span',
+          value: spanSize,
+          label: 'Positions',
+          testID: 'span-size',
+          containerStyle: [styles.statBox, styles.levelBox],
+          valueStyle: styles.statValue,
+          labelStyle: styles.statLabel,
+        },
+        {
+          key: 'misses',
+          value: `${failureStreak}/${MAX_CONSECUTIVE_FAILURES}`,
+          label: 'Misses',
+          testID: 'span-misses',
+          containerStyle: [styles.statBox, styles.missBox],
+          valueStyle: styles.statValue,
+          labelStyle: styles.statLabel,
+        },
+      ]}
+    />
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Visual Span Expansion</Text>
-        <Text style={styles.subtitle}>Remember the sequence shown</Text>
+        <Text style={styles.title}>Visual Span</Text>
+        <Text style={styles.subtitle}>
+          Hold the center while words appear around it
+        </Text>
       </View>
 
       {phase === 'idle' && (
@@ -203,140 +430,126 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
 
       {phase === 'show' && (
         <View style={styles.gameArea}>
-          <StatsRow
-            style={styles.statsRow}
-            items={[
-              {
-                key: 'score',
-                value: score,
-                label: 'Score',
-                containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-              {
-                key: 'level',
-                value: level,
-                label: 'Level',
-                containerStyle: [styles.statBox, styles.levelBox],
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-            ]}
+          {stats}
+          <Text style={styles.roundLabel}>
+            Glance {Math.min(round + 1, totalRounds)} of {totalRounds}
+          </Text>
+          <Text style={styles.instruction}>
+            Keep your eyes near the + and notice the surrounding words.
+          </Text>
+          <SpatialBoard
+            trial={trial}
+            spread={config.spread}
+            revealWords
           />
+        </View>
+      )}
 
-          <View testID="sequence-display" style={styles.sequenceCard}>
-            <Text testID="sequence" style={styles.sequence}>{sequence}</Text>
-          </View>
-
-          <Text style={styles.instruction}>Memorize this sequence!</Text>
+      {phase === 'fixate' && (
+        <View style={styles.gameArea}>
+          {stats}
+          <Text style={styles.roundLabel}>
+            Glance {Math.min(round + 1, totalRounds)} of {totalRounds}
+          </Text>
+          <Text style={styles.question}>Set your eyes on the center +</Text>
+          <Text style={styles.instruction}>
+            Keep them there when the surrounding words appear.
+          </Text>
+          <SpatialBoard
+            trial={trial}
+            spread={config.spread}
+            revealWords={false}
+            testID="span-fixation-cue"
+          />
         </View>
       )}
 
       {phase === 'recall' && (
-        <View style={styles.gameArea}>
-          <StatsRow
-            style={styles.statsRow}
-            items={[
-              {
-                key: 'score',
-                value: score,
-                label: 'Score',
-                containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-              {
-                key: 'level',
-                value: level,
-                label: 'Level',
-                containerStyle: [styles.statBox, styles.levelBox],
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-            ]}
+        <View testID="span-recall" style={styles.gameArea}>
+          {stats}
+          <Text style={styles.roundLabel}>
+            Glance {Math.min(round + 1, totalRounds)} of {totalRounds}
+          </Text>
+          <Text style={styles.question}>
+            Which word was at {trial.targetPositionLabel}?
+          </Text>
+          <SpatialBoard
+            trial={trial}
+            spread={config.spread}
+            revealWords={false}
+            showTarget
           />
-
-          <View style={[
-            styles.inputCard,
-            feedback === 'correct' && styles.cardCorrect,
-            feedback === 'wrong' && styles.cardWrong,
-          ]}>
-            <TextInput
-              testID="recall-input"
-              style={styles.input}
-              value={input}
-              onChangeText={setInput}
-              keyboardType="number-pad"
-              placeholder="Enter sequence"
-              placeholderTextColor={colors.textMuted}
-              autoFocus
-            />
+          <View testID="span-options" style={styles.options}>
+            {trial.options.map((option, index) => (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Answer ${option}`}
+                key={option}
+                testID={`span-option-${index}`}
+                onPress={() => chooseAnswer(option)}
+                style={({ pressed }) => [
+                  styles.optionButton,
+                  pressed && styles.optionButtonPressed,
+                ]}
+              >
+                <Text style={styles.optionText}>{option}</Text>
+              </Pressable>
+            ))}
           </View>
-
-          <Pressable accessibilityRole="button" testID="submit-btn" style={styles.submitBtn} onPress={submit}>
-            <Text style={styles.submitBtnText}>Submit</Text>
-          </Pressable>
         </View>
       )}
 
-      {phase === 'feedback' && (
+      {phase === 'feedback' && review && (
         <View testID="visual-span-feedback" style={styles.gameArea}>
-          <StatsRow
-            style={styles.statsRow}
-            items={[
-              {
-                key: 'score',
-                value: score,
-                label: 'Score',
-                containerStyle: styles.statBox,
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-              {
-                key: 'level',
-                value: level,
-                label: 'Level',
-                containerStyle: [styles.statBox, styles.levelBox],
-                valueStyle: styles.statValue,
-                labelStyle: styles.statLabel,
-              },
-            ]}
-          />
+          {stats}
           <View
             accessibilityLiveRegion="polite"
             style={[
               styles.reviewCard,
-              feedback === 'correct' ? styles.cardCorrect : styles.cardWrong,
+              review.correct ? styles.cardCorrect : styles.cardWrong,
             ]}
           >
             <Text
               style={
-                feedback === 'correct'
+                review.correct
                   ? styles.reviewCorrectTitle
                   : styles.reviewWrongTitle
               }
             >
-              {feedback === 'correct' ? 'Correct' : 'Review the sequence'}
+              {review.correct ? 'Correct position recall' : 'Review this position'}
             </Text>
-            {feedback === 'wrong' && (
-              <>
-                <Text style={styles.reviewLabel}>Your answer</Text>
-                <Text testID="visual-span-user-answer" style={styles.reviewSequence}>
-                  {input ? input.split('').join(' ') : 'No answer'}
-                </Text>
-                <Text style={styles.reviewLabel}>Correct sequence</Text>
-                <Text
-                  selectable
-                  testID="visual-span-correct-answer"
-                  style={styles.reviewSequence}
-                >
-                  {sequence.split('').join(' ')}
-                </Text>
-                <Text style={styles.reviewHint}>
-                  Compare each position before the result screen appears.
-                </Text>
-              </>
+            <Text style={styles.reviewPosition}>
+              Position: {review.positionLabel}
+            </Text>
+            <Text style={styles.reviewLabel}>Your answer</Text>
+            <Text testID="visual-span-user-answer" style={styles.reviewWord}>
+              {review.selectedWord}
+            </Text>
+            <Text style={styles.reviewLabel}>Correct word</Text>
+            <Text
+              selectable
+              testID="visual-span-correct-answer"
+              style={styles.reviewWord}
+            >
+              {review.correctWord}
+            </Text>
+            {!review.correct && (
+              <Text style={styles.reviewHint}>
+                −{FAILURE_PENALTY} points · next glance uses {spanSize}{' '}
+                positions
+                {review.shouldFinish
+                  ? ' · session ends after this review'
+                  : ''}
+              </Text>
+            )}
+            {review.correct && !review.shouldFinish && (
+              <Text style={styles.reviewHint}>
+                {review.nextSpan > review.previousSpan
+                  ? `One position restored · next glance uses ${review.nextSpan}`
+                  : review.nextSpan < maximumSpan
+                    ? `${correctStreak}/${CORRECT_RUN_TO_RESTORE_SPAN} correct toward restoring one position`
+                    : `Selected ${maximumSpan}-position span held`}
+              </Text>
             )}
           </View>
         </View>
@@ -344,11 +557,22 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
 
       {phase === 'ended' && (
         <View testID="end" style={styles.endCard}>
-          <Text style={styles.endEmoji}>🧠</Text>
-          <Text style={styles.endTitle}>Game Over!</Text>
+          <Text style={styles.endEmoji}>◎</Text>
+          <Text style={styles.endTitle}>
+            {finishReason === 'three-misses'
+              ? 'Three misses — session complete'
+              : 'Visual span set complete'}
+          </Text>
           <Text style={styles.endScore}>{score}</Text>
-          <Text style={styles.endMeta}>Max Level: {level} digits</Text>
-          <Text style={styles.endDifficulty}>Difficulty: {selectedDifficulty}</Text>
+          <Text style={styles.endMeta}>
+            {correctRef.current}/{attemptsRef.current} positions correct
+          </Text>
+          <Text style={styles.endMeta}>
+            Widest glance: {maxSpanRef.current} positions
+          </Text>
+          <Text style={styles.endDifficulty}>
+            Difficulty: {selectedDifficulty}
+          </Text>
           <View style={styles.progressRow}>
             <Text style={styles.levelText}>Level {gameProgress.level}</Text>
             <Text style={styles.starsText}>
@@ -356,7 +580,12 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
               {'☆'.repeat(5 - levelToStars(gameProgress.level))}
             </Text>
           </View>
-          <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
+          <Pressable
+            accessibilityRole="button"
+            testID="play-again"
+            style={styles.playAgainBtn}
+            onPress={playAgain}
+          >
             <Text style={styles.playAgainText}>Try Again</Text>
           </Pressable>
         </View>
@@ -368,66 +597,182 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12 },
   header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  title: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
+  subtitle: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
   idleContent: { flex: 1 },
   descriptionText: {
+    color: colors.textSecondary,
     fontSize: 15,
-    color: '#4B5563',
-    textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
     paddingHorizontal: 8,
+    textAlign: 'center',
   },
-  progressInfo: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
+  progressInfo: { alignItems: 'center', marginBottom: 24 },
   levelLabel: {
+    color: colors.textPrimary,
     fontSize: 18,
     fontWeight: '700',
-    color: '#374151',
     marginBottom: 8,
   },
-  starsDisplay: {
-    fontSize: 24,
-    letterSpacing: 4,
-  },
-  startBtn: { backgroundColor: colors.interactiveTeal, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
-  gameArea: { flex: 1 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 },
-  statBox: { alignItems: 'center', backgroundColor: '#CCFBF1', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
-  levelBox: { backgroundColor: '#99F6E4' },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#115E59' },
-  statLabel: { fontSize: 10, color: '#0F766E' },
-  sequenceCard: {
-    backgroundColor: '#F0FDFA',
-    borderRadius: 12,
-    padding: 32,
+  starsDisplay: { fontSize: 24, letterSpacing: 4 },
+  startBtn: {
     alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#5EEAD4',
+    backgroundColor: colors.interactiveTeal,
+    borderRadius: 10,
+    minHeight: 50,
+    justifyContent: 'center',
   },
-  sequence: { fontSize: 36, fontWeight: '800', color: '#115E59', letterSpacing: 8 },
-  instruction: { textAlign: 'center', color: '#6B7280', fontSize: 12 },
-  inputCard: {
-    backgroundColor: '#F0FDFA',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#5EEAD4',
+  startBtnText: { color: colors.onInteractive, fontSize: 16, fontWeight: '700' },
+  gameArea: { alignItems: 'center', flex: 1 },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+    width: '100%',
   },
-  cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
-  cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
-  input: { fontSize: 28, fontWeight: '700', color: '#115E59', textAlign: 'center', letterSpacing: 4 },
-  reviewCard: {
-    borderRadius: 14,
+  statBox: {
+    alignItems: 'center',
+    backgroundColor: colors.infoSurface,
+    borderRadius: 10,
+    minWidth: 78,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  levelBox: { backgroundColor: colors.surfaceTonal },
+  missBox: { backgroundColor: colors.warningSurface },
+  statValue: {
+    color: colors.infoForeground,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  statLabel: { color: colors.textSecondary, fontSize: 10 },
+  roundLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginBottom: 5,
+    textTransform: 'uppercase',
+  },
+  instruction: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  spatialBoard: {
+    alignSelf: 'center',
+    backgroundColor: colors.cardBackground,
+    borderColor: colors.border,
+    borderRadius: 24,
+    borderWidth: 1,
+    marginVertical: 6,
+    maxWidth: 360,
+    position: 'relative',
+  },
+  positionSlot: {
+    alignItems: 'center',
+    backgroundColor: colors.infoSurface,
+    borderColor: colors.info,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 40,
+    minWidth: 70,
+    paddingHorizontal: 8,
+    position: 'absolute',
+  },
+  targetSlot: {
+    backgroundColor: colors.warningSurface,
+    borderColor: colors.warningForeground,
     borderWidth: 2,
+  },
+  positionText: {
+    color: colors.infoForeground,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  hiddenPositionText: {
+    color: colors.textMuted,
+    fontSize: 18,
+  },
+  targetPositionText: {
+    color: colors.warningForeground,
+    fontSize: 24,
+  },
+  fixation: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    left: '43%',
+    position: 'absolute',
+    top: '39%',
+  },
+  fixationMark: {
+    color: colors.interactivePrimary,
+    fontSize: 34,
+    fontWeight: '400',
+    lineHeight: 36,
+  },
+  fixationLabel: {
+    color: colors.textMuted,
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  question: {
+    color: colors.textPrimary,
+    fontSize: 19,
+    fontWeight: '800',
+    lineHeight: 26,
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  options: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
+    justifyContent: 'center',
+    maxWidth: 360,
+    width: '100%',
+  },
+  optionButton: {
+    alignItems: 'center',
+    backgroundColor: colors.cardBackground,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 48,
+    minWidth: 96,
+    paddingHorizontal: 16,
+  },
+  optionButtonPressed: {
+    backgroundColor: colors.infoSurface,
+    borderColor: colors.infoForeground,
+  },
+  optionText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cardCorrect: {
+    backgroundColor: colors.successSurface,
+    borderColor: colors.successForeground,
+  },
+  cardWrong: {
+    backgroundColor: colors.errorSurface,
+    borderColor: colors.errorForeground,
+  },
+  reviewCard: {
+    borderRadius: 16,
+    borderWidth: 2,
+    gap: 6,
+    marginTop: 12,
+    maxWidth: 360,
     padding: 20,
+    width: '100%',
   },
   reviewCorrectTitle: {
     color: colors.successForeground,
@@ -441,20 +786,26 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
   },
+  reviewPosition: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 3,
+    textAlign: 'center',
+  },
   reviewLabel: {
     color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    marginTop: 4,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    marginTop: 3,
     textAlign: 'center',
     textTransform: 'uppercase',
   },
-  reviewSequence: {
+  reviewWord: {
     color: colors.textPrimary,
-    fontSize: 26,
+    fontSize: 25,
     fontWeight: '800',
-    letterSpacing: 4,
     textAlign: 'center',
   },
   reviewHint: {
@@ -463,17 +814,46 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: 'center',
   },
-  submitBtn: { backgroundColor: colors.interactiveTeal, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
-  submitBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
-  endCard: { alignItems: 'center', paddingVertical: 20 },
-  endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: colors.interactiveTeal, marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
-  endDifficulty: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
-  levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  starsText: { fontSize: 16, color: colors.warningForeground },
-  playAgainBtn: { marginTop: 16, backgroundColor: colors.interactiveTeal, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
-  playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
+  endCard: { alignItems: 'center', flex: 1, paddingVertical: 20 },
+  endEmoji: {
+    color: colors.interactiveTeal,
+    fontSize: 44,
+    marginBottom: 8,
+  },
+  endTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  endScore: {
+    color: colors.interactiveTeal,
+    fontSize: 48,
+    fontWeight: '800',
+    marginVertical: 8,
+  },
+  endMeta: { color: colors.textSecondary, fontSize: 14, marginTop: 2 },
+  endDifficulty: { color: colors.textMuted, fontSize: 12, marginTop: 5 },
+  progressRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  levelText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  starsText: { color: colors.warningForeground, fontSize: 16 },
+  playAgainBtn: {
+    backgroundColor: colors.interactiveTeal,
+    borderRadius: 10,
+    marginTop: 16,
+    minHeight: 48,
+    minWidth: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playAgainText: {
+    color: colors.onInteractive,
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });

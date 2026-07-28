@@ -44,6 +44,10 @@ import WordMismatchGrid from '../games/WordMismatchGrid/WordMismatchGrid';
 import WordPairs from '../games/WordPairs/WordPairs';
 import WordSearchGame from '../games/WordSearchGame/WordSearchGame';
 import { getRecallFeedbackDurationMs } from '../games/recallFeedback';
+import {
+  createVisualSpanTrial,
+  VISUAL_SPAN_FIXATION_CUE_MS,
+} from '../games/VisualSpanExpansion/visualSpanContent';
 
 type Report = jest.Mock<void, [Record<string, unknown>]>;
 
@@ -276,20 +280,22 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
     id: 'VisualSpanExpansion',
     element: (report) => (
       <VisualSpanExpansion
-        startingLength={1}
+        itemCount={3}
         displayMs={10}
+        totalRounds={1}
+        random={() => 0.25}
         onReportResult={report}
       />
     ),
     complete: (view) => {
-      const expected = String(view.getByTestId('sequence').props.children);
-      advance(20);
-      fireEvent.changeText(view.getByTestId('recall-input'), 'x');
-      fireEvent.press(view.getByTestId('submit-btn'));
-      advance(getRecallFeedbackDurationMs(expected, false) + 10);
+      const trial = createVisualSpanTrial('easy', 3, () => 0.25);
+      const correctIndex = trial.options.indexOf(trial.correctWord);
+      advance(VISUAL_SPAN_FIXATION_CUE_MS + 20);
+      fireEvent.press(view.getByTestId(`span-option-${correctIndex}`));
+      advance(getRecallFeedbackDurationMs(trial.correctWord, true));
     },
-    activeTestId: 'sequence-display',
-    replayTestId: 'recall-input',
+    activeTestId: 'span-fixation-cue',
+    replayTestId: 'span-fixation-cue',
     endTestId: 'end',
   },
   {
