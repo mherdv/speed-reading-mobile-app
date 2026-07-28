@@ -36,7 +36,6 @@ import {
   GameDifficultyProvider,
   getDifficultyOptions,
 } from '../ui/GameDifficultyControl';
-import { GameSessionActivityProvider } from '../ui/GameSessionActivity';
 import { ResponsiveShell } from '../ui/ResponsiveShell';
 
 type Props = {
@@ -46,7 +45,6 @@ type Props = {
   difficulty?: Difficulty;
   onBack: () => void;
   onFinish: (result: AttemptResult) => void;
-  onSessionDirtyChange?: (dirty: boolean) => void;
 };
 
 function makeId() {
@@ -60,7 +58,6 @@ export function GameScreen({
   difficulty,
   onBack,
   onFinish,
-  onSessionDirtyChange,
 }: Props) {
   const normalizedGameId = normalizeGameId(gameId);
   const [controlLoaded, setControlLoaded] = useState(false);
@@ -194,7 +191,6 @@ export function GameScreen({
     // Persistence is intentionally backgrounded: storage latency or failure
     // must not trap the user on a completed game screen.
     void saveResult(result).catch(() => undefined);
-    onSessionDirtyChange?.(false);
     onFinish(result);
   };
 
@@ -245,25 +241,21 @@ export function GameScreen({
         </View>
         <View style={styles.gameContainer}>
           <GameDifficultyProvider value={difficultyControl}>
-            <GameSessionActivityProvider
-              value={() => onSessionDirtyChange?.(true)}
-            >
-              <GameComponent
-                key={`${sessionKey ?? normalizedGameId}-${difficultyControl.mode}-${difficultyControl.difficulty}`}
-                autoStart={autoStart}
-                difficulty={difficultyControl.difficulty}
-                onReportResult={(p: GameReportPayload) =>
-                  void handleGameReport({
-                    ...p,
-                    details: {
-                      ...p.details,
-                      difficulty: difficultyControl.difficulty,
-                      difficultyMode: difficultyControl.mode,
-                    },
-                  })
-                }
-              />
-            </GameSessionActivityProvider>
+            <GameComponent
+              key={`${sessionKey ?? normalizedGameId}-${difficultyControl.mode}-${difficultyControl.difficulty}`}
+              autoStart={autoStart}
+              difficulty={difficultyControl.difficulty}
+              onReportResult={(p: GameReportPayload) =>
+                void handleGameReport({
+                  ...p,
+                  details: {
+                    ...p.details,
+                    difficulty: difficultyControl.difficulty,
+                    difficultyMode: difficultyControl.mode,
+                  },
+                })
+              }
+            />
           </GameDifficultyProvider>
         </View>
       </ResponsiveShell>

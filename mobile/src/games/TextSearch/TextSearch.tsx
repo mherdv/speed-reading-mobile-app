@@ -8,6 +8,7 @@ import { StatsRow } from '../../ui/StatsRow';
 import { colors } from '../../theme/colors';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
 import { TEXT_SEARCH_VARIATIONS } from '../../data/textSearchContent';
+import { formatDuration } from '../../domain/results';
 
 const GAME_ID = 'TextSearch';
 
@@ -257,8 +258,8 @@ export default function TextSearch({
               {
                 key: 'time',
                 value: config.timeLimit
-                  ? `${Math.max(0, (config.timeLimit - elapsed) / 1000).toFixed(1)}s`
-                  : `${(elapsed / 1000).toFixed(1)}s`,
+                  ? formatDuration(Math.max(0, config.timeLimit - elapsed))
+                  : formatDuration(elapsed),
                 label: config.timeLimit ? 'Left' : 'Time',
                 containerStyle: [styles.statBox, styles.timerBox],
                 valueStyle: styles.statValue,
@@ -345,7 +346,7 @@ export default function TextSearch({
           </Text>
           <Text style={styles.endMeta}>
             Found {found.length} of {targetIndices.length} · {errors}{' '}
-            {errors === 1 ? 'error' : 'errors'} · {(elapsed / 1000).toFixed(1)}s
+            {errors === 1 ? 'error' : 'errors'} · {formatDuration(elapsed)}
           </Text>
           <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Search Again</Text>

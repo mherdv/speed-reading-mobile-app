@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -79,7 +77,7 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
 
     const timer = setInterval(() => {
       setElapsedMs(Date.now() - (startedAtRef.current ?? Date.now()));
-    }, 250);
+    }, 50);
     return () => clearInterval(timer);
   }, [phase]);
 
@@ -140,27 +138,7 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
   }
 
   function handleCancel() {
-    if (phase === 'idle') {
-      onCancel();
-      return;
-    }
-
-    const leave = () => onCancel();
-    if (Platform.OS === 'web') {
-      if (globalThis.confirm('Leave this measured read? The current attempt will not be saved.')) {
-        leave();
-      }
-      return;
-    }
-
-    Alert.alert(
-      'Leave measured read?',
-      'The current attempt will not be saved.',
-      [
-        { text: 'Keep reading', style: 'cancel' },
-        { text: 'Leave', style: 'destructive', onPress: leave },
-      ]
-    );
+    onCancel();
   }
 
   return (

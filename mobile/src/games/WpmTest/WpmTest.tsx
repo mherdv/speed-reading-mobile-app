@@ -7,7 +7,7 @@ import {
   getWpmTestPool,
   type WpmQuestion,
 } from '../../data/wpmTestContent';
-import { assessReadingMeasurement } from '../../domain/results';
+import { assessReadingMeasurement, formatDuration } from '../../domain/results';
 import type { TextSample } from '../../domain/types';
 import { computeWpm, countWords } from '../../domain/wpm';
 import { colors } from '../../theme/colors';
@@ -92,7 +92,7 @@ export default function WpmTest({
     if (phase !== 'reading') return;
     const interval = setInterval(() => {
       setElapsedMs(Date.now() - startedAtRef.current);
-    }, 250);
+    }, 50);
     return () => clearInterval(interval);
   }, [phase]);
 
@@ -226,7 +226,7 @@ export default function WpmTest({
         <ScrollView testID="wpm-reading" contentContainerStyle={styles.scrollContent}>
           <View style={styles.timerRow}>
             <Text style={styles.timerText}>
-              {Math.floor(elapsedMs / 60_000)}:{String(Math.floor((elapsedMs % 60_000) / 1_000)).padStart(2, '0')}
+              {formatDuration(elapsedMs)}
             </Text>
             <Text style={styles.wordCount}>{countWords(activeSample.text)} words</Text>
           </View>

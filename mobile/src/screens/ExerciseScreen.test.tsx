@@ -39,6 +39,23 @@ describe('ExerciseScreen', () => {
     expect(queryByText(sample.text)).toBeNull();
   });
 
+  it('leaves an active measured read immediately when Back is pressed', () => {
+    const sample = TEXT_SAMPLES[0];
+    const onCancel = jest.fn();
+    const { getByLabelText, getByTestId } = render(
+      <ExerciseScreen
+        sample={sample}
+        onCancel={onCancel}
+        onFinish={jest.fn()}
+      />
+    );
+
+    fireEvent.press(getByTestId('start-reading'));
+    fireEvent.press(getByLabelText('Go back'));
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
   it('calculates WPM from reading time only, excluding the question phase', () => {
     const sample = TEXT_SAMPLES[0];
     const onFinish = jest.fn();

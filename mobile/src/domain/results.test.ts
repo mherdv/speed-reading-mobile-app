@@ -100,8 +100,12 @@ describe('result helpers', () => {
   });
 
   it('formats short and multi-minute durations', () => {
-    expect(formatDuration(19_600)).toBe('20s');
-    expect(formatDuration(125_000)).toBe('2m 5s');
+    expect(formatDuration(4_320)).toBe('4.32s');
+    expect(formatDuration(19_600)).toBe('19.60s');
+    expect(formatDuration(125_000)).toBe('2m 5.00s');
+    expect(formatDuration(59_999)).toBe('1m 0.00s');
+    expect(formatDuration(-1)).toBe('0.00s');
+    expect(formatDuration(Number.NaN)).toBe('0.00s');
   });
 
   it('flags immediate or implausibly fast reading without changing raw data', () => {

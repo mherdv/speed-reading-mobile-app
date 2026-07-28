@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
+import { formatDuration } from '../../domain/results';
 import { useAutoStart, type Difficulty } from '../gameHooks';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
@@ -298,7 +299,7 @@ export default function NumberRecognition({
               },
               {
                 key: 'time',
-                value: `${(timeLeft / 1000).toFixed(1)}s`,
+                value: formatDuration(timeLeft),
                 label: 'Time',
                 containerStyle: [styles.statBox, styles.timerBox],
                 valueStyle: styles.statValue,

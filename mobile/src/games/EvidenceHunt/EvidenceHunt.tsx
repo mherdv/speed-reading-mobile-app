@@ -16,6 +16,7 @@ import {
   levelToStars,
   updateTwoSessionDifficultySuggestion,
 } from '../../data/progressStore';
+import { formatDuration } from '../../domain/results';
 import type { EvidenceHuntResultDetails } from '../../domain/types';
 import { useAccessibilityPreferences } from '../../hooks/useAccessibilityPreferences';
 import { colors, shadows, spacing } from '../../theme/colors';
@@ -167,7 +168,7 @@ export default function EvidenceHunt({
         clearRoundTimer();
         expireRoundRef.current();
       }
-    }, 250);
+    }, 50);
   }
 
   function start(force = false) {
@@ -420,7 +421,7 @@ export default function EvidenceHunt({
             </Text>
             {timed && (
               <Text accessibilityLiveRegion="polite" style={styles.timerText}>
-                Optional guide: {Math.ceil(remainingMs / 1000)} seconds left
+                Optional guide: {formatDuration(remainingMs)} left
               </Text>
             )}
           </View>

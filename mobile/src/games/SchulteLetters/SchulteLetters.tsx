@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { formatDuration } from '../../domain/results';
 import { borderRadius, colors, shadows, spacing } from '../../theme/colors';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
@@ -293,7 +294,7 @@ export default function SchulteLetters({
           <Text style={styles.endEmoji}>ABC</Text>
           <Text style={styles.endTitle}>Completed!</Text>
           <Text style={styles.endTime}>
-            {(elapsedMs / 1000).toFixed(1)}s
+            {formatDuration(elapsedMs)}
           </Text>
           <Text style={styles.endMeta}>
             {mistakes === 0 ? 'Perfect! No mistakes' : `${mistakes} mistake${mistakes > 1 ? 's' : ''}`}

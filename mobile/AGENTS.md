@@ -63,3 +63,5 @@
 - Interactive controls need a semantic accessibility role and a practical touch target of at least 44 points (48 preferred).
 - Avoid nested vertical scrolling containers.
 - Keep reading copy at a comfortable size and line height; never expose a measured passage before its timer begins.
+- Back navigation from an idle or active exercise is immediate and non-blocking. Unmount cleanup must discard the unsaved attempt safely; do not add game-exit confirmation dialogs.
+- Keep confirmation dialogs for irreversible data actions such as clearing history or resetting stored progress.

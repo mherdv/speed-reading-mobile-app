@@ -76,7 +76,7 @@ export default function RepeatedReading({
     if (phase !== 'reading') return;
     const timer = setInterval(() => {
       setLiveElapsedMs(Date.now() - roundStartedAtRef.current);
-    }, 250);
+    }, 50);
     return () => clearInterval(timer);
   }, [phase, roundIndex]);
 

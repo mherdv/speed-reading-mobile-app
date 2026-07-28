@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
+import { formatDuration } from '../../domain/results';
 import { colors } from '../../theme/colors';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
@@ -261,8 +262,8 @@ export default function NumberSearch({
               { key: 'found', value: score, label: 'Found' },
               {
                 key: 'time',
-                value: Math.ceil(timeLeftMs / 1000),
-                label: 'Seconds',
+                value: formatDuration(timeLeftMs),
+                label: 'Left',
               },
               { key: 'attempts', value: attempts, label: 'Attempts' },
             ]}

@@ -1,5 +1,4 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import {
   act,
   fireEvent,
@@ -31,19 +30,8 @@ jest.mock('react-native-safe-area-context', () => {
 import App from '../../App';
 
 describe('real app navigation flows', () => {
-  let alertAction: 'keep' | 'leave';
-
   beforeEach(async () => {
     await AsyncStorage.clear();
-    alertAction = 'leave';
-    jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
-      const action = buttons?.find((button) =>
-        alertAction === 'leave'
-          ? button.text === 'Leave'
-          : button.text === 'Keep training'
-      );
-      action?.onPress?.();
-    });
   });
 
   afterEach(() => {
@@ -81,11 +69,9 @@ describe('real app navigation flows', () => {
     await waitFor(() => {
       expect(getByText('Welcome back')).toBeTruthy();
     });
-    expect(Alert.alert).not.toHaveBeenCalled();
   });
 
-  it('keeps an active game usable after Back → Keep training and completes it', async () => {
-    alertAction = 'keep';
+  it('leaves an active game immediately when Back is pressed', async () => {
     const { getByLabelText, getByTestId, getByText } = render(<App />);
     await waitFor(() => {
       expect(getByTestId('open-game-StructureScan')).toBeTruthy();
@@ -97,43 +83,16 @@ describe('real app navigation flows', () => {
     });
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('structure-scan-article')).toBeTruthy();
-
-    fireEvent.press(getByLabelText('Go back'));
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
-    expect(getByTestId('structure-scan-article')).toBeTruthy();
-
-    for (let round = 0; round < 3; round += 1) {
-      fireEvent.press(getByTestId('show-structure-choices'));
-      fireEvent.press(getByTestId('structure-choice-0'));
-      fireEvent.press(getByTestId('continue-structure-scan'));
-    }
-
-    await waitFor(() => {
-      expect(getByText('Recent progress')).toBeTruthy();
-    });
-  });
-
-  it('leaves an active game after Back → Leave', async () => {
-    const { getByLabelText, getByTestId, getByText } = render(<App />);
-    await waitFor(() => {
-      expect(getByTestId('open-game-StructureScan')).toBeTruthy();
-    });
-    fireEvent.press(getByTestId('open-game-StructureScan'));
-    await waitFor(() => {
-      expect(getByTestId('start-button')).toBeTruthy();
-    });
-    fireEvent.press(getByTestId('start-button'));
 
     fireEvent.press(getByLabelText('Go back'));
 
     await waitFor(() => {
       expect(getByText('Welcome back')).toBeTruthy();
     });
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
   });
 
   it.each(['EvidenceHunt', 'ContextBuilder'])(
-    'guards and discards an active %s session through the shared Back flow',
+    'leaves an active %s session immediately through the shared Back flow',
     async (gameId) => {
       const { getByLabelText, getByTestId, getByText } = render(<App />);
       await waitFor(() => {
@@ -149,42 +108,10 @@ describe('real app navigation flows', () => {
       await waitFor(() => {
         expect(getByText('Welcome back')).toBeTruthy();
       });
-      expect(Alert.alert).toHaveBeenCalledTimes(1);
     }
   );
 
-  it('guards an auto-started Result → Play Again session after Back → Keep training', async () => {
-    alertAction = 'keep';
-    const { getByLabelText, getByTestId, getByText } = render(<App />);
-    await waitFor(() => {
-      expect(getByTestId('open-game-StructureScan')).toBeTruthy();
-    });
-    fireEvent.press(getByTestId('open-game-StructureScan'));
-    await waitFor(() => {
-      expect(getByTestId('start-button')).toBeTruthy();
-    });
-    fireEvent.press(getByTestId('start-button'));
-
-    for (let round = 0; round < 3; round += 1) {
-      fireEvent.press(getByTestId('show-structure-choices'));
-      fireEvent.press(getByTestId('structure-choice-0'));
-      fireEvent.press(getByTestId('continue-structure-scan'));
-    }
-    await waitFor(() => {
-      expect(getByText('Recent progress')).toBeTruthy();
-    });
-
-    fireEvent.press(getByLabelText('Play this game again'));
-    await waitFor(() => {
-      expect(getByTestId('structure-scan-article')).toBeTruthy();
-    });
-    fireEvent.press(getByLabelText('Go back'));
-
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
-    expect(getByTestId('structure-scan-article')).toBeTruthy();
-  });
-
-  it('leaves an auto-started Result → Play Again session after Back → Leave', async () => {
+  it('leaves an auto-started Result → Play Again session immediately', async () => {
     const { getByLabelText, getByTestId, getByText } = render(<App />);
     await waitFor(() => {
       expect(getByTestId('open-game-StructureScan')).toBeTruthy();
@@ -213,6 +140,5 @@ describe('real app navigation flows', () => {
     await waitFor(() => {
       expect(getByText('Welcome back')).toBeTruthy();
     });
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
   });
 });

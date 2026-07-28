@@ -12,7 +12,6 @@ import {
 
 import { colors } from '../theme/colors';
 import { GameDifficultyControl } from './GameDifficultyControl';
-import { useMarkGameSessionActive } from './GameSessionActivity';
 
 type Props = {
   description: string;
@@ -37,13 +36,6 @@ export function SimpleIdlePanel({
   buttonTextStyle,
   children,
 }: Props) {
-  const markSessionActive = useMarkGameSessionActive();
-
-  const handleStart = () => {
-    markSessionActive();
-    onStart();
-  };
-
   return (
     <ScrollView
       contentContainerStyle={styles.container}
@@ -67,7 +59,7 @@ export function SimpleIdlePanel({
             buttonStyle,
             pressed && styles.pressed,
           ]}
-          onPress={handleStart}
+          onPress={onStart}
         >
           <Text style={[styles.startButtonText, buttonTextStyle]}>{startLabel}</Text>
         </Pressable>

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 
 import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { formatDuration } from '../../domain/results';
 import {
   createVariedSequence,
   getFlashWordPool,
@@ -362,8 +363,8 @@ export default function WordSearch({
               },
               {
                 key: 'time',
-                value: Math.ceil(timeLeftMs / 1000),
-                label: 'Seconds',
+                value: formatDuration(timeLeftMs),
+                label: 'Left',
                 containerStyle: styles.statBox,
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,

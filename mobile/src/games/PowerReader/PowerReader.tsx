@@ -8,6 +8,7 @@ import { updateProgress, levelToStars } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
 import { loadResults } from '../../data/resultsStore';
 import { ARTICLES } from '../../data/articles';
+import { formatDuration } from '../../domain/results';
 import { useAutoStart, useGameProgress } from '../gameHooks';
 import { StatsRow } from '../../ui/StatsRow';
 import { GameDifficultyControl } from '../../ui/GameDifficultyControl';
@@ -1513,7 +1514,7 @@ export default function PowerReader({
           <Text style={styles.endScore}>Guide: {targetWpm} WPM</Text>
           <Text style={styles.endMeta}>
             {presentedWordIndexesRef.current.size} words presented ·{' '}
-            {(elapsed / 1000).toFixed(1)}s active guide time
+            {formatDuration(elapsed)} active guide time
           </Text>
           <View style={styles.progressRow}>
             <Text style={styles.levelText}>Level {gameProgress.level}</Text>

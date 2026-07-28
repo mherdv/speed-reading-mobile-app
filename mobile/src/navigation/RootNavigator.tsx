@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { usePreventRemove } from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   type NativeStackScreenProps,
 } from '@react-navigation/native-stack';
-import { Alert, Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { RootStackParamList } from './types';
@@ -36,44 +35,11 @@ type GameRouteProps = NativeStackScreenProps<RootStackParamList, 'Game'> & {
   onResultsChanged: () => void;
 };
 
-function confirmGameRemoval(onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if (
-      globalThis.confirm(
-        'Leave this training session? Any active round will be discarded.'
-      )
-    ) {
-      onConfirm();
-    }
-    return;
-  }
-
-  Alert.alert(
-    'Leave training?',
-    'Any active round will be discarded and will not be saved.',
-    [
-      { text: 'Keep training', style: 'cancel' },
-      { text: 'Leave', style: 'destructive', onPress: onConfirm },
-    ]
-  );
-}
-
 function GameRoute({
   navigation,
   route,
   onResultsChanged,
 }: GameRouteProps) {
-  const bypassWarningRef = React.useRef(false);
-  const [sessionDirty, setSessionDirty] = React.useState(false);
-
-  usePreventRemove(sessionDirty, ({ data }) => {
-    if (bypassWarningRef.current) {
-      navigation.dispatch(data.action);
-      return;
-    }
-    confirmGameRemoval(() => navigation.dispatch(data.action));
-  });
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <GameScreen
@@ -82,13 +48,11 @@ function GameRoute({
         sessionKey={route.params.sessionKey}
         autoStart={route.params.autoStart}
         difficulty={route.params.difficulty}
-        onSessionDirtyChange={setSessionDirty}
         onBack={() => {
           onResultsChanged();
           navigation.goBack();
         }}
         onFinish={(result: AttemptResult) => {
-          bypassWarningRef.current = true;
           onResultsChanged();
           navigation.reset({
             index: 1,

@@ -5,6 +5,7 @@ import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { updateProgress } from '../../data/progressStore';
+import { formatDuration } from '../../domain/results';
 import {
   OPPOSITE_ITEMS,
   type OppositeItem,
@@ -259,8 +260,8 @@ export default function WordPairs({
               },
               {
                 key: 'time',
-                value: Math.ceil(timeLeftMs / 1000),
-                label: 'Seconds',
+                value: formatDuration(timeLeftMs),
+                label: 'Left',
                 containerStyle: styles.statBox,
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,

@@ -249,13 +249,13 @@ export function formatAttemptSummary(result: AttemptResult): string {
 }
 
 export function formatDuration(elapsedMs: number): string {
-  const safeMs = Math.max(0, elapsedMs);
-  const totalSeconds = Math.round(safeMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
+  const safeMs = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
+  const totalCentiseconds = Math.round(safeMs / 10);
+  const minutes = Math.floor(totalCentiseconds / 6_000);
+  const seconds = (totalCentiseconds % 6_000) / 100;
 
-  if (minutes === 0) return `${seconds}s`;
-  return `${minutes}m ${seconds}s`;
+  if (minutes === 0) return `${seconds.toFixed(2)}s`;
+  return `${minutes}m ${seconds.toFixed(2)}s`;
 }
 
 function localDayOrdinal(date: Date): number {

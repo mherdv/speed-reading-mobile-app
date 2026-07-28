@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { shuffleItems } from '../../data/flashPracticeContent';
 import { updateProgress } from '../../data/progressStore';
+import { formatDuration } from '../../domain/results';
 import {
   MIXUP_WORDS,
   type MixupWord,
@@ -267,7 +268,7 @@ export default function LetterJumble({
           <StatsRow
             items={[
               { key: 'solved', value: score, label: 'Solved' },
-              { key: 'time', value: Math.ceil(timeLeftMs / 1000), label: 'Seconds' },
+              { key: 'time', value: formatDuration(timeLeftMs), label: 'Left' },
               { key: 'attempts', value: attempts, label: 'Attempts' },
             ]}
           />

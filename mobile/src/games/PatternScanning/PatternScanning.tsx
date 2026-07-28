@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { formatDuration } from '../../domain/results';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
@@ -352,7 +353,7 @@ export default function PatternScanning({
               },
               {
                 key: 'time',
-                value: `${(timeLeft / 1000).toFixed(1)}s`,
+                value: formatDuration(timeLeft),
                 label: 'Time',
                 containerStyle: [styles.statBox, styles.timerBox],
                 valueStyle: styles.statValue,

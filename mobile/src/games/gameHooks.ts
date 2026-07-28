@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { loadGameProgress, type GameProgress } from '../data/progressStore';
 import { normalizeGameId } from '../data/gameIds';
-import { useMarkGameSessionActive } from '../ui/GameSessionActivity';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
@@ -55,15 +54,13 @@ export function useAutoStart(
   start: () => void
 ) {
   const autoStartedRef = useRef(false);
-  const markSessionActive = useMarkGameSessionActive();
 
   useEffect(() => {
     if (progressLoaded && autoStart && phase === 'idle' && !autoStartedRef.current) {
       autoStartedRef.current = true;
-      markSessionActive();
       start();
     }
-  }, [autoStart, markSessionActive, phase, progressLoaded, start]);
+  }, [autoStart, phase, progressLoaded, start]);
 }
 
 export function useTrackedTimeouts() {

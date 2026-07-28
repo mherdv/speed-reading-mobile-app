@@ -16,7 +16,6 @@ import {
   GameDifficultyControl,
   useGameDifficultyControl,
 } from './GameDifficultyControl';
-import { useMarkGameSessionActive } from './GameSessionActivity';
 
 type Props = {
   description: string;
@@ -51,7 +50,6 @@ export function GameIdlePanel({
   buttonTextStyle,
   children,
 }: Props) {
-  const markSessionActive = useMarkGameSessionActive();
   const difficultyControl = useGameDifficultyControl();
   const difficulty =
     difficultyControl?.difficulty ?? levelToDifficulty(level);
@@ -98,10 +96,7 @@ export function GameIdlePanel({
             buttonStyle,
             pressed && styles.pressed,
           ]}
-          onPress={() => {
-            markSessionActive();
-            onStart();
-          }}
+          onPress={onStart}
         >
           <Text style={[styles.startButtonText, buttonTextStyle]}>{startLabel}</Text>
         </Pressable>

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { updateProgress, levelToStars } from '../../data/progressStore';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { formatDuration } from '../../domain/results';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
@@ -297,7 +298,7 @@ export default function SchulteMix({
           <Text style={styles.endEmoji}>🎯</Text>
           <Text style={styles.endTitle}>Completed!</Text>
           <Text style={styles.endTime}>
-            {Math.floor((Date.now() - startedAtRef.current) / 1000)}s
+            {formatDuration(Date.now() - startedAtRef.current)}
           </Text>
           <Text style={styles.endMeta}>
             {mistakes === 0 ? 'Perfect! No mistakes' : `${mistakes} mistake${mistakes > 1 ? 's' : ''}`}
