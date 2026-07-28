@@ -49,6 +49,7 @@ describe('PowerReader', () => {
     );
 
     fireEvent.press(getByTestId('start-button'));
+    expect(getByTestId('power-reader-running-scroll')).toBeTruthy();
     expect(getByTestId('chunk-display')).toBeTruthy();
   });
 

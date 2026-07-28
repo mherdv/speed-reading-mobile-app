@@ -1325,7 +1325,14 @@ export default function PowerReader({
       )}
 
       {phase === 'running' && (
-        <View style={styles.gameArea}>
+        <ScrollView
+          contentContainerStyle={styles.gameArea}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+          style={styles.runningScroll}
+          testID="power-reader-running-scroll"
+        >
           <StatsRow
             style={styles.statsRow}
             items={[
@@ -1597,7 +1604,7 @@ export default function PowerReader({
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${progress}%` }]} />
           </View>
-        </View>
+        </ScrollView>
       )}
 
       {phase === 'ended' && (
@@ -1968,7 +1975,14 @@ const styles = StyleSheet.create({
   header: { marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
   subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  gameArea: { flex: 1, paddingHorizontal: 12 },
+  runningScroll: {
+    flex: 1,
+  },
+  gameArea: {
+    flexGrow: 1,
+    paddingHorizontal: 12,
+    paddingBottom: 24,
+  },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12, marginTop: 12 },
   statBox: { alignItems: 'center', backgroundColor: '#E7F5FB', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
   progressBox: { backgroundColor: '#D9EEF7' },
