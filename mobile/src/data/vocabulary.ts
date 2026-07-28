@@ -30,6 +30,12 @@ function uniqueReviewedWords(words: readonly string[]): string[] {
 
 // ============== BEGINNER WORDS (4-6 letters) ==============
 const BEGINNER_WORD_SOURCE: string[] = [
+  // Short words used by the compact Word Search board
+  'arch', 'bank', 'bird', 'boat', 'book', 'camp', 'card', 'city', 'clay', 'coat',
+  'dawn', 'desk', 'door', 'dust', 'farm', 'fish', 'flag', 'food', 'fork', 'game',
+  'gate', 'gift', 'hill', 'home', 'hope', 'idea', 'lake', 'lamp', 'leaf', 'line',
+  'map', 'moon', 'path', 'pond', 'rain', 'road', 'rock', 'roof', 'room', 'seed',
+  'ship', 'shop', 'snow', 'song', 'star', 'team', 'tent', 'tree', 'wind', 'wood',
   // Common nouns
   'apple', 'bread', 'chair', 'dream', 'earth', 'flame', 'glass', 'heart',
   'island', 'juice', 'knife', 'lemon', 'money', 'novel', 'ocean', 'paper',

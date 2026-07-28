@@ -30,7 +30,7 @@ describe('WordPairs', () => {
     expect(validateVocabularyPracticeContent()).toEqual([]);
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
       const challenge = getWordPairChallenge(difficulty);
-      expect(challenge.items.length).toBeGreaterThanOrEqual(12);
+      expect(challenge.items.length).toBeGreaterThanOrEqual(18);
     }
   });
 

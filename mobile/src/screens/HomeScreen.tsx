@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -63,9 +64,16 @@ import {
 } from '../games/registry';
 
 export const HOME_GAME_ICON_COLUMNS = 3;
+export const HOME_GAME_ICON_COLUMNS_WIDE = 4;
+export const HOME_GAME_TILE_MIN_WIDTH = 80;
+export const HOME_GAME_GRID_HORIZONTAL_PADDING = 12;
+const HOME_SHELL_MAX_WIDTH = 1200;
 
-export function getHomeGameIconColumns(): 3 {
-  return HOME_GAME_ICON_COLUMNS;
+export function getHomeGameIconColumns(availableWidth: number): 3 | 4 {
+  return availableWidth >=
+    HOME_GAME_TILE_MIN_WIDTH * HOME_GAME_ICON_COLUMNS_WIDE
+    ? HOME_GAME_ICON_COLUMNS_WIDE
+    : HOME_GAME_ICON_COLUMNS;
 }
 
 type Props = {
@@ -106,6 +114,13 @@ function GameGrid({
   onOpenGame,
   onToggleFavorite,
 }: GameGridProps) {
+  const { width: windowWidth } = useWindowDimensions();
+  const availableWidth =
+    Math.min(windowWidth, HOME_SHELL_MAX_WIDTH) -
+    HOME_GAME_GRID_HORIZONTAL_PADDING * 2;
+  const columns = getHomeGameIconColumns(availableWidth);
+  const tileWidth = columns === 4 ? '25%' : '33.3333%';
+
   return (
     <View style={styles.gamesGrid}>
       {games.map((game) => {
@@ -123,7 +138,10 @@ function GameGrid({
         const favorite = favorites.includes(game.id);
 
         return (
-          <View key={game.id} style={styles.gameTile}>
+          <View
+            key={game.id}
+            style={[styles.gameTile, { width: tileWidth }]}
+          >
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${game.title}. ${game.shortDescription}. ${progressLabel(game.id, level, preference)}`}
@@ -689,10 +707,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   shell: {
+    paddingHorizontal: 0,
     paddingBottom: spacing.xl,
   },
   header: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
   },
   logoImage: {
@@ -747,7 +766,7 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
   trainingCard: {
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     marginTop: spacing.lg,
     padding: 20,
     borderRadius: 26,
@@ -965,7 +984,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   sectionHeader: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     marginTop: spacing.xl,
     marginBottom: 14,
   },
@@ -983,7 +1002,7 @@ const styles = StyleSheet.create({
   },
   catalogTools: {
     marginTop: spacing.xl,
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
   catalogCount: {
@@ -1030,7 +1049,7 @@ const styles = StyleSheet.create({
     lineHeight: 30,
   },
   loadingCard: {
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     padding: spacing.lg,
     alignItems: 'center',
     gap: spacing.sm,
@@ -1042,14 +1061,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   gamesGrid: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: HOME_GAME_GRID_HORIZONTAL_PADDING,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
   },
   gameTile: {
     position: 'relative',
-    width: '33.3333%',
+    minWidth: HOME_GAME_TILE_MIN_WIDTH,
     minHeight: 138,
     marginBottom: 12,
   },
@@ -1122,7 +1141,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   emptySearch: {
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     padding: spacing.lg,
     alignItems: 'center',
     borderRadius: borderRadius.lg,
@@ -1156,7 +1175,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   progressSection: {
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     marginTop: spacing.lg,
     padding: 18,
     borderRadius: 22,

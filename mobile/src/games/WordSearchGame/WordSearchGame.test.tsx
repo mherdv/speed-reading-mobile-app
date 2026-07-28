@@ -19,7 +19,7 @@ describe('WordSearchGame', () => {
   });
 
   it('uses large difficulty-specific target pools instead of a short fixed list', () => {
-    expect(getWordSearchPool('easy').length).toBeGreaterThan(20);
+    expect(getWordSearchPool('easy').length).toBeGreaterThan(60);
     expect(getWordSearchPool('medium').length).toBeGreaterThan(40);
     expect(getWordSearchPool('hard').length).toBeGreaterThan(40);
     expect(

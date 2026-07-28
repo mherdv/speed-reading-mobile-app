@@ -1,7 +1,10 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
-import type { MainIdeaPassage } from '../../data/mainIdeaPassages';
+import {
+  MAIN_IDEA_PASSAGES,
+  type MainIdeaPassage,
+} from '../../data/mainIdeaPassages';
 import MainIdeaSprint from './MainIdeaSprint';
 
 const PASSAGE: MainIdeaPassage = {
@@ -26,6 +29,22 @@ describe('MainIdeaSprint', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('has at least five authored scenarios at every difficulty', () => {
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      const passages = MAIN_IDEA_PASSAGES.filter(
+        (passage) => passage.difficulty === difficulty
+      );
+      expect(passages.length).toBeGreaterThanOrEqual(5);
+      expect(
+        passages.every(
+          (passage) =>
+            passage.correctIndex >= 0 &&
+            passage.correctIndex < passage.choices.length
+        )
+      ).toBe(true);
+    }
   });
 
   it('hides the passage before retrieval and reports the answer', async () => {

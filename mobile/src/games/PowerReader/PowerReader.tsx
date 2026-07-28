@@ -115,21 +115,32 @@ type Props = {
 };
 
 type Phase = 'idle' | 'running' | 'ended';
+export type Difficulty = 'easy' | 'medium' | 'hard';
 
 const WORDS_PER_PAGE = 180;
-const starterArticle = ARTICLES[0];
-const STARTER_ARTICLE: PowerReaderArticle = {
-  id: `starter-${starterArticle.id}`,
-  title: starterArticle.title,
-  author: 'SpeedRead library',
-  description: 'A short offline article, ready whenever you are.',
-  text: starterArticle.text,
-  source: 'Built-in library',
-  difficulty: starterArticle.difficulty,
-  wordCount: starterArticle.wordCount,
-};
+export const OFFLINE_POWER_READER_ARTICLES: readonly PowerReaderArticle[] =
+  ARTICLES.map((article) => ({
+    id: `offline-${article.id}`,
+    title: article.title,
+    author: 'SpeedRead library',
+    description: `${article.category[0]?.toLocaleUpperCase()}${article.category.slice(1)} · available offline`,
+    text: article.text,
+    source: 'Built-in library',
+    difficulty: article.difficulty,
+    wordCount: article.wordCount,
+  }));
 
-export type Difficulty = 'easy' | 'medium' | 'hard';
+export function getOfflinePowerReaderArticles(
+  difficulty: Difficulty
+): readonly PowerReaderArticle[] {
+  return OFFLINE_POWER_READER_ARTICLES.filter(
+    (article) => article.difficulty === difficulty
+  );
+}
+
+const STARTER_ARTICLE =
+  getOfflinePowerReaderArticles('medium')[0] ??
+  OFFLINE_POWER_READER_ARTICLES[0];
 
 export default function PowerReader({
   text: textProp,
@@ -139,6 +150,8 @@ export default function PowerReader({
   onReportResult,
   difficulty = 'medium',
 }: Props & { difficulty?: Difficulty }) {
+  const initialOfflineArticle =
+    getOfflinePowerReaderArticles(difficulty)[0] ?? STARTER_ARTICLE;
   const [articles, setArticles] = useState<PowerReaderArticle[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<PowerReaderArticle | null>(
     textProp
@@ -152,7 +165,7 @@ export default function PowerReader({
           difficulty: 'medium',
           wordCount: textProp.split(/\s+/).filter(Boolean).length,
         }
-      : STARTER_ARTICLE
+      : initialOfflineArticle
   );
   const [loadingArticles, setLoadingArticles] = useState(false);
   const [articlesError, setArticlesError] = useState<string | null>(null);
@@ -194,7 +207,11 @@ export default function PowerReader({
     selectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
-  const selectedIntensity = difficultyToIntensity(difficulty);
+  const selectedIntensity = difficultyToIntensity(selectedDifficulty);
+  const offlineArticles = useMemo(
+    () => getOfflinePowerReaderArticles(selectedDifficulty),
+    [selectedDifficulty]
+  );
   const [targetWpm, setTargetWpm] = useState(
     INTENSITY_CONFIG[selectedIntensity].wpm
   );
@@ -330,6 +347,33 @@ export default function PowerReader({
   const progressWriterRef = useRef<ReturnType<
     typeof createSerializedProgressWriter
   > | null>(null);
+
+  useEffect(() => {
+    if (
+      textProp ||
+      phase !== 'idle' ||
+      selectedArticle?.source !== 'Built-in library' ||
+      selectedArticle.difficulty === selectedDifficulty
+    ) {
+      return;
+    }
+    const nextArticle = getOfflinePowerReaderArticles(selectedDifficulty)[0];
+    if (!nextArticle) return;
+    setSelectedArticle(nextArticle);
+    setResumeFromSaved(false);
+    resumeFromSavedRef.current = false;
+    setPageIndex(0);
+    setHighlightIndex(0);
+    pageIndexRef.current = 0;
+    highlightIndexRef.current = 0;
+  }, [
+    phase,
+    selectedArticle?.difficulty,
+    selectedArticle?.source,
+    selectedDifficulty,
+    textProp,
+  ]);
+
   if (!progressWriterRef.current) {
     progressWriterRef.current = createSerializedProgressWriter(
       AsyncStorage,
@@ -719,9 +763,11 @@ export default function PowerReader({
         highlightIndexRef.current = 0;
       }
       setSelectedArticle(finalized);
-      const nextRecentBooks = await saveRecentBook(finalized);
-      if (!mountedRef.current) return;
-      setRecentBooks(nextRecentBooks);
+      if (finalized.source !== 'Built-in library') {
+        const nextRecentBooks = await saveRecentBook(finalized);
+        if (!mountedRef.current) return;
+        setRecentBooks(nextRecentBooks);
+      }
       setPendingStart(true);
     } catch (error) {
       if (mountedRef.current) {
@@ -978,24 +1024,73 @@ export default function PowerReader({
             Start with an offline article, or choose a free book to train guided pacing.
           </Text>
 
+          <GameDifficultyControl />
+
           {!textProp && (
             <View style={styles.contentPanel}>
-              <Text style={styles.sectionLabel}>Ready offline</Text>
-              <View style={[styles.articleCard, styles.articleCardActive]}>
-                <View style={styles.articleMain}>
-                  <View style={styles.articleCoverFallback}>
-                    <Text style={styles.articleCoverText}>A</Text>
-                  </View>
-                  <View style={styles.articleInfo}>
-                    <Text style={[styles.articleTitle, styles.articleTitleActive]}>
-                      {STARTER_ARTICLE.title}
-                    </Text>
-                    <Text style={styles.articleAuthor}>{STARTER_ARTICLE.author}</Text>
-                    <Text style={[styles.articleDescription, styles.articleDescriptionActive]}>
-                      {STARTER_ARTICLE.wordCount} words · {STARTER_ARTICLE.difficulty}
-                    </Text>
-                  </View>
-                </View>
+              <Text style={styles.sectionLabel}>
+                Ready offline · {offlineArticles.length} {selectedDifficulty} articles
+              </Text>
+              <Text style={styles.networkNote}>
+                Choose any bundled article. Difficulty changes both the text library and starting pace.
+              </Text>
+              <View style={styles.articleList}>
+                {offlineArticles.map((article) => {
+                  const isActive = selectedArticle?.id === article.id;
+                  return (
+                    <View
+                      key={article.id}
+                      style={[
+                        styles.articleCard,
+                        isActive && styles.articleCardActive,
+                      ]}
+                    >
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Read ${article.title}, ${article.wordCount} words`}
+                        style={styles.articleMain}
+                        testID={`offline-article-${article.id}`}
+                        onPress={() => handleSelectArticle(article)}
+                      >
+                        <View style={styles.articleCoverFallback}>
+                          <Text style={styles.articleCoverText}>
+                            {article.title.slice(0, 1)}
+                          </Text>
+                        </View>
+                        <View style={styles.articleInfo}>
+                          <Text
+                            style={[
+                              styles.articleTitle,
+                              isActive && styles.articleTitleActive,
+                            ]}
+                          >
+                            {article.title}
+                          </Text>
+                          <Text style={styles.articleAuthor}>{article.author}</Text>
+                          <Text
+                            style={[
+                              styles.articleDescription,
+                              isActive && styles.articleDescriptionActive,
+                            ]}
+                          >
+                            {article.wordCount} words · {article.description}
+                          </Text>
+                        </View>
+                      </Pressable>
+                      <View style={styles.articleActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          style={styles.actionButton}
+                          onPress={() => handleSelectArticle(article)}
+                        >
+                          <Text style={styles.actionButtonText}>
+                            {isActive ? 'Read now' : 'Choose'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
 
               <Text style={styles.sectionLabel}>Paste your own text</Text>
@@ -1192,8 +1287,6 @@ export default function PowerReader({
                   : 'See only the current word group at the focal point.'}
             </Text>
           </View>
-
-          <GameDifficultyControl />
 
           {/* Stats Row */}
           <View style={styles.statsContainer}>

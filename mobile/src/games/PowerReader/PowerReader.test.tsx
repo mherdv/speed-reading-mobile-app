@@ -1,7 +1,11 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
-import PowerReader, { createSerializedProgressWriter } from './PowerReader';
+import PowerReader, {
+  createSerializedProgressWriter,
+  getOfflinePowerReaderArticles,
+  OFFLINE_POWER_READER_ARTICLES,
+} from './PowerReader';
 import * as progressStore from '../../data/progressStore';
 
 describe('PowerReader', () => {
@@ -13,6 +17,25 @@ describe('PowerReader', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
+  });
+
+  it('exposes the full bundled article library by difficulty', () => {
+    expect(OFFLINE_POWER_READER_ARTICLES).toHaveLength(16);
+    expect(getOfflinePowerReaderArticles('easy')).toHaveLength(6);
+    expect(getOfflinePowerReaderArticles('medium')).toHaveLength(8);
+    expect(getOfflinePowerReaderArticles('hard')).toHaveLength(2);
+  });
+
+  it('shows every bundled article and selects one for the chosen difficulty', async () => {
+    const { getAllByText, getByText } = render(
+      <PowerReader difficulty="easy" />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getAllByText('SpeedRead library')).toHaveLength(6);
+    expect(getByText('Read now')).toBeTruthy();
   });
 
   it('starts in idle phase and shows start button', () => {

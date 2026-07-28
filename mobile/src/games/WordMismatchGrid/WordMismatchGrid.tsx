@@ -40,7 +40,7 @@ type WordCard = {
 };
 
 // Similar-looking word pairs (easily confused)
-const SIMILAR_PAIRS: [string, string][] = [
+export const SIMILAR_PAIRS: [string, string][] = [
   ['affect', 'effect'],
   ['accept', 'except'],
   ['advice', 'advise'],
@@ -76,6 +76,31 @@ const SIMILAR_PAIRS: [string, string][] = [
   ['weak', 'week'],
   ['wear', 'where'],
   ['whose', 'who\'s'],
+  ['adapt', 'adopt'],
+  ['altar', 'alter'],
+  ['angle', 'angel'],
+  ['canvas', 'canvass'],
+  ['coarse', 'course'],
+  ['credible', 'credulous'],
+  ['dairy', 'diary'],
+  ['device', 'devise'],
+  ['ensure', 'insure'],
+  ['farther', 'further'],
+  ['formally', 'formerly'],
+  ['later', 'latter'],
+  ['medal', 'meddle'],
+  ['moral', 'morale'],
+  ['personal', 'personnel'],
+  ['precede', 'proceed'],
+  ['prescribe', 'proscribe'],
+  ['prosecute', 'persecute'],
+  ['respectfully', 'respectively'],
+  ['sensory', 'sensitive'],
+  ['tortuous', 'torturous'],
+  ['woman', 'women'],
+  ['price', 'prize'],
+  ['wander', 'wonder'],
+  ['collision', 'collusion'],
 ];
 
 function getDifficultyConfig(difficulty: Difficulty) {

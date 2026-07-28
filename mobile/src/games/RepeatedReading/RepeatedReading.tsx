@@ -24,20 +24,66 @@ type Props = {
   sample?: TextSample;
   difficulty?: Difficulty;
   autoStart?: boolean;
+  random?: () => number;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
 type Phase = 'idle' | 'reading' | 'between' | 'question' | 'ended';
 
-function sampleForDifficulty(difficulty: Difficulty): TextSample {
-  const index = difficulty === 'easy' ? 0 : difficulty === 'medium' ? 1 : 2;
-  return TEXT_SAMPLES[index % TEXT_SAMPLES.length];
+function passageComplexityScore(sample: TextSample): number {
+  const words = sample.text
+    .toLocaleLowerCase('en')
+    .match(/[a-z]+(?:'[a-z]+)?/g) ?? [];
+  const averageWordLength =
+    words.reduce((total, word) => total + word.length, 0) /
+    Math.max(words.length, 1);
+  return averageWordLength + words.length / 500;
+}
+
+/**
+ * Repeated Reading uses its own training pool so measured baseline passages
+ * stay unfamiliar. Lexical density divides the authored training texts into
+ * meaningful, deterministic difficulty bands.
+ */
+export function getRepeatedReadingPool(
+  difficulty: Difficulty
+): readonly TextSample[] {
+  const trainingSamples = TEXT_SAMPLES
+    .filter((item) => item.complexityBand !== 'baseline-brief')
+    .sort(
+      (first, second) =>
+        passageComplexityScore(first) - passageComplexityScore(second) ||
+        first.id.localeCompare(second.id)
+    );
+  const bandSize = Math.ceil(trainingSamples.length / 3);
+  const bandIndex = difficulty === 'easy' ? 0 : difficulty === 'medium' ? 1 : 2;
+  const start = bandIndex * bandSize;
+  const end =
+    difficulty === 'hard' ? trainingSamples.length : start + bandSize;
+  return trainingSamples.slice(start, end);
+}
+
+export function chooseNextRepeatedReadingSample(
+  difficulty: Difficulty,
+  previousId: string,
+  random: () => number
+): TextSample {
+  const pool = getRepeatedReadingPool(difficulty);
+  const candidates = pool.filter((item) => item.id !== previousId);
+  const available = candidates.length > 0 ? candidates : pool;
+  return available[
+    Math.min(
+      available.length - 1,
+      Math.floor(random() * available.length)
+    )
+  ] ?? TEXT_SAMPLES[0];
 }
 
 export default function RepeatedReading({
   sample,
   difficulty = 'easy',
   autoStart = false,
+  random = Math.random,
   onReportResult,
 }: Props) {
   const {
@@ -46,7 +92,10 @@ export default function RepeatedReading({
     selectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
-  const activeSample = sample ?? sampleForDifficulty(selectedDifficulty);
+  const initialSample =
+    sample ?? getRepeatedReadingPool(selectedDifficulty)[0] ?? TEXT_SAMPLES[0];
+  const [activeSample, setActiveSample] =
+    useState<TextSample>(initialSample);
   const wordCount = useMemo(
     () => countWords(activeSample.text),
     [activeSample.text]
@@ -65,12 +114,23 @@ export default function RepeatedReading({
   const roundWpmsRef = useRef<number[]>([]);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const previousSampleIdRef = useRef(activeSample.id);
 
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (phase !== 'idle') return;
+    const next =
+      sample ??
+      getRepeatedReadingPool(selectedDifficulty)[0] ??
+      TEXT_SAMPLES[0];
+    setActiveSample(next);
+    previousSampleIdRef.current = next.id;
+  }, [phase, sample, selectedDifficulty]);
 
   useEffect(() => {
     if (phase !== 'reading') return;
@@ -92,6 +152,15 @@ export default function RepeatedReading({
   function start(force = false) {
     cancelledRef.current = false;
     if (!force && phase !== 'idle' && phase !== 'ended') return;
+    if (!sample) {
+      const nextSample = chooseNextRepeatedReadingSample(
+        selectedDifficulty,
+        previousSampleIdRef.current,
+        random
+      );
+      previousSampleIdRef.current = nextSample.id;
+      setActiveSample(nextSample);
+    }
     reportedRef.current = false;
     roundDurationsRef.current = [];
     roundWpmsRef.current = [];

@@ -267,6 +267,10 @@ const MEDIUM_OPENERS = [
   'Near the riverbank',
   'At the final review',
   'Without losing focus',
+  'After the field survey',
+  'When the evidence conflicts',
+  'Throughout the final draft',
+  'Under changing conditions',
 ] as const;
 
 const MEDIUM_SUBJECTS = [
@@ -278,6 +282,10 @@ const MEDIUM_SUBJECTS = [
   'a curious student',
   'the careful observer',
   'an experienced guide',
+  'the review committee',
+  'a skeptical analyst',
+  'the science reporter',
+  'an independent auditor',
 ] as const;
 
 const MEDIUM_ACTIONS = [
@@ -289,6 +297,10 @@ const MEDIUM_ACTIONS = [
   'checks each important detail',
   'organizes the new information',
   'questions the first conclusion',
+  'traces the claim to its source',
+  'tests the proposed explanation',
+  'separates observation from inference',
+  'records the remaining uncertainty',
 ] as const;
 
 const HARD_OPENERS = [
@@ -298,6 +310,12 @@ const HARD_OPENERS = [
   'After the preliminary findings changed unexpectedly',
   'While the broader pattern was initially overlooked',
   'Even when the familiar strategy stops working',
+  'Unless the hidden assumption survives closer testing',
+  'Before the apparent correlation is treated as causal',
+  'Where competing priorities cannot all be maximized',
+  'If the original sample excludes an important group',
+  'Once the short-term improvement begins to fade',
+  'Despite the precision suggested by a single estimate',
 ] as const;
 
 const HARD_CLAUSES = [
@@ -307,6 +325,12 @@ const HARD_CLAUSES = [
   'the team tests an alternative explanation against the data',
   'the editor preserves the main idea while removing repetition',
   'the investigator checks whether each conclusion follows logically',
+  'the reviewer identifies which evidence would change the conclusion',
+  'the committee weighs immediate benefits against delayed costs',
+  'the historian distinguishes the surviving record from later interpretation',
+  'the designer tests whether the solution transfers to a different setting',
+  'the statistician examines the distribution behind the average',
+  'the reporter verifies the fluent summary against the primary source',
 ] as const;
 
 const HARD_ENDINGS = [
@@ -318,6 +342,10 @@ const HARD_ENDINGS = [
   'and records what changed',
   'before rejecting the competing account',
   'while keeping the evidence visible',
+  'and names the limit of the available sample',
+  'before recommending a permanent change',
+  'while distinguishing confidence from certainty',
+  'and explains which tradeoff remains unresolved',
 ] as const;
 
 function pick<T>(

@@ -2,7 +2,10 @@ import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 import type { TextSample } from '../../domain/types';
-import RepeatedReading from './RepeatedReading';
+import RepeatedReading, {
+  chooseNextRepeatedReadingSample,
+  getRepeatedReadingPool,
+} from './RepeatedReading';
 
 const SAMPLE: TextSample = {
   id: 'repeated-test',
@@ -24,6 +27,23 @@ describe('RepeatedReading', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('offers several non-baseline passages in every difficulty band', () => {
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      const pool = getRepeatedReadingPool(difficulty);
+      expect(pool.length).toBeGreaterThanOrEqual(5);
+      expect(
+        pool.every((item) => item.complexityBand !== 'baseline-brief')
+      ).toBe(true);
+    }
+  });
+
+  it('avoids immediately repeating the previous bundled passage', () => {
+    const pool = getRepeatedReadingPool('easy');
+    expect(
+      chooseNextRepeatedReadingSample('easy', pool[0]!.id, () => 0).id
+    ).toBe(pool[1]!.id);
   });
 
   it('times two reading passes and checks comprehension', async () => {

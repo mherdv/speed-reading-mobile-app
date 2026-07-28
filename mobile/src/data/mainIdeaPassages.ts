@@ -112,4 +112,157 @@ export const MAIN_IDEA_PASSAGES: MainIdeaPassage[] = [
     difficulty: 'hard',
     inferenceDepth: 'qualification',
   },
+  {
+    id: 'bus-arrival-display',
+    title: 'When the display goes blank',
+    text:
+      'Live arrival screens make waiting for a bus easier because riders can decide whether to stay, walk, or choose another route. Yet the screens depend on vehicle signals and a working network. When data is missing, showing an old arrival time as if it were current creates more confusion than showing no estimate. A useful system therefore pairs live information with a clear “data unavailable” message and a posted schedule as a backup.',
+    choices: [
+      'Arrival screens should hide every service delay.',
+      'Posted schedules are always more accurate than live data.',
+      'Useful arrival displays provide live estimates and communicate clearly when those estimates are unavailable.',
+      'Riders should never choose a different route.',
+    ],
+    correctIndex: 2,
+    feedback:
+      'The paragraph supports live information while stressing honest failure states and a backup.',
+    difficulty: 'easy',
+    inferenceDepth: 'explicit',
+  },
+  {
+    id: 'community-tool-library',
+    title: 'Borrowing more than books',
+    text:
+      'A neighborhood tool library lets residents borrow drills, ladders, and garden equipment that they may need only a few times each year. Members save storage space and avoid buying rarely used items. The library also schedules basic repair classes, which help people use the tools safely and keep them working longer. Shared equipment succeeds, however, only when borrowers return it on time and report damage promptly.',
+    choices: [
+      'A tool library reduces unnecessary purchases but depends on responsible sharing.',
+      'Every household should own a separate set of tools.',
+      'Repair classes make return dates unnecessary.',
+      'Garden equipment should never be borrowed.',
+    ],
+    correctIndex: 0,
+    feedback:
+      'The benefits of shared equipment and the condition of responsible borrowing form the complete main idea.',
+    difficulty: 'easy',
+    inferenceDepth: 'explicit',
+  },
+  {
+    id: 'quiet-study-breaks',
+    title: 'A pause that protects focus',
+    text:
+      'Long study sessions often feel productive because they take a great deal of time. Attention, however, usually fades before the session ends. A brief planned break can interrupt mindless rereading and give a learner a chance to check what was actually remembered. The break works best when it has a clear end; an open-ended visit to social media can replace the study session instead of refreshing it.',
+    choices: [
+      'Studying longer always produces stronger memory.',
+      'Planned, limited breaks can restore attention, while unbounded distractions can derail study.',
+      'Social media is the only effective way to rest.',
+      'Learners should stop checking what they remember.',
+    ],
+    correctIndex: 1,
+    feedback:
+      'The author recommends bounded breaks and contrasts them with distractions that have no stopping point.',
+    difficulty: 'easy',
+    inferenceDepth: 'explicit',
+  },
+  {
+    id: 'retrieval-before-review',
+    title: 'Try to remember first',
+    text:
+      'When learners reread notes immediately, every line looks familiar, and that familiarity can be mistaken for mastery. Trying to recall the material before reopening the notes produces a more useful signal. Missing ideas reveal exactly what needs another look, while successfully retrieved ideas become easier to access later. Review still matters, but it becomes more efficient when retrieval determines where attention should go.',
+    choices: [
+      'Familiar-looking notes prove that material is mastered.',
+      'Review should be removed from every study routine.',
+      'Recall attempts make learning harder without offering information.',
+      'Attempting retrieval before review reveals gaps and directs later study.',
+    ],
+    correctIndex: 3,
+    feedback:
+      'Every example supports using recall as a diagnostic step before targeted review.',
+    difficulty: 'medium',
+    inferenceDepth: 'synthesis',
+  },
+  {
+    id: 'bike-lane-pilot',
+    title: 'Testing a street change',
+    text:
+      'The city installed a temporary protected bike lane using paint and movable barriers rather than rebuilding the street immediately. During the three-month pilot, staff measured travel times, bicycle use, delivery access, and collisions. The temporary materials were not the final design; they made revision inexpensive. By testing several outcomes before committing permanent funds, the city could keep useful features and change those that caused avoidable problems.',
+    choices: [
+      'Temporary street pilots allow evidence and revision to guide permanent investment.',
+      'Paint and movable barriers should remain forever.',
+      'Only bicycle counts matter when a street changes.',
+      'A city should avoid measuring unexpected effects.',
+    ],
+    correctIndex: 0,
+    feedback:
+      'The purpose of temporary materials and multiple measurements is to support an informed, revisable decision.',
+    difficulty: 'medium',
+    inferenceDepth: 'synthesis',
+  },
+  {
+    id: 'museum-object-labels',
+    title: 'A label that opens a question',
+    text:
+      'Traditional museum labels often list an object’s date, material, and maker. A revised label can retain those facts while also explaining how the object was used, who collected it, and which parts of its history remain disputed. This added context does not tell visitors what to think. Instead, it gives them enough evidence to ask better questions and recognize that a confident display may still contain uncertainty.',
+    choices: [
+      'Museum labels should remove dates and materials.',
+      'Visitors should accept every display without questions.',
+      'Contextual labels combine core facts with evidence and uncertainty that support deeper interpretation.',
+      'Disputed histories cannot be shown in museums.',
+    ],
+    correctIndex: 2,
+    feedback:
+      'The passage argues for labels that preserve facts while enabling informed interpretation rather than prescribing it.',
+    difficulty: 'medium',
+    inferenceDepth: 'synthesis',
+  },
+  {
+    id: 'average-wait-time',
+    title: 'What the average conceals',
+    text:
+      'A clinic reported that its average waiting time fell from thirty minutes to twenty. The improvement was real, but the average alone obscured an important pattern: most appointments began within ten minutes, while a smaller group still waited more than an hour. Adding the median and the range made the report less tidy but more useful. A summary measure can support a decision only when readers also know whether the distribution contains consequential extremes.',
+    choices: [
+      'A lower average proves that every patient waited less.',
+      'Averages are useless and should never be reported.',
+      'Clinics should report only their longest wait.',
+      'An average can show change but may need distribution details to reveal important unequal experiences.',
+    ],
+    correctIndex: 3,
+    feedback:
+      'The claim is qualified: the average is informative, but not sufficient when extreme waits affect a subgroup.',
+    difficulty: 'hard',
+    inferenceDepth: 'qualification',
+  },
+  {
+    id: 'automated-draft-review',
+    title: 'Assistance without delegation',
+    text:
+      'A newsroom used an automated system to create first drafts of routine weather summaries. Editors remained responsible for checking every number, correcting emphasis, and deciding whether unusual conditions required original reporting. The tool reduced repetitive typing, but its speed created a new risk: fluent wording could make an incorrect detail seem trustworthy. The experiment saved time only when verification remained a required stage rather than an optional response to obvious errors.',
+    choices: [
+      'Fluent automated writing no longer requires verification.',
+      'Automation can reduce routine work, but accountable review must remain part of the process.',
+      'Weather summaries should contain no numerical details.',
+      'Editors should review only writing that sounds unusual.',
+    ],
+    correctIndex: 1,
+    feedback:
+      'The passage accepts a productivity benefit while making it conditional on systematic human verification.',
+    difficulty: 'hard',
+    inferenceDepth: 'qualification',
+  },
+  {
+    id: 'tourism-conservation',
+    title: 'Visitors and a fragile reserve',
+    text:
+      'Entrance fees from a coastal reserve funded habitat restoration and local guides, giving nearby communities a direct benefit from conservation. As visitor numbers grew, however, boats disturbed nesting areas and footpaths widened into sensitive vegetation. Closing the reserve entirely would remove both pressure and income, while unrestricted access would damage the resource attracting visitors. Managers instead limited daily entries, shifted routes seasonally, and published monitoring results so the limits could change with conditions.',
+    choices: [
+      'The reserve must choose permanently between tourism and conservation.',
+      'More visitors always provide greater conservation benefits.',
+      'Adaptive limits can preserve tourism benefits while responding to measured ecological harm.',
+      'Monitoring is unnecessary once entry fees are collected.',
+    ],
+    correctIndex: 2,
+    feedback:
+      'The response balances competing effects through monitored, revisable limits rather than an absolute rule.',
+    difficulty: 'hard',
+    inferenceDepth: 'qualification',
+  },
 ];

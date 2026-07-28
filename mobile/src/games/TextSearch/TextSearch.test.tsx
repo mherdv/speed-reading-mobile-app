@@ -34,9 +34,9 @@ describe('TextSearch', () => {
 
   it('uses reviewed natural passage pools at every difficulty', () => {
     expect(validateTextSearchContent()).toEqual([]);
-    expect(TEXT_SEARCH_VARIATIONS.easy).toHaveLength(6);
-    expect(TEXT_SEARCH_VARIATIONS.medium).toHaveLength(6);
-    expect(TEXT_SEARCH_VARIATIONS.hard).toHaveLength(6);
+    expect(TEXT_SEARCH_VARIATIONS.easy).toHaveLength(9);
+    expect(TEXT_SEARCH_VARIATIONS.medium).toHaveLength(9);
+    expect(TEXT_SEARCH_VARIATIONS.hard).toHaveLength(9);
   });
 
   it('does not immediately repeat a built-in passage on replay', () => {

@@ -3,7 +3,7 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import { Text } from 'react-native';
 
 type TextNode = { props: { children?: unknown } };
-import WordMismatchGrid from './WordMismatchGrid';
+import WordMismatchGrid, { SIMILAR_PAIRS } from './WordMismatchGrid';
 
 describe('WordMismatchGrid (card-based similar words)', () => {
   beforeEach(() => {
@@ -14,6 +14,13 @@ describe('WordMismatchGrid (card-based similar words)', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
+  });
+
+  it('has a broad pool of confusable word shapes', () => {
+    expect(SIMILAR_PAIRS.length).toBeGreaterThanOrEqual(60);
+    expect(
+      new Set(SIMILAR_PAIRS.flat().map((word) => word.toLocaleLowerCase())).size
+    ).toBeGreaterThanOrEqual(100);
   });
 
   it('Start -> game runs and can select cards', () => {
