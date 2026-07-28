@@ -39,6 +39,33 @@ describe('SchulteNumbers', () => {
     expect(getByTestId('cell-1')).toBeTruthy();
   });
 
+  it('records a wrong tap without changing the measured session time', () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    const onReportResult = jest.fn();
+    const { getByTestId } = render(
+      <SchulteNumbers gridSize={2} onReportResult={onReportResult} />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    now.mockReturnValue(5_320);
+    fireEvent.press(getByTestId('cell-2'));
+    fireEvent.press(getByTestId('cell-1'));
+    fireEvent.press(getByTestId('cell-2'));
+    fireEvent.press(getByTestId('cell-3'));
+    fireEvent.press(getByTestId('cell-4'));
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        elapsedMs: 4_320,
+        details: expect.objectContaining({
+          mistakes: 1,
+          timePenaltyMs: 0,
+        }),
+      })
+    );
+    now.mockRestore();
+  });
+
   it('uses consistent grid padding and row gaps (no extra bottom gap)', () => {
     const { getByTestId } = render(<SchulteNumbers gridSize={3} />);
 

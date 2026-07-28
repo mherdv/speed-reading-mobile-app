@@ -164,6 +164,7 @@ export default function SchulteLetters({
         gridSize,
         mistakes,
         itemsPerMinute,
+        timePenaltyMs: 0,
         difficulty: selectedDifficulty,
       },
     });

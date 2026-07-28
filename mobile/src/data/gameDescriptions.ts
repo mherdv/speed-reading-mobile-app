@@ -82,13 +82,13 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Repair an English word whose nearby letters have been transposed, then type the corrected spelling. Letter Mixup is a spelling and pattern challenge; its result is specific to the puzzle.',
 
   SchulteNumbers:
-    'Find numbers in sequence in a grid to practice ordered visual search and sustained attention. Completion time measures this task only; use measured reads to check whether practice transfers to your reading.',
+    'Find numbers in sequence in a grid to practice ordered visual search and sustained attention. Wrong taps count as errors but add no artificial time penalty. Completion time measures this task only; use measured reads to check whether practice transfers to your reading.',
 
   SchulteLetters:
-    'Find letters in sequence in a grid to practice ordered visual search with reading symbols. Treat completion time as task performance, not proof of faster connected-text reading.',
+    'Find letters in sequence in a grid to practice ordered visual search with reading symbols. Wrong taps count as errors but add no artificial time penalty. Treat completion time as task performance, not proof of faster connected-text reading.',
 
   SchulteMix:
-    'Alternate between numbers and letters in sequence. This optional task challenges switching and visual search without claiming broader reading gains.',
+    'Alternate between numbers and letters in sequence. Wrong taps count as errors but add no artificial time penalty. This optional task challenges switching and visual search without claiming broader reading gains.',
 
   WordSearchGame:
     'Find hidden words in a letter grid to practice orthographic recognition and systematic visual search. Its score describes word-search performance; use measured passages to evaluate reading transfer.',

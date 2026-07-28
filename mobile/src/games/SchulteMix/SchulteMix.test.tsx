@@ -39,6 +39,34 @@ describe('SchulteMix', () => {
     expect(onReportResult).toHaveBeenCalled();
   });
 
+  it('records a wrong tap without changing the measured session time', () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    const onReportResult = jest.fn();
+    const { getByTestId, getByText } = render(
+      <SchulteMix gridSize={2} onReportResult={onReportResult} />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    now.mockReturnValue(5_320);
+    fireEvent.press(getByTestId('cell-letter-A'));
+    fireEvent.press(getByTestId('cell-number-1'));
+    fireEvent.press(getByTestId('cell-letter-A'));
+    fireEvent.press(getByTestId('cell-number-2'));
+    fireEvent.press(getByTestId('cell-letter-B'));
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        elapsedMs: 4_320,
+        details: expect.objectContaining({
+          mistakes: 1,
+          timePenaltyMs: 0,
+        }),
+      })
+    );
+    expect(getByText('4.32s')).toBeTruthy();
+    now.mockRestore();
+  });
+
   it('uses consistent grid padding and row gaps (no extra bottom gap)', () => {
     const { getByTestId } = render(<SchulteMix gridSize={3} />);
 

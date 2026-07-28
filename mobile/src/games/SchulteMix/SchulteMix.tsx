@@ -90,6 +90,7 @@ export default function SchulteMix({
   const [nextIndex, setNextIndex] = useState(0);
   const [mistakes, setMistakes] = useState(0);
   const [tapped, setTapped] = useState<Set<string>>(new Set());
+  const [elapsedMs, setElapsedMs] = useState(0);
 
   const startedAtRef = useRef<number>(0);
   const reportedRef = useRef(false);
@@ -140,6 +141,7 @@ export default function SchulteMix({
     setNextIndex(0);
     setMistakes(0);
     setTapped(new Set());
+    setElapsedMs(0);
     startedAtRef.current = Date.now();
     setPhase('running');
   }
@@ -151,7 +153,8 @@ export default function SchulteMix({
     clearTrackedTimeouts();
     
     const now = Date.now();
-    const elapsedMs = now - startedAtRef.current;
+    const completedElapsedMs = now - startedAtRef.current;
+    setElapsedMs(completedElapsedMs);
     const attempts = total + mistakes;
     const accuracy = attempts > 0 ? total / attempts : 1;
     
@@ -164,10 +167,16 @@ export default function SchulteMix({
     onReportResult?.({
       startedAtIso: new Date(startedAtRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
-      elapsedMs,
+      elapsedMs: completedElapsedMs,
       score: total,
       accuracy,
-      details: { gridSize, mistakes, timeMs: elapsedMs, difficulty: selectedDifficulty },
+      details: {
+        gridSize,
+        mistakes,
+        timeMs: completedElapsedMs,
+        timePenaltyMs: 0,
+        difficulty: selectedDifficulty,
+      },
     });
     setPhase('ended');
   }
@@ -298,7 +307,7 @@ export default function SchulteMix({
           <Text style={styles.endEmoji}>🎯</Text>
           <Text style={styles.endTitle}>Completed!</Text>
           <Text style={styles.endTime}>
-            {formatDuration(Date.now() - startedAtRef.current)}
+            {formatDuration(elapsedMs)}
           </Text>
           <Text style={styles.endMeta}>
             {mistakes === 0 ? 'Perfect! No mistakes' : `${mistakes} mistake${mistakes > 1 ? 's' : ''}`}

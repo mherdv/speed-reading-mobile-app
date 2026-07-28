@@ -166,6 +166,7 @@ export default function SchulteNumbers({
         gridSize,
         mistakes,
         itemsPerMinute,
+        timePenaltyMs: 0,
         difficulty: selectedDifficulty,
       },
     });
