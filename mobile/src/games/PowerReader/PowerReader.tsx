@@ -88,7 +88,7 @@ export function createSerializedProgressWriter(
 const INTENSITY_CONFIG: Record<Intensity, { wpm: number; label: string; chunkSize: number; color: string }> = {
   beginner: { wpm: 150, label: 'Beginner', chunkSize: 2, color: '#10B981' },
   intermediate: { wpm: 300, label: 'Intermediate', chunkSize: 3, color: colors.interactivePrimary },
-  advanced: { wpm: 500, label: 'Advanced', chunkSize: 5, color: '#6366F1' },
+  advanced: { wpm: 500, label: 'Advanced', chunkSize: 5, color: '#0E4979' },
 };
 
 function difficultyToIntensity(difficulty: Difficulty): Intensity {
@@ -1086,13 +1086,13 @@ export default function PowerReader({
 
               {loadingArticles && (
                 <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#6366F1" />
+                  <ActivityIndicator color="#0E4979" />
                   <Text style={styles.loadingText}>Loading free books...</Text>
                 </View>
               )}
               {loadingBook && (
                 <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#6366F1" />
+                  <ActivityIndicator color="#0E4979" />
                   <Text style={styles.loadingText}>Loading book text...</Text>
                 </View>
               )}
@@ -1600,8 +1600,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   articleCardActive: {
-    borderColor: '#6366F1',
-    backgroundColor: '#EEF2FF',
+    borderColor: '#0E4979',
+    backgroundColor: '#E7F5FB',
   },
   articleMain: {
     flexDirection: 'row',
@@ -1633,7 +1633,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   articleTitleActive: {
-    color: '#4338CA',
+    color: '#083B65',
   },
   articleAuthor: {
     fontSize: 12,
@@ -1656,7 +1656,7 @@ const styles = StyleSheet.create({
   },
   articleProgress: {
     fontSize: 11,
-    color: '#4F46E5',
+    color: '#0B628F',
     marginTop: 6,
     fontWeight: '600',
   },
@@ -1668,7 +1668,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     minHeight: 44,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#0E4979',
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -1682,14 +1682,14 @@ const styles = StyleSheet.create({
   actionButtonOutline: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: '#6366F1',
+    borderColor: '#0E4979',
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 14,
     justifyContent: 'center',
   },
   actionButtonOutlineText: {
-    color: '#6366F1',
+    color: '#0E4979',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1709,7 +1709,7 @@ const styles = StyleSheet.create({
   loadMoreText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#4F46E5',
+    color: '#0B628F',
   },
   sectionLabel: {
     fontSize: 16,
@@ -1771,7 +1771,7 @@ const styles = StyleSheet.create({
   },
   modeButtonActive: {
     borderColor: colors.interactivePrimary,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#E7F5FB',
   },
   modeButtonText: {
     color: '#4B5563',
@@ -1852,7 +1852,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 12,
     marginBottom: 20,
-    shadowColor: '#6366F1',
+    shadowColor: '#0E4979',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1877,10 +1877,10 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
   gameArea: { flex: 1, paddingHorizontal: 12 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12, marginTop: 12 },
-  statBox: { alignItems: 'center', backgroundColor: '#EEF2FF', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
-  progressBox: { backgroundColor: '#E0E7FF' },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#4F46E5' },
-  statLabel: { fontSize: 10, color: '#6366F1' },
+  statBox: { alignItems: 'center', backgroundColor: '#E7F5FB', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
+  progressBox: { backgroundColor: '#D9EEF7' },
+  statValue: { fontSize: 18, fontWeight: '700', color: '#0B628F' },
+  statLabel: { fontSize: 10, color: '#0E4979' },
   speedControlRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1917,20 +1917,20 @@ const styles = StyleSheet.create({
   selectionChip: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: '#CBD5F5',
+    borderColor: '#B7DDEB',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
     justifyContent: 'center',
   },
   selectionChipActive: {
-    backgroundColor: '#6366F1',
-    borderColor: '#6366F1',
+    backgroundColor: '#0E4979',
+    borderColor: '#0E4979',
   },
   selectionChipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#4338CA',
+    color: '#083B65',
     textTransform: 'capitalize',
   },
   selectionChipTextActive: {
@@ -1965,20 +1965,20 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#CBD5F5',
+    borderColor: '#B7DDEB',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
     justifyContent: 'center',
   },
   languageChipActive: {
-    backgroundColor: '#6366F1',
-    borderColor: '#6366F1',
+    backgroundColor: '#0E4979',
+    borderColor: '#0E4979',
   },
   languageChipText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#4338CA',
+    color: '#083B65',
   },
   languageChipTextActive: {
     color: '#FFFFFF',
@@ -2075,7 +2075,7 @@ const styles = StyleSheet.create({
   },
   pageButton: {
     minHeight: 44,
-    backgroundColor: '#E0E7FF',
+    backgroundColor: '#D9EEF7',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
@@ -2087,7 +2087,7 @@ const styles = StyleSheet.create({
   pageButtonText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#4338CA',
+    color: '#083B65',
   },
   pageProgressText: {
     fontSize: 12,
@@ -2098,7 +2098,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#0E4979',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2119,11 +2119,11 @@ const styles = StyleSheet.create({
   speedValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#4F46E5',
+    color: '#0B628F',
   },
   speedLabel: {
     fontSize: 10,
-    color: '#6366F1',
+    color: '#0E4979',
   },
   pageCard: {
     backgroundColor: '#F9FAFB',
@@ -2144,7 +2144,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   highlightWord: {
-    color: '#4F46E5',
+    color: '#0B628F',
   },
   focusLineText: {
     marginVertical: 'auto',
@@ -2158,7 +2158,7 @@ const styles = StyleSheet.create({
   },
   focusLineHighlight: {
     color: '#111827',
-    backgroundColor: '#E0E7FF',
+    backgroundColor: '#D9EEF7',
     fontWeight: '800',
   },
   rsvpCard: {
@@ -2173,7 +2173,7 @@ const styles = StyleSheet.create({
   rsvpGuide: {
     width: 2,
     height: 18,
-    backgroundColor: '#818CF8',
+    backgroundColor: '#1BA3DD',
   },
   rsvpText: {
     minHeight: 54,
@@ -2188,16 +2188,16 @@ const styles = StyleSheet.create({
   selectedWord: {
     backgroundColor: '#FEF08A',
   },
-  progressBar: { height: 8, backgroundColor: '#E0E7FF', borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#6366F1' },
+  progressBar: { height: 8, backgroundColor: '#D9EEF7', borderRadius: 4, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: '#0E4979' },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#6366F1', marginVertical: 8 },
+  endScore: { fontSize: 48, fontWeight: '800', color: '#0E4979', marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
   starsText: { fontSize: 16, color: colors.warningForeground },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#6366F1', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  playAgainBtn: { marginTop: 16, backgroundColor: '#0E4979', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
   playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
 });

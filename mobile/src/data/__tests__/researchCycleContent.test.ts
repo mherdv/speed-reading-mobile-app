@@ -69,15 +69,18 @@ describe('research-cycle reviewed content', () => {
     }
   });
 
-  it('ships twelve valid Context Builder rounds at every difficulty', () => {
+  it('ships twenty-four valid Context Builder rounds at every difficulty', () => {
     expect(validateContextBuilderContent()).toEqual([]);
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
       const rounds = CONTEXT_BUILDER_ROUNDS.filter(
         (round) => round.difficulty === difficulty
       );
-      expect(rounds).toHaveLength(12);
-      expect(new Set(rounds.map((round) => round.targetWord)).size).toBe(12);
+      expect(rounds).toHaveLength(24);
+      expect(new Set(rounds.map((round) => round.targetWord)).size).toBe(24);
     }
+    expect(
+      new Set(CONTEXT_BUILDER_ROUNDS.map((round) => round.partOfSpeech))
+    ).toEqual(new Set(['adjective', 'verb', 'noun', 'adverb']));
   });
 
   it('uses word-specific meanings and sentence-referenced clue spans', () => {
@@ -138,6 +141,18 @@ describe('research-cycle reviewed content', () => {
       'The rain-fed desert pool was ephemeral, disappearing only days after it formed.',
       'The independent diary could corroborate the reported storm date because it described the same event from another village.',
       'The new shade could ameliorate the platform heat, although it could not remove every hot-day discomfort.',
+      'The field survey remained contingent on river levels falling below the safety mark.',
+      'The archive’s color-based filing system was idiosyncratic, unlike the standard methods used elsewhere.',
+      'The dust problem was pervasive, reaching homes, schools, vehicles, and sealed storage rooms.',
+      'The building’s paint color was orthogonal to the water-quality question under review.',
+      'Adding the station name could disambiguate “bank” by identifying the intended riverbank sense.',
+      'Analysts used five years of measurements to extrapolate demand beyond the observed period.',
+      'Dated receipts and independent letters could substantiate the historian’s claim.',
+      'Correcting for the time-zone difference helped researchers reconcile the two apparently conflicting logs.',
+      'The convergence of independent model estimates increased confidence in the revised forecast.',
+      'Treating every proposal as total success or complete failure created a false dichotomy.',
+      'The rule was ostensibly about safety, although internal notes emphasized staffing costs.',
+      'The analyst inadvertently separated names from addresses while sorting the spreadsheet.',
     ];
     const hardTargets = CONTEXT_BUILDER_ROUNDS.filter(
       (round) => round.difficulty === 'hard'
@@ -228,12 +243,15 @@ describe('research-cycle reviewed content', () => {
     );
   });
 
-  it('keeps the optional baseline at three distinct passages with three dependent items each', () => {
+  it('keeps a diverse nine-passage baseline with three dependent items each', () => {
     expect(validateBaselineTextSamples()).toEqual([]);
-    expect(BASELINE_TEXT_SAMPLES).toHaveLength(3);
+    expect(BASELINE_TEXT_SAMPLES).toHaveLength(9);
     expect(new Set(BASELINE_TEXT_SAMPLES.map((sample) => sample.id)).size).toBe(
-      3
+      9
     );
+    expect(
+      new Set(BASELINE_TEXT_SAMPLES.map((sample) => sample.genre)).size
+    ).toBeGreaterThanOrEqual(5);
     expect(
       BASELINE_TEXT_SAMPLES.every(
         (sample) => (sample.questions?.length ?? 0) >= 3

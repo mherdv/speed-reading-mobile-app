@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     marginVertical: spacing.xl,
     borderRadius: 64,
     borderWidth: 10,
-    borderColor: '#DCD2FA',
+    borderColor: '#B7DDEB',
     backgroundColor: colors.surfaceTonal,
   },
   counterValue: {

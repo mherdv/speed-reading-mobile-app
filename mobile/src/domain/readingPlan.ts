@@ -213,27 +213,34 @@ export function buildTodayPlan({
 }): TodayPlanItem[] {
   if (samples.length === 0) return [];
   const skippedSet = new Set(skipped);
-  const baselineCandidates = samples.slice(0, 3);
+  const reviewedBaselineIds = new Set(
+    BASELINE_TEXT_SAMPLES.map((sample) => sample.id)
+  );
+  const baselineCandidates = samples.filter((sample) =>
+    reviewedBaselineIds.has(sample.id)
+  );
+  const usableBaselineCandidates =
+    baselineCandidates.length >= 3 ? baselineCandidates : samples.slice(0, 3);
   const completedBaselineIds = new Set(
     results
       .filter((result) =>
-        isBaselineEligibleResult(result, baselineCandidates)
+        isBaselineEligibleResult(result, usableBaselineCandidates)
       )
       .map((result) => result.details!.contentId as string)
   );
-  const incompleteBaseline = baselineCandidates.filter(
+  const incompleteBaseline = usableBaselineCandidates.filter(
     (sample) => !completedBaselineIds.has(sample.id)
   );
   const readingPool =
-    incompleteBaseline.length > 0 ? incompleteBaseline : [...samples];
+    incompleteBaseline.length > 0
+      ? incompleteBaseline
+      : usableBaselineCandidates;
   const baselineSample =
     readingPool[
       ((readingSwapOffset % readingPool.length) + readingPool.length) %
         readingPool.length
     ]!;
-  const baselineComplete = baselineCandidates.every((sample) =>
-    completedBaselineIds.has(sample.id)
-  );
+  const baselineComplete = completedBaselineIds.size >= 3;
 
   const skillCandidates: readonly GameId[] = [
     'EvidenceHunt',
@@ -269,7 +276,7 @@ export function buildTodayPlan({
       kind: 'reading',
       title: baselineComplete
         ? `Measured reading: ${baselineSample.title}`
-        : `Baseline passage ${completedBaselineIds.size + 1} of 3`,
+        : `Baseline passage ${Math.min(completedBaselineIds.size + 1, 3)} of 3`,
       reason: baselineComplete
         ? 'Selected next because reading with understanding is the primary progress measure.'
         : 'Selected because three different valid passages are needed for a personal practice estimate. You can skip this.',

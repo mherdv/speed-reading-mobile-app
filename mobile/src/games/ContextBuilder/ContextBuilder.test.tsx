@@ -68,6 +68,40 @@ describe('Context Builder', () => {
     expect(report).toHaveBeenCalledTimes(1);
   });
 
+  it('makes the target-sentence meaning and supporting-clue steps explicit', async () => {
+    const round = getContextBuilderRounds('easy')[0]!;
+    const view = render(
+      <ContextBuilder
+        rounds={[round]}
+        roundCount={1}
+        random={() => 0.999}
+      />
+    );
+    await settle();
+    fireEvent.press(view.getByTestId('start-button'));
+
+    expect(view.getByTestId('context-sentence-1')).toHaveTextContent(
+      /^Sentence 1:/
+    );
+    expect(view.getByTestId('context-sentence-2')).toHaveTextContent(
+      /^Sentence 2:/
+    );
+    expect(
+      view.getByText(
+        `1. Meaning of “${round.targetWord}” in Sentence 2`
+      )
+    ).toBeTruthy();
+    expect(
+      view.getByText('2. Passage clue(s) that support this meaning')
+    ).toBeTruthy();
+    expect(
+      view.getByLabelText(/^Meaning option A:/)
+    ).toBeTruthy();
+    expect(
+      view.getByLabelText(/^Clue option A:/)
+    ).toBeTruthy();
+  });
+
   it('keeps attempted accuracy truthful but does not qualify one answer plus four skips', async () => {
     const report = jest.fn();
     const view = render(

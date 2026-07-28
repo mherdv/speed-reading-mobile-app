@@ -1,4 +1,6 @@
 import type { TextSample } from '../domain/types';
+import { countWords } from '../domain/wpm';
+import { ADDITIONAL_BASELINE_TEXT_SAMPLES } from './additionalBaselineTextSamples';
 
 export const TEXT_SAMPLES: TextSample[] = [
   {
@@ -180,6 +182,7 @@ export const TEXT_SAMPLES: TextSample[] = [
       },
     ],
   },
+  ...ADDITIONAL_BASELINE_TEXT_SAMPLES,
   {
     id: 'sample-4',
     comparisonBand: 'general-practice-brief-v1',
@@ -619,7 +622,9 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
 ];
 
-export const BASELINE_TEXT_SAMPLES = TEXT_SAMPLES.slice(0, 3);
+export const BASELINE_TEXT_SAMPLES = TEXT_SAMPLES.filter(
+  (sample) => sample.complexityBand === 'baseline-brief'
+);
 
 export function validateBaselineTextSamples(
   samples: readonly TextSample[] = BASELINE_TEXT_SAMPLES
@@ -629,6 +634,7 @@ export function validateBaselineTextSamples(
     errors.push('Baseline requires at least three distinct passage IDs');
   }
   for (const sample of samples) {
+    const wordCount = countWords(sample.text);
     if (typeof sample.version !== 'number') {
       errors.push(`${sample.id}: baseline content version required`);
     }
@@ -637,6 +643,16 @@ export function validateBaselineTextSamples(
     }
     if ((sample.questions?.length ?? 0) < 3) {
       errors.push(`${sample.id}: at least three dependent questions required`);
+    }
+    if (wordCount < 120 || wordCount > 220) {
+      errors.push(
+        `${sample.id}: expected 120–220 words, received ${wordCount}`
+      );
+    }
+    if (
+      new Set(sample.questions?.map((question) => question.type)).size < 3
+    ) {
+      errors.push(`${sample.id}: main idea, detail, and inference required`);
     }
     for (const question of sample.questions ?? []) {
       if (!question.rationale.trim()) {

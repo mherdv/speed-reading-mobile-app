@@ -31,7 +31,7 @@ import {
 import type { GameReportPayload } from '../registry';
 
 const GAME_ID = 'ContextBuilder';
-const CONTENT_VERSION = 1;
+const CONTENT_VERSION = 2;
 
 type Phase = 'idle' | 'active' | 'feedback' | 'ended';
 type Confidence = 'unsure' | 'confident';
@@ -70,7 +70,15 @@ function rotateFresh<T>(
   );
 }
 
-function TargetSentence({ round }: { round: ContextBuilderRound }) {
+function TargetSentence({
+  round,
+  sentenceNumber,
+  boldText,
+}: {
+  round: ContextBuilderRound;
+  sentenceNumber: number;
+  boldText: boolean;
+}) {
   const sentence = round.sentences.find(
     (candidate) => candidate.id === round.targetSentenceId
   );
@@ -78,7 +86,17 @@ function TargetSentence({ round }: { round: ContextBuilderRound }) {
   const targetIndex = sentence.text
     .toLocaleLowerCase()
     .indexOf(round.targetWord.toLocaleLowerCase());
-  if (targetIndex < 0) return <Text style={styles.paragraphText}>{sentence.text}</Text>;
+  if (targetIndex < 0) {
+    return (
+      <Text
+        testID={`context-sentence-${sentenceNumber}`}
+        style={[styles.paragraphText, boldText && styles.boldParagraphText]}
+      >
+        <Text style={styles.sentenceNumber}>Sentence {sentenceNumber}: </Text>
+        {sentence.text}
+      </Text>
+    );
+  }
   const before = sentence.text.slice(0, targetIndex);
   const target = sentence.text.slice(
     targetIndex,
@@ -86,7 +104,11 @@ function TargetSentence({ round }: { round: ContextBuilderRound }) {
   );
   const after = sentence.text.slice(targetIndex + round.targetWord.length);
   return (
-    <Text style={styles.paragraphText}>
+    <Text
+      testID={`context-sentence-${sentenceNumber}`}
+      style={[styles.paragraphText, boldText && styles.boldParagraphText]}
+    >
+      <Text style={styles.sentenceNumber}>Sentence {sentenceNumber}: </Text>
       {before}
       <Text
         accessibilityLabel={round.targetAccessibilityLabel}
@@ -324,6 +346,11 @@ export default function ContextBuilder({
     );
   }
 
+  const targetSentenceNumber =
+    current.sentences.findIndex(
+      (sentence) => sentence.id === current.targetSentenceId
+    ) + 1;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -343,7 +370,8 @@ export default function ContextBuilder({
         >
           <View style={styles.idleMeta}>
             <Text style={styles.metaText}>
-              {totalRounds} rounds · untimed · confidence is optional
+              {totalRounds} rounds · {sourceRounds.length} reviewed words at this
+              level · untimed
             </Text>
           </View>
         </GameIdlePanel>
@@ -356,7 +384,11 @@ export default function ContextBuilder({
               ROUND {roundIndex + 1} OF {sessionRoundsRef.current.length}
             </Text>
             <Text style={styles.question}>
-              What does “{current.targetWord}” mean here?
+              What does “{current.targetWord}” mean in the highlighted sentence?
+            </Text>
+            <Text style={styles.questionHelp}>
+              Choose the word’s meaning in that sentence only. Then identify the
+              passage evidence that supports it.
             </Text>
           </View>
 
@@ -371,31 +403,44 @@ export default function ContextBuilder({
               showsVerticalScrollIndicator={false}
             >
             <Text style={styles.passageTitle}>{current.title}</Text>
-            {current.sentences.map((sentence) =>
+            {current.sentences.map((sentence, sentenceIndex) =>
               sentence.id === current.targetSentenceId ? (
-                <TargetSentence key={sentence.id} round={current} />
+                <TargetSentence
+                  key={sentence.id}
+                  round={current}
+                  sentenceNumber={sentenceIndex + 1}
+                  boldText={boldText}
+                />
               ) : (
                 <Text
                   key={sentence.id}
+                  testID={`context-sentence-${sentenceIndex + 1}`}
                   style={[
                     styles.paragraphText,
                     boldText && styles.boldParagraphText,
                   ]}
                 >
+                  <Text style={styles.sentenceNumber}>
+                    Sentence {sentenceIndex + 1}:{' '}
+                  </Text>
                   {sentence.text}
                 </Text>
               )
             )}
 
-            <Text style={styles.sectionHeading}>Choose the meaning</Text>
+            <Text style={styles.sectionHeading}>
+              1. Meaning of “{current.targetWord}” in Sentence{' '}
+              {targetSentenceNumber}
+            </Text>
             <View accessibilityRole="radiogroup">
               {meaningOptions.map((option, index) => {
                 const selected = selectedMeaning === option.id;
+                const optionLetter = String.fromCharCode(65 + index);
                 return (
                   <Pressable
                     accessibilityRole="radio"
                     accessibilityState={{ checked: selected }}
-                    accessibilityLabel={option.text}
+                    accessibilityLabel={`Meaning option ${optionLetter}: ${option.text}`}
                     key={option.id}
                     testID={`context-meaning-${index}`}
                     style={({ pressed }) => [
@@ -406,22 +451,25 @@ export default function ContextBuilder({
                     onPress={() => setSelectedMeaning(option.id)}
                   >
                     <Text style={[styles.optionText, selected && styles.selectedText]}>
-                      {option.text}
+                      {optionLetter}. {option.text}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
 
-            <Text style={styles.sectionHeading}>Which clue supports that meaning?</Text>
+            <Text style={styles.sectionHeading}>
+              2. Passage clue(s) that support this meaning
+            </Text>
             <View accessibilityRole="radiogroup">
               {clueOptions.map((option, index) => {
                 const selected = selectedClue === option.id;
+                const optionLetter = String.fromCharCode(65 + index);
                 return (
                   <Pressable
                     accessibilityRole="radio"
                     accessibilityState={{ checked: selected }}
-                    accessibilityLabel={`Context clue: ${option.text}`}
+                    accessibilityLabel={`Clue option ${optionLetter}: ${option.text}`}
                     key={option.id}
                     testID={`context-clue-${index}`}
                     style={({ pressed }) => [
@@ -432,7 +480,7 @@ export default function ContextBuilder({
                     onPress={() => setSelectedClue(option.id)}
                   >
                     <Text style={[styles.optionText, selected && styles.selectedText]}>
-                      {option.text}
+                      {optionLetter}. {option.text}
                     </Text>
                   </Pressable>
                 );
@@ -502,7 +550,8 @@ export default function ContextBuilder({
                   : 'REVIEW THE CONTEXT'}
             </Text>
             <Text style={styles.feedbackTitle}>
-              {current.targetWord}: {current.definition}
+              In Sentence {targetSentenceNumber}, “{current.targetWord}” means:{' '}
+              {current.definition}
             </Text>
             <Text style={styles.body}>{current.rationale}</Text>
             <Text style={styles.morphology}>
@@ -565,6 +614,7 @@ const styles = StyleSheet.create({
   promptCard: { padding: spacing.md, borderRadius: 18, backgroundColor: colors.infoSurface },
   eyebrow: { color: colors.primaryDark, fontSize: 11, fontWeight: '900', letterSpacing: 0.8 },
   question: { color: colors.textPrimary, fontSize: 18, fontWeight: '800', lineHeight: 25, marginTop: 5 },
+  questionHelp: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 5 },
   passage: {
     flex: 1,
     width: '100%',
@@ -576,6 +626,7 @@ const styles = StyleSheet.create({
   passageTitle: { color: colors.textPrimary, fontSize: 21, fontWeight: '800', marginBottom: spacing.md },
   paragraphText: { color: colors.textPrimary, fontSize: 17, lineHeight: 28, marginBottom: 8 },
   boldParagraphText: { fontWeight: '600' },
+  sentenceNumber: { color: colors.textSecondary, fontWeight: '800' },
   targetWord: {
     color: colors.infoForeground,
     backgroundColor: colors.infoSurface,

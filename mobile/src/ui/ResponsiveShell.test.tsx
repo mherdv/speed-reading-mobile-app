@@ -41,7 +41,7 @@ describe('responsive and accessible visualization contracts', () => {
       <ResponsiveLineChart
         data={[180, 210, 205]}
         metricLabel="WPM"
-        color="#5426C8"
+        color="#0E4979"
       />
     );
     fireEvent(getByTestId('responsive-chart-container'), 'layout', {

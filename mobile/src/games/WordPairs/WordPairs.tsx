@@ -10,7 +10,10 @@ import {
   OPPOSITE_ITEMS,
   type OppositeItem,
 } from '../../data/vocabularyPracticeContent';
-import { shuffleItems } from '../../data/flashPracticeContent';
+import {
+  selectSimilarDistractors,
+  shuffleItems,
+} from '../../data/flashPracticeContent';
 
 const GAME_ID = 'WordPairs';
 
@@ -83,7 +86,11 @@ function buildRound(
     challenge.items[Math.floor(Math.random() * challenge.items.length)];
   const word = item.word;
   const correct = item.correct;
-  const distractors = item.distractors.slice(0, challenge.optionCount - 1);
+  const distractors = selectSimilarDistractors(
+    correct,
+    item.distractors,
+    challenge.optionCount - 1
+  );
   
   const options = shuffle([correct, ...distractors]);
   const correctIndex = options.indexOf(correct);
@@ -331,7 +338,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
   subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
   startBtn: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#0E4979',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -350,19 +357,19 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 18, fontWeight: '700', color: '#111827' },
   statLabel: { fontSize: 10, color: '#6B7280' },
   wordCard: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#E7F5FB',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#C7D2FE',
+    borderColor: '#B7DDEB',
   },
   cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
   cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
   correctText: { color: '#116149', fontSize: 12, fontWeight: '700', marginTop: 6 },
   wrongText: { color: '#9F253A', fontSize: 12, fontWeight: '700', marginTop: 6 },
-  wordLabel: { fontSize: 12, color: '#6366F1', marginBottom: 4 },
+  wordLabel: { fontSize: 12, color: '#0E4979', marginBottom: 4 },
   word: { fontSize: 24, fontWeight: '700', color: '#312E81' },
   optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   optionBtn: {
@@ -379,11 +386,11 @@ const styles = StyleSheet.create({
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
   endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 32, fontWeight: '800', color: '#6366F1', marginVertical: 8 },
+  endScore: { fontSize: 32, fontWeight: '800', color: '#0E4979', marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
   playAgainBtn: {
     marginTop: 16,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#0E4979',
     paddingVertical: 10,
     paddingHorizontal: 24,
     borderRadius: 8,

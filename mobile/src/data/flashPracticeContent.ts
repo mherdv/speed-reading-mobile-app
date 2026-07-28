@@ -81,6 +81,115 @@ export function createVariedSequence(
   return sequence;
 }
 
+function comparableText(value: string): string {
+  return value.toLocaleLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function sharedEdgeLength(
+  first: string,
+  second: string,
+  fromEnd = false
+): number {
+  const limit = Math.min(first.length, second.length);
+  let shared = 0;
+  while (shared < limit) {
+    const firstIndex = fromEnd ? first.length - shared - 1 : shared;
+    const secondIndex = fromEnd ? second.length - shared - 1 : shared;
+    if (first[firstIndex] !== second[secondIndex]) break;
+    shared += 1;
+  }
+  return shared;
+}
+
+function editDistance(first: string, second: string): number {
+  const previous = Array.from(
+    { length: second.length + 1 },
+    (_, index) => index
+  );
+
+  for (let firstIndex = 1; firstIndex <= first.length; firstIndex += 1) {
+    const current = [firstIndex];
+    for (
+      let secondIndex = 1;
+      secondIndex <= second.length;
+      secondIndex += 1
+    ) {
+      const substitution =
+        previous[secondIndex - 1] +
+        (first[firstIndex - 1] === second[secondIndex - 1] ? 0 : 1);
+      current[secondIndex] = Math.min(
+        previous[secondIndex] + 1,
+        current[secondIndex - 1] + 1,
+        substitution
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+
+  return previous[second.length] ?? Math.max(first.length, second.length);
+}
+
+function recognitionSimilarityScore(answer: string, candidate: string): number {
+  const normalizedAnswer = comparableText(answer);
+  const normalizedCandidate = comparableText(candidate);
+  const wordCountDifference = Math.abs(
+    countWords(answer) - countWords(candidate)
+  );
+  const lengthDifference = Math.abs(
+    normalizedAnswer.length - normalizedCandidate.length
+  );
+  const spellingDistance = editDistance(
+    normalizedAnswer,
+    normalizedCandidate
+  );
+  const sharedPrefix = sharedEdgeLength(
+    normalizedAnswer,
+    normalizedCandidate
+  );
+  const sharedSuffix = sharedEdgeLength(
+    normalizedAnswer,
+    normalizedCandidate,
+    true
+  );
+
+  // Word count and visible length are dominant so the answer cannot be
+  // inferred from button width. Spelling shape breaks close-length ties.
+  return (
+    wordCountDifference * 10_000 +
+    lengthDifference * 1_000 +
+    spellingDistance * 10 -
+    sharedPrefix * 3 -
+    sharedSuffix * 2
+  );
+}
+
+export function selectSimilarDistractors(
+  answer: string,
+  candidates: readonly string[],
+  count: number,
+  random: RandomSource = Math.random
+): string[] {
+  const normalizedAnswer = answer.toLocaleLowerCase();
+  const ranked = uniqueStrings(candidates)
+    .filter((candidate) => candidate.toLocaleLowerCase() !== normalizedAnswer)
+    .map((candidate, sourceIndex) => ({
+      candidate,
+      sourceIndex,
+      score: recognitionSimilarityScore(answer, candidate),
+    }))
+    .sort(
+      (first, second) =>
+        first.score - second.score ||
+        first.sourceIndex - second.sourceIndex
+    );
+  const needed = Math.max(0, count);
+  const closeCandidateWindow = ranked
+    .slice(0, Math.min(ranked.length, Math.max(needed, needed * 2)))
+    .map(({ candidate }) => candidate);
+
+  return shuffleItems(closeCandidateWindow, random).slice(0, needed);
+}
+
 export function createRecognitionOptions(
   answer: string,
   preferredPool: readonly string[],
@@ -95,14 +204,11 @@ export function createRecognitionOptions(
   const candidates = uniqueStrings([...preferredPool, ...universalPool]).filter(
     (word) => word.toLocaleLowerCase() !== answer.toLocaleLowerCase()
   );
-  const lengthSorted = [...candidates].sort(
-    (a, b) =>
-      Math.abs(a.length - answer.length) - Math.abs(b.length - answer.length)
-  );
-  const closeLengthPool = lengthSorted.slice(0, Math.max(18, count * 5));
-  const distractors = shuffleItems(closeLengthPool, random).slice(
-    0,
-    Math.max(0, count - 1)
+  const distractors = selectSimilarDistractors(
+    answer,
+    candidates,
+    Math.max(0, count - 1),
+    random
   );
   return shuffleItems([answer, ...distractors], random);
 }

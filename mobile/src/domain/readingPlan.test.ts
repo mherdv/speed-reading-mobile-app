@@ -1,5 +1,8 @@
 import type { AttemptResult } from './types';
-import { TEXT_SAMPLES } from '../data/textSamples';
+import {
+  BASELINE_TEXT_SAMPLES,
+  TEXT_SAMPLES,
+} from '../data/textSamples';
 import {
   buildTodayPlan,
   calculatePersonalPracticeEstimate,
@@ -122,6 +125,35 @@ describe('reading-first Today and baseline model', () => {
         now: new Date('2026-07-26T12:00:00.000Z'),
       }).map((item) => item.id)
     ).toEqual(['reading', 'skill', 'comfort']);
+  });
+
+  it('rotates to a fresh reviewed passage after the three-reading estimate is ready', () => {
+    const completed = BASELINE_TEXT_SAMPLES.slice(0, 3).map((sample, index) =>
+      reading(`${index + 1}`, sample.id, 220 + index * 10, 3)
+    );
+    const nextReading = buildTodayPlan({
+      results: completed,
+      samples: TEXT_SAMPLES,
+    })[0];
+
+    expect(nextReading?.title).toBe(
+      `Measured reading: ${BASELINE_TEXT_SAMPLES[3]!.title}`
+    );
+    expect(nextReading).toHaveProperty(
+      'sample.id',
+      BASELINE_TEXT_SAMPLES[3]!.id
+    );
+  });
+
+  it('accepts a valid passage completed through the standalone Baseline Reading game', () => {
+    const sample = BASELINE_TEXT_SAMPLES[3]!;
+    const standaloneResult: AttemptResult = {
+      ...reading('standalone', sample.id, 245, 3),
+      sampleId: 'WpmTest',
+      sampleTitle: 'Baseline Reading',
+    };
+
+    expect(isBaselineEligibleResult(standaloneResult)).toBe(true);
   });
 
   it('rejects legacy baseline attempts and counts only completed baseline IDs', () => {

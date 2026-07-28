@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import { colors } from '../theme/colors';
 
 type Props = {
   /** Array of numeric values to plot */
@@ -32,8 +33,8 @@ export function LineChart({
   data,
   width = 280,
   height = 120,
-  color = '#6366F1',
-  gradientColor = '#6366F1',
+  color = colors.primary,
+  gradientColor = colors.brandCyan,
   showDots = true,
   showArea = true,
   labels,
@@ -109,7 +110,7 @@ export function LineChart({
               y1={y}
               x2={padding.left + chartWidth}
               y2={y}
-              stroke="#E5E7EB"
+              stroke={colors.border}
               strokeWidth={1}
               strokeDasharray="4,4"
             />
@@ -168,7 +169,7 @@ export function LineChart({
               x={padding.left - 8}
               y={y + 4}
               fontSize={10}
-              fill="#6B7280"
+              fill={colors.textMuted}
               textAnchor="end"
             >
               {tick}
@@ -183,7 +184,7 @@ export function LineChart({
             x={p.x}
             y={height - 6}
             fontSize={9}
-            fill="#6B7280"
+            fill={colors.textMuted}
             textAnchor="middle"
           >
             {xLabels[i] || i + 1}
@@ -196,7 +197,7 @@ export function LineChart({
           y1={padding.top}
           x2={padding.left}
           y2={padding.top + chartHeight}
-          stroke="#D1D5DB"
+          stroke={colors.border}
           strokeWidth={1}
         />
         <Line
@@ -204,7 +205,7 @@ export function LineChart({
           y1={padding.top + chartHeight}
           x2={padding.left + chartWidth}
           y2={padding.top + chartHeight}
-          stroke="#D1D5DB"
+          stroke={colors.border}
           strokeWidth={1}
         />
       </Svg>
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
   },
   dataSummary: {
     marginTop: 4,
-    color: '#625F70',
+    color: colors.textSecondary,
     fontSize: 12,
     lineHeight: 18,
   },

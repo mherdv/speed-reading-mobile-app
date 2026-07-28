@@ -3,6 +3,7 @@ import {
   createVariedSequence,
   generatePhrasePool,
   getFlashWordPool,
+  selectSimilarDistractors,
   uniqueStrings,
 } from './flashPracticeContent';
 
@@ -53,6 +54,56 @@ describe('flash practice content', () => {
     expect(options).toHaveLength(4);
     expect(new Set(options).size).toBe(4);
     expect(options).toContain('pattern');
+    expect(options.every((option) => option.length === 'pattern'.length)).toBe(
+      true
+    );
+  });
+
+  it('prefers close spelling shapes after matching visible length', () => {
+    const closeShapes = [
+      'stoke',
+      'store',
+      'shone',
+      'atone',
+      'phone',
+      'stale',
+    ];
+    const distractors = selectSimilarDistractors(
+      'stone',
+      [...closeShapes, 'quick', 'zebra', 'fuzzy', 'vivid', 'plant', 'crown'],
+      3,
+      seededRandom(19)
+    );
+
+    expect(distractors).toHaveLength(3);
+    expect(distractors.every((word) => closeShapes.includes(word))).toBe(true);
+  });
+
+  it('matches phrase word count and length before randomizing choices', () => {
+    const answer = 'careful readers notice subtle patterns';
+    const sameShape = [
+      'patient readers follow useful signals',
+      'focused readers compare clear details',
+      'curious readers remember hidden changes',
+      'skilled readers examine quiet evidence',
+      'active readers question simple claims',
+      'steady readers observe small differences',
+    ];
+    const options = createRecognitionOptions(
+      answer,
+      [
+        ...sameShape,
+        'short phrase',
+        'a much longer phrase with many extra visible words',
+      ],
+      4,
+      seededRandom(23)
+    );
+
+    expect(options).toContain(answer);
+    expect(options.every((option) => option.split(/\s+/).length === 5)).toBe(
+      true
+    );
   });
 
   it('generates hundreds of different phrase combinations', () => {

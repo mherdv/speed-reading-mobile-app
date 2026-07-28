@@ -1,7 +1,12 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
-import { validateWpmTestPool, type WpmQuestion } from '../../data/wpmTestContent';
+import {
+  getBaselineReadingPool,
+  validateBaselineReadingPool,
+  validateWpmTestPool,
+  type WpmQuestion,
+} from '../../data/wpmTestContent';
 import type { TextSample } from '../../domain/types';
 import WpmTest from './WpmTest';
 
@@ -129,6 +134,23 @@ describe('WpmTest', () => {
 
   it('provides multiple reviewed passages with 1, 2, and 3 questions by difficulty', () => {
     expect(validateWpmTestPool()).toEqual([]);
+  });
+
+  it('uses nine standalone baseline passages and keeps three questions at every difficulty', () => {
+    expect(validateBaselineReadingPool()).toEqual([]);
+    expect(getBaselineReadingPool('easy')).toHaveLength(9);
+    expect(
+      getBaselineReadingPool('easy').every(
+        (item) =>
+          item.questions.length === 3 &&
+          item.questions.every((question) => question.choices.length === 2)
+      )
+    ).toBe(true);
+    expect(
+      getBaselineReadingPool('hard').every(
+        (item) => item.questions.length === 3
+      )
+    ).toBe(true);
   });
 
   it('falls back to the sample question when an empty override is supplied', () => {

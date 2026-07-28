@@ -29,11 +29,20 @@ describe('LastWordRecall', () => {
     expect(getByTestId('stream-word')).toBeTruthy();
 
     act(() => {
-      jest.advanceTimersByTime(90);
+      jest.advanceTimersByTime(65);
+    });
+    const answer = getByTestId('stream-word').props.children as string;
+    act(() => {
+      jest.advanceTimersByTime(25);
     });
 
     expect(getByTestId('last-word-options')).toBeTruthy();
     expect(getByTestId('last-word-option-3')).toBeTruthy();
+    for (let index = 0; index < 4; index += 1) {
+      const option = getByTestId(`last-word-option-${index}`).props
+        .accessibilityLabel as string;
+      expect(option.length).toBe(answer.length);
+    }
   });
 
   it('stops unpredictably after a random 3–10 words', () => {

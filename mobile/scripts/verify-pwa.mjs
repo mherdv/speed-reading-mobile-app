@@ -31,7 +31,17 @@ assert(
   indexHtml.includes(".register('./sw.js')"),
   'index.html does not register the service worker.'
 );
+assert(
+  indexHtml.includes('id="app-loading"') &&
+    indexHtml.includes('./launch-logo.svg'),
+  'index.html does not include the branded loading state.'
+);
 assert(manifest.name === 'SpeedRead', 'The PWA manifest has the wrong app name.');
+assert(
+  manifest.theme_color === '#0E4979' &&
+    manifest.background_color === '#0E4979',
+  'The PWA launch colors do not match the SpeedRead brand.'
+);
 assert(manifest.display === 'standalone', 'The PWA must launch in standalone mode.');
 assert(
   manifest.start_url === './',
@@ -51,6 +61,7 @@ for (const icon of manifest.icons) {
 }
 
 await access(resolve(distDirectory, 'apple-touch-icon.png'));
+await access(resolve(distDirectory, 'launch-logo.svg'));
 assert(
   serviceWorker.includes("'speedread-pwa-'"),
   'The generated service worker has no versioned SpeedRead cache.'

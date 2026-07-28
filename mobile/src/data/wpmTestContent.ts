@@ -35,10 +35,48 @@ function questionsFor(sample: TextSample): readonly WpmQuestion[] {
   return sample.questions ?? [legacyQuestion(sample)];
 }
 
+function withDifficultyChoices(
+  question: WpmQuestion,
+  difficulty: Difficulty
+): WpmQuestion {
+  const choiceLimit = difficulty === 'easy' ? 2 : difficulty === 'medium' ? 3 : 4;
+  if (question.choices.length <= choiceLimit) return question;
+
+  const selectedIndexes = [
+    question.correctIndex,
+    ...question.choices
+      .map((_, index) => index)
+      .filter((index) => index !== question.correctIndex),
+  ]
+    .slice(0, choiceLimit)
+    .sort((first, second) => first - second);
+
+  return {
+    ...question,
+    choices: selectedIndexes.map((index) => question.choices[index]!),
+    correctIndex: selectedIndexes.indexOf(question.correctIndex),
+  };
+}
+
 /**
- * WPM Test reuses the app's original reviewed TEXT_SAMPLES. Easy uses a broad
- * one-question passage pool; medium and hard use the versioned baseline set
- * with two and three passage-dependent questions respectively.
+ * The standalone baseline keeps three comprehension checks at every level so a
+ * valid attempt can contribute to the personal estimate. Difficulty changes
+ * distractor load without changing the comparable connected-passage pool.
+ */
+export function getBaselineReadingPool(
+  difficulty: Difficulty
+): WpmTestItem[] {
+  return BASELINE_TEXT_SAMPLES.map((sample) => ({
+    sample,
+    questions: questionsFor(sample)
+      .slice(0, 3)
+      .map((question) => withDifficultyChoices(question, difficulty)),
+  }));
+}
+
+/**
+ * The paced-comprehension exercise retains its graduated one-, two-, and
+ * three-question pools. Baseline Reading uses getBaselineReadingPool instead.
  */
 export function getWpmTestPool(difficulty: Difficulty): WpmTestItem[] {
   if (difficulty === 'easy') {
@@ -53,6 +91,37 @@ export function getWpmTestPool(difficulty: Difficulty): WpmTestItem[] {
     sample,
     questions: questionsFor(sample).slice(0, questionCount),
   }));
+}
+
+export function validateBaselineReadingPool(): string[] {
+  const errors: string[] = [];
+  for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+    const items = getBaselineReadingPool(difficulty);
+    const expectedChoices =
+      difficulty === 'easy' ? 2 : difficulty === 'medium' ? 3 : 4;
+    if (new Set(items.map((item) => item.sample.id)).size < 9) {
+      errors.push(`${difficulty}: at least nine baseline passages required`);
+    }
+    for (const item of items) {
+      if (item.questions.length !== 3) {
+        errors.push(`${difficulty}/${item.sample.id}: three questions required`);
+      }
+      if (
+        item.questions.some(
+          (question) =>
+            question.answerDependency !== 'passage-required' ||
+            question.choices.length !== expectedChoices ||
+            question.correctIndex < 0 ||
+            question.correctIndex >= question.choices.length
+        )
+      ) {
+        errors.push(
+          `${difficulty}/${item.sample.id}: invalid ${expectedChoices}-choice question`
+        );
+      }
+    }
+  }
+  return errors;
 }
 
 export function validateWpmTestPool(): string[] {

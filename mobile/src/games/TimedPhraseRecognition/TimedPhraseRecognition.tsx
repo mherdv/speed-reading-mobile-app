@@ -3,9 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   countWords,
+  createRecognitionOptions,
   createVariedSequence,
   generatePhrasePool,
-  shuffleItems,
   uniqueStrings,
 } from '../../data/flashPracticeContent';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
@@ -138,10 +138,7 @@ export default function TimedPhraseRecognition({
   }, []);
 
   function createOptions(answer: string): string[] {
-    const distractors = shuffleItems(
-      optionPool.filter((phrase) => phrase !== answer)
-    ).slice(0, 3);
-    return shuffleItems([answer, ...distractors]);
+    return createRecognitionOptions(answer, optionPool);
   }
 
   function takeNextPhrase() {

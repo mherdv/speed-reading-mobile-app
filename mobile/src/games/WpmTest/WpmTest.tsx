@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import {
-  getWpmTestPool,
+  getBaselineReadingPool,
   type WpmQuestion,
 } from '../../data/wpmTestContent';
 import { assessReadingMeasurement, formatDuration } from '../../domain/results';
@@ -33,8 +33,7 @@ function questionsFromSample(
   sample: TextSample,
   difficulty: Difficulty
 ): readonly WpmQuestion[] {
-  const count = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
-  const authored = sample.questions?.slice(0, count);
+  const authored = sample.questions?.slice(0, 3);
   if (authored && authored.length > 0) return authored;
   return [
     {
@@ -58,7 +57,7 @@ export default function WpmTest({
   autoStart = false,
   onReportResult,
 }: Props) {
-  const pool = useMemo(() => getWpmTestPool(difficulty), [difficulty]);
+  const pool = useMemo(() => getBaselineReadingPool(difficulty), [difficulty]);
   const initialItem = pool[0]!;
   const [activeSample, setActiveSample] = useState<TextSample>(
     sampleProp ?? initialItem.sample
@@ -207,9 +206,9 @@ export default function WpmTest({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>WPM Test</Text>
+      <Text style={styles.title}>Baseline Reading</Text>
       <Text style={styles.subtitle}>
-        Measure connected-text speed, then verify comprehension
+        Read one fresh passage toward your three-reading personal estimate
       </Text>
 
       {phase === 'idle' && (
@@ -301,7 +300,7 @@ export default function WpmTest({
 
       {phase === 'ended' && result && (
         <View testID="end" style={styles.endCard}>
-          <Text style={styles.endTitle}>Measured reading complete</Text>
+          <Text style={styles.endTitle}>Baseline reading complete</Text>
           <Text testID="wpm-result" style={styles.endWpm}>{result.wpm} WPM</Text>
           <Text style={styles.endMeta}>
             {result.correct}/{result.questionCount} questions correct · {result.wordCount} words
@@ -313,13 +312,19 @@ export default function WpmTest({
                 : 'Rate is above the personal-estimate quality range'}
             </Text>
           )}
+          {!result.qualityFlag && !sampleProp && (
+            <Text testID="baseline-valid" style={styles.validMessage}>
+              Valid baseline passage · complete three different passages for
+              your personal estimate
+            </Text>
+          )}
           <Pressable
             accessibilityRole="button"
             testID="play-again"
             onPress={start}
             style={styles.primaryButton}
           >
-            <Text style={styles.primaryButtonText}>Test Again</Text>
+            <Text style={styles.primaryButtonText}>Read Another Passage</Text>
           </Pressable>
         </View>
       )}
@@ -387,6 +392,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warningSurface,
     borderRadius: 10,
     color: colors.warningForeground,
+    fontSize: 13,
+    marginVertical: 8,
+    padding: 10,
+    textAlign: 'center',
+  },
+  validMessage: {
+    backgroundColor: colors.successSurface,
+    borderRadius: 10,
+    color: colors.successForeground,
     fontSize: 13,
     marginVertical: 8,
     padding: 10,

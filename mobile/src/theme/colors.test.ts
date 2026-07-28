@@ -1,4 +1,4 @@
-import { colors } from './colors';
+import { colors, gameGradients } from './colors';
 
 function relativeLuminance(hex: string): number {
   const channels = hex
@@ -28,6 +28,12 @@ function contrastRatio(first: string, second: string): number {
 }
 
 describe('semantic color contrast', () => {
+  it('uses the supplied navy and cyan brand colors', () => {
+    expect(colors.brandNavy).toBe('#0E4979');
+    expect(colors.brandCyan).toBe('#1BA3DD');
+    expect(colors.primary).toBe(colors.brandNavy);
+  });
+
   it.each([
     ['enabled action', colors.onInteractive, colors.interactivePrimary],
     ['pressed action', colors.onInteractive, colors.interactivePrimaryPressed],
@@ -47,5 +53,23 @@ describe('semantic color contrast', () => {
     expect(contrastRatio(colors.focusRing, colors.cardBackground)).toBeGreaterThanOrEqual(
       3
     );
+  });
+
+  it.each([
+    ['primary text on the app background', colors.textPrimary, colors.background],
+    ['secondary text on the app background', colors.textSecondary, colors.background],
+    ['muted text on a card', colors.textMuted, colors.cardBackground],
+  ])('%s meets WCAG AA for normal text', (_name, foreground, background) => {
+    expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps every game-icon gradient readable with white icons', () => {
+    for (const gradient of Object.values(gameGradients)) {
+      for (const stop of gradient) {
+        expect(contrastRatio(colors.onInteractive, stop)).toBeGreaterThanOrEqual(
+          4.5
+        );
+      }
+    }
   });
 });

@@ -696,10 +696,11 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
   },
   logoImage: {
-    width: 232,
-    height: 72,
+    width: 119,
+    height: 141,
     alignSelf: 'center',
     marginBottom: spacing.sm,
+    borderRadius: 16,
   },
   welcomeRow: {
     flexDirection: 'row',

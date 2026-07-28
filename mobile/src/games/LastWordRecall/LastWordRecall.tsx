@@ -5,7 +5,6 @@ import {
   createRecognitionOptions,
   createVariedSequence,
   getFlashWordPool,
-  shuffleItems,
   uniqueStrings,
   type RandomSource,
 } from '../../data/flashPracticeContent';
@@ -174,18 +173,12 @@ export default function LastWordRecall({
   }, []);
 
   function createLastWordOptions(sequence: readonly string[]): string[] {
-    const answer = sequence[sequence.length - 1];
-    const seenDistractors = shuffleItems(
-      uniqueStrings(sequence.slice(0, -1)).filter((word) => word !== answer)
-    );
-    const fallback = createRecognitionOptions(answer, optionPool, 7).filter(
-      (word) => word !== answer && !seenDistractors.includes(word)
-    );
-    return shuffleItems([
+    const answer =
+      sequence[sequence.length - 1] ?? wordPool[0] ?? 'focus';
+    return createRecognitionOptions(
       answer,
-      ...seenDistractors,
-      ...fallback,
-    ].slice(0, 4));
+      uniqueStrings([...sequence.slice(0, -1), ...optionPool])
+    );
   }
 
   function revealNextWord() {

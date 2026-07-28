@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { colors } from '../theme/colors';
 
 type Props = {
   /** Value from 0 to 100 */
@@ -25,7 +26,7 @@ export function CircularProgress({
   percentage,
   size = 120,
   strokeWidth = 10,
-  color = '#6366F1',
+  color = colors.primary,
   gradientEnd,
   showText = true,
   centerLabel,
@@ -56,7 +57,7 @@ export function CircularProgress({
           cx={center}
           cy={center}
           r={radius}
-          stroke="#E5E7EB"
+          stroke={colors.border}
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -101,10 +102,10 @@ const styles = StyleSheet.create({
   },
   valueText: {
     fontWeight: '800',
-    color: '#2C3E50',
+    color: colors.textPrimary,
   },
   subLabel: {
-    color: '#5D6D7E',
+    color: colors.textSecondary,
     marginTop: 2,
     fontWeight: '500',
   },

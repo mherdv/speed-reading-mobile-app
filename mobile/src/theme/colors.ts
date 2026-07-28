@@ -1,82 +1,83 @@
-/** SpeedRead light theme: expressive accents on calm, high-contrast surfaces. */
+/** SpeedRead light theme, derived from the navy and cyan brand mark. */
 
 export const colors = {
-  primary: '#6D3FE8',
-  primaryDark: '#5426C8',
-  primaryLight: '#8D6AEE',
+  brandNavy: '#0E4979',
+  brandCyan: '#1BA3DD',
 
-  secondary: '#C33B82',
-  secondaryLight: '#E56BA7',
-  secondaryDark: '#98245F',
+  primary: '#0E4979',
+  primaryDark: '#083B65',
+  primaryLight: '#1A6798',
 
-  gradientStart: '#6D3FE8',
-  gradientEnd: '#C33B82',
+  secondary: '#0B628F',
+  secondaryLight: '#1BA3DD',
+  secondaryDark: '#0B557E',
 
-  // Alternative gradient colors for card icons (Blue to Purple)
-  gradientIconStart: '#6D7BFF',
-  gradientIconEnd: '#A958FF',
+  gradientStart: '#0E4979',
+  gradientEnd: '#0B628F',
 
-  // Progress bar gradient
-  gradientProgressStart: '#A88BEB',
-  gradientProgressEnd: '#6E53B0',
+  gradientIconStart: '#155A88',
+  gradientIconEnd: '#0D769E',
+
+  gradientProgressStart: '#1BA3DD',
+  gradientProgressEnd: '#0B628F',
 
   // Game category colors (for card icons)
-  categorySpeed: '#6C4EC7', // Purple - speed/timing games
-  categoryMemory: '#9B7BD4', // Light Purple - memory games
-  categoryFocus: '#5BC0DE', // Cyan - focus/attention games
-  categoryVision: '#5CB85C', // Green - visual training
-  categoryWord: '#E642A5', // Pink - word/letter games
-  categoryNumber: '#FF5B37', // Orange - number games
+  categorySpeed: '#0E4979',
+  categoryMemory: '#155A88',
+  categoryFocus: '#0B628F',
+  categoryVision: '#166A9A',
+  categoryWord: '#0D769E',
+  categoryNumber: '#19759B',
 
   // Surface roles
-  background: '#F7F7FB',
-  backgroundDark: '#ECECF3',
-  backgroundGradientStart: '#FBFAFF',
-  backgroundGradientEnd: '#EEF5FF',
+  background: '#F6FAFC',
+  backgroundDark: '#E8F1F5',
+  backgroundGradientStart: '#FBFDFE',
+  backgroundGradientEnd: '#EAF7FC',
   cardBackground: '#FFFFFF',
-  surfaceTonal: '#F2EEFF',
+  surfaceTonal: '#E7F5FB',
 
-  textPrimary: '#252333',
-  textSecondary: '#625F70',
-  textMuted: '#6F6B7A',
+  textPrimary: '#142836',
+  textSecondary: '#506572',
+  textMuted: '#607481',
 
   // Accessible semantic interaction roles. Foreground/background pairings are
   // tested in colors.test.ts and should be preferred over raw accent hex codes.
   onInteractive: '#FFFFFF',
-  interactivePrimary: '#5426C8',
-  interactivePrimaryPressed: '#431D9F',
+  interactivePrimary: '#0E4979',
+  interactivePrimaryPressed: '#083B65',
   interactiveTeal: '#0F766E',
   interactiveWarm: '#9A3412',
-  interactiveInfo: '#175AAB',
-  focusRing: '#5426C8',
-  disabledForeground: '#5F5B6C',
-  disabledSurface: '#ECECF3',
+  interactiveInfo: '#0E5D8A',
+  focusRing: '#0E4979',
+  disabledForeground: '#586C78',
+  disabledSurface: '#E8F1F5',
   successForeground: '#116149',
   successSurface: '#E8F5EF',
   errorForeground: '#9F253A',
   errorSurface: '#FDECF0',
   warningForeground: '#704000',
   warningSurface: '#FFF3D6',
-  infoForeground: '#174F9C',
-  infoSurface: '#EAF2FF',
+  infoForeground: '#0E4979',
+  infoSurface: '#E7F5FB',
 
   // UI feedback colors
   success: '#16815B',
   error: '#C63D4F',
   warning: '#A86100',
-  info: '#246BCE',
+  info: '#0B628F',
 
   // Accent
-  accent: '#FF5B37',
+  accent: '#0D769E',
 
   // Neutral colors
-  border: '#E9ECEF',
-  divider: '#E9ECEF',
+  border: '#D9E8EF',
+  divider: '#D9E8EF',
   white: '#FFFFFF',
   black: '#000000',
 
   // Shadow
-  shadow: 'rgba(0,0,0,0.1)',
+  shadow: 'rgba(14,73,121,0.12)',
 
   // Star rating color
   starActive: '#F5A623',
@@ -186,7 +187,7 @@ export const gradients = {
     end: { x: 1, y: 0.5 },
   },
   cardIcon: {
-    colors: ['#6D7BFF', '#A958FF'] as const,
+    colors: [colors.gradientIconStart, colors.gradientIconEnd] as const,
     start: { x: 0, y: 0 },
     end: { x: 1, y: 1 },
   },
@@ -199,40 +200,40 @@ export const gradients = {
 
 // Per-game icon gradient colors
 export const gameGradients: Record<string, readonly [string, string]> = {
-  RepeatedReading: ['#1468C7', '#3446C8'],
-  WpmTest: ['#1468C7', '#3446C8'],
-  MainIdeaSprint: ['#7140D8', '#9B35B8'],
-  StructureScan: ['#087F8C', '#1468C7'],
-  EvidenceHunt: ['#087F8C', '#1468C7'],
-  ContextBuilder: ['#7140D8', '#9B35B8'],
-  PowerReader: ['#E94B20', '#B93D17'],
-  FlashReading: ['#E94B20', '#B93D17'],
-  WordsRecall: ['#7140D8', '#9B35B8'],
-  SentenceRecall: ['#7140D8', '#9B35B8'],
-  EyeMovementTraining: ['#1F8A70', '#48A868'],
-  SymbolRecognition: ['#E94B20', '#B93D17'],
+  RepeatedReading: ['#0E4979', '#155A88'],
+  WpmTest: ['#0E4979', '#155A88'],
+  MainIdeaSprint: ['#155A88', '#0B628F'],
+  StructureScan: ['#0B628F', '#0D769E'],
+  EvidenceHunt: ['#0B628F', '#0D769E'],
+  ContextBuilder: ['#155A88', '#0B628F'],
+  PowerReader: ['#0E4979', '#0D769E'],
+  FlashReading: ['#0E4979', '#0D769E'],
+  WordsRecall: ['#155A88', '#0B628F'],
+  SentenceRecall: ['#155A88', '#0B628F'],
+  EyeMovementTraining: ['#166A9A', '#19759B'],
+  SymbolRecognition: ['#0E4979', '#0D769E'],
 
-  ComprehensionTest: ['#D9472C', '#AD275B'],
+  ComprehensionTest: ['#0E4979', '#0B628F'],
 
-  VisualSpanExpansion: ['#D93474', '#A32261'],
-  TimedPhraseRecognition: ['#D93474', '#A32261'],
-  LastWordRecall: ['#7140D8', '#9B35B8'],
-  WordPairs: ['#D93474', '#A32261'],
-  NumberSearch: ['#D93474', '#A32261'],
-  LetterRecognition: ['#D93474', '#A32261'],
-  LetterJumble: ['#D93474', '#A32261'],
-  WordMismatchGrid: ['#D93474', '#A32261'],
-  EvenNumbers: ['#D93474', '#A32261'],
-  MemoryRecall: ['#D93474', '#A32261'],
+  VisualSpanExpansion: ['#0B557E', '#0D769E'],
+  TimedPhraseRecognition: ['#0B557E', '#0D769E'],
+  LastWordRecall: ['#155A88', '#0B628F'],
+  WordPairs: ['#0B557E', '#0D769E'],
+  NumberSearch: ['#0B557E', '#0D769E'],
+  LetterRecognition: ['#0B557E', '#0D769E'],
+  LetterJumble: ['#0B557E', '#0D769E'],
+  WordMismatchGrid: ['#0B557E', '#0D769E'],
+  EvenNumbers: ['#0B557E', '#0D769E'],
+  MemoryRecall: ['#0B557E', '#0D769E'],
 
-  PatternScanning: ['#7140D8', '#9B35B8'],
-  SchulteLetters: ['#7140D8', '#9B35B8'],
-  SchulteMix: ['#7140D8', '#9B35B8'],
-  NumberRecognition: ['#7140D8', '#9B35B8'],
+  PatternScanning: ['#155A88', '#0B628F'],
+  SchulteLetters: ['#155A88', '#0B628F'],
+  SchulteMix: ['#155A88', '#0B628F'],
+  NumberRecognition: ['#155A88', '#0B628F'],
 
-  TimedWordRecognition: ['#007F9B', '#1C6EBA'],
-  SchulteNumbers: ['#007F9B', '#1C6EBA'],
-  WordSearchGame: ['#007F9B', '#1C6EBA'],
+  TimedWordRecognition: ['#0E5D8A', '#0D769E'],
+  SchulteNumbers: ['#0E5D8A', '#0D769E'],
+  WordSearchGame: ['#0E5D8A', '#0D769E'],
 
-  TextSearch: ['#1468C7', '#3446C8'],
+  TextSearch: ['#0E4979', '#155A88'],
 };

@@ -10,7 +10,7 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Read the same short passage twice at a comfortable pace, then answer a comprehension question. Compare both attempts and improve fluency without trading away meaning.',
 
   WpmTest:
-    'Read an original connected passage while the timer runs, then answer passage-dependent questions after reading time stops. The result uses the actual word count and reading duration, and flags attempts that are too brief or implausibly fast for a stable personal estimate.',
+    'Read one of nine original connected passages while the timer runs, then answer three passage-dependent questions after reading time stops. Complete three different valid passages to build your personal practice estimate. Difficulty changes the number of answer choices without weakening the comprehension check.',
 
   MainIdeaSprint:
     'Read a short passage, hide it, and retrieve its central idea from memory. Immediate feedback helps you learn to separate the author’s main claim from supporting details.',
@@ -22,7 +22,7 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Find the sentence or sentences that justify an answer in connected text. The result keeps answer accuracy, evidence credit, locate time, and wrong selections separate.',
 
   ContextBuilder:
-    'Infer an unfamiliar word from a connected paragraph and identify the clue that supports your meaning. This reports vocabulary-task accuracy, not reading speed.',
+    'Infer an unfamiliar word as it is used in one highlighted sentence, then identify the numbered sentence clue or clues that support that meaning. Its 72 reviewed words span adjectives, verbs, nouns, and adverbs; the result reports vocabulary-task accuracy, not reading speed.',
 
   PowerReader:
     'Use Flow, Focus line, or RSVP to experiment with a steady display guide. The configured target is stored separately from measured WPM, and the result counts only the words and chunks actually presented.',
@@ -64,19 +64,19 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Locate matching patterns in a grid and compare speed with accuracy. Use it as an optional visual-search warm-up rather than a reading measure.',
 
   TimedPhraseRecognition:
-    'Identify briefly displayed phrases and track recognition accuracy. Results apply to the drill and should not be read as connected-text comprehension.',
+    'Identify briefly displayed phrases among options with similar word counts and visible lengths. Results apply to the drill and should not be read as connected-text comprehension.',
 
   TimedWordRecognition:
-    'Choose a briefly displayed word from several options. This optional task records recognition speed and accuracy without making claims about subvocalization.',
+    'Choose a briefly displayed word from close-length, similar-looking options so exact recall matters more than button shape. This optional task records recognition speed and accuracy without making claims about subvocalization.',
 
   LastWordRecall:
-    'Follow a paced stream that stops unpredictably after 3–10 words, then identify the final word. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
+    'Follow a paced stream that stops unpredictably after 3–10 words, then identify the final word among close-length, similar-looking options. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
 
   WordMismatchGrid:
     'Compare same-or-different word pairs and find every mismatch. A tap on a matching pair costs time immediately, so guesses cannot be removed without consequence. This is an optional visual-discrimination task, not a comprehension exercise.',
 
   WordPairs:
-    'Match each prompt with its reviewed opposite and track accuracy. Use Opposites as an English vocabulary warm-up; its score does not measure passage comprehension.',
+    'Match each prompt with its reviewed opposite among the closest-length authored alternatives and track accuracy. Use Opposites as an English vocabulary warm-up; its score does not measure passage comprehension.',
 
   LetterJumble:
     'Repair an English word whose nearby letters have been transposed, then type the corrected spelling. Letter Mixup is a spelling and pattern challenge; its result is specific to the puzzle.',

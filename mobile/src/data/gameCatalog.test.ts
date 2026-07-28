@@ -3,6 +3,14 @@ import { GAME_IDS } from './gameIds';
 import { getDifficultyOptions } from '../ui/GameDifficultyControl';
 
 describe('game catalog', () => {
+  it('exposes the baseline assessment as a clearly named standalone exercise', () => {
+    expect(GAME_CATALOG.WpmTest).toMatchObject({
+      id: 'WpmTest',
+      title: 'Baseline Reading',
+      shortDescription: expect.stringContaining('baseline'),
+    });
+  });
+
   it('contains complete rules and difficulty metadata for every registered game', () => {
     expect(Object.keys(GAME_CATALOG)).toEqual([...GAME_IDS]);
 

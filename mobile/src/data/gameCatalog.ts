@@ -77,21 +77,28 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
   },
   WpmTest: {
     id: 'WpmTest',
-    title: 'WPM Test',
-    shortDescription: 'Measure reading speed with a comprehension check.',
+    title: 'Baseline Reading',
+    shortDescription: 'Build a reliable WPM baseline with fresh passages.',
     category: 'reading',
     tier: 'reading-practice',
     rules: [
       'Start the timer only when the connected passage appears.',
       'Finish reading before the comprehension questions; reading time stops immediately.',
-      'Review actual word count, WPM, accuracy, and any measurement-quality flag.',
+      'Complete three different valid passages to build your personal practice estimate.',
     ],
     difficulty: {
-      easy: option('Easy', 'Broad passage pool · 1 dependent question'),
-      medium: option('Medium', 'Versioned baseline pool · 2 dependent questions'),
-      hard: option('Hard', 'Versioned baseline pool · 3 dependent questions'),
+      easy: option('Easy', '9 reviewed passages · 3 questions · 2 choices each'),
+      medium: option('Medium', '9 reviewed passages · 3 questions · 3 choices each'),
+      hard: option('Hard', '9 reviewed passages · 3 questions · 4 choices each'),
     },
-    keywords: ['wpm', 'test', 'reading speed', 'comprehension', 'measurement'],
+    keywords: [
+      'baseline',
+      'wpm',
+      'test',
+      'reading speed',
+      'comprehension',
+      'measurement',
+    ],
   },
   MainIdeaSprint: {
     id: 'MainIdeaSprint',
@@ -150,18 +157,18 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
   ContextBuilder: {
     id: 'ContextBuilder',
     title: 'Context Builder',
-    shortDescription: 'Infer a word and identify its context clue.',
+    shortDescription: 'Infer a word in one sentence and prove it from context.',
     category: 'language',
     tier: 'skill-lab',
     rules: [
-      'Read the connected paragraph and locate the marked target word.',
-      'Choose its meaning, then select the clue that supports your inference.',
+      'Read the numbered paragraph and locate the target word in its highlighted sentence.',
+      'Choose what the word means in that sentence only, then select the passage clue or clues that support it.',
       'Optionally rate confidence and review meaning and clue accuracy separately.',
     ],
     difficulty: {
-      easy: option('Easy', 'Common words · direct definition among sentence-based clues'),
-      medium: option('Medium', 'Closer same-part-of-speech distractors · contrast or consequence clue'),
-      hard: option('Hard', 'Less-frequent words · combine two independent context spans'),
+      easy: option('Easy', '24 common words · direct definition among sentence-based clues'),
+      medium: option('Medium', '24 mid-frequency words · contrast or consequence clue'),
+      hard: option('Hard', '24 less-frequent words · combine two independent context spans'),
     },
     keywords: ['context', 'vocabulary', 'meaning', 'clue', 'morphology'],
   },
@@ -371,7 +378,7 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     tier: 'skill-lab',
     rules: [
       'View one word before it disappears.',
-      'Choose the exact word from several distractors.',
+      'Choose the exact word from close-length, similar-looking distractors.',
       'The pace rises by 25 WPM after 8 correct in a row; a miss resets the streak and 3 consecutive misses end the session.',
     ],
     difficulty: {
@@ -389,7 +396,7 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     tier: 'skill-lab',
     rules: [
       'View one generated phrase at the selected WPM.',
-      'Choose the exact phrase from four options.',
+      'Choose the exact phrase from four options with similar word counts and lengths.',
       'The pace rises by 25 WPM after 8 correct in a row; a miss resets the streak and 3 consecutive misses end the session.',
     ],
     difficulty: {
@@ -407,7 +414,7 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     tier: 'skill-lab',
     rules: [
       'Watch words shown one at a time; each stream stops unpredictably after 3–10 words.',
-      'After the stream ends, choose the word that appeared last.',
+      'After the stream ends, choose the last word from close-length, similar-looking options.',
       'The pace rises by 25 WPM after 4 correct in a row; a miss resets the streak and 3 consecutive misses end the session.',
     ],
     difficulty: {
@@ -425,7 +432,7 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     tier: 'skill-lab',
     rules: [
       'Read the prompt word.',
-      'Choose its reviewed opposite from the available alternatives.',
+      'Choose its reviewed opposite from the closest-length authored alternatives.',
       'Continue until the timer ends and review accuracy.',
     ],
     difficulty: {
