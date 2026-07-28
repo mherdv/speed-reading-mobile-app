@@ -10,6 +10,7 @@ import { colors } from '../theme/colors';
 import { SimpleIdlePanel } from '../ui/SimpleIdlePanel';
 import { StatsRow } from '../ui/StatsRow';
 import { useAutoStart, useTrackedTimeouts, type Difficulty } from './gameHooks';
+import { getRecallFeedbackDurationMs } from './recallFeedback';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -177,7 +178,7 @@ export function TypedRecallExercise({
       if (cancelledRef.current) return;
       if (roundRef.current >= totalRounds) finish();
       else showRound();
-    }, 500);
+    }, getRecallFeedbackDurationMs(promptRef.current, isCorrect));
   }
 
   const displayedWords = twoWordLayout ? prompt.split(/\s+/).slice(0, 2) : [];
@@ -257,14 +258,30 @@ export function TypedRecallExercise({
                 </Pressable>
               )}
               {phase === 'feedback' && (
-                <Text
+                <View
+                  accessibilityLiveRegion="polite"
                   testID="recall-feedback"
-                  style={feedback === 'correct' ? styles.correctText : styles.wrongText}
+                  style={styles.feedbackReview}
                 >
-                  {feedback === 'correct'
-                    ? 'Correct'
-                    : `Answer: ${promptRef.current}`}
-                </Text>
+                  {feedback === 'correct' ? (
+                    <Text style={styles.correctText}>Correct</Text>
+                  ) : (
+                    <>
+                      <Text style={styles.wrongText}>Review this answer</Text>
+                      <Text style={styles.answerLabel}>Correct answer</Text>
+                      <Text
+                        selectable
+                        testID="recall-correct-answer"
+                        style={styles.correctAnswer}
+                      >
+                        {promptRef.current}
+                      </Text>
+                      <Text style={styles.reviewHint}>
+                        Compare it with what you typed above before the next round.
+                      </Text>
+                    </>
+                  )}
+                </View>
               )}
             </View>
           )}
@@ -351,6 +368,25 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: colors.onInteractive, fontSize: 16, fontWeight: '700' },
   correctText: { color: colors.successForeground, fontSize: 15, fontWeight: '700' },
   wrongText: { color: colors.errorForeground, fontSize: 14, fontWeight: '600' },
+  feedbackReview: { gap: 6 },
+  answerLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  correctAnswer: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '700',
+    lineHeight: 25,
+  },
+  reviewHint: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   endCard: { alignItems: 'center', flex: 1, gap: 8, justifyContent: 'center' },
   endTitle: { color: colors.textPrimary, fontSize: 22, fontWeight: '800' },
   endScore: { color: colors.interactivePrimary, fontSize: 40, fontWeight: '800' },

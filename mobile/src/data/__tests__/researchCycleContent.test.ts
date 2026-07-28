@@ -243,11 +243,11 @@ describe('research-cycle reviewed content', () => {
     );
   });
 
-  it('keeps a diverse nine-passage baseline with three dependent items each', () => {
+  it('keeps a diverse twelve-passage baseline with three dependent items each', () => {
     expect(validateBaselineTextSamples()).toEqual([]);
-    expect(BASELINE_TEXT_SAMPLES).toHaveLength(9);
+    expect(BASELINE_TEXT_SAMPLES).toHaveLength(12);
     expect(new Set(BASELINE_TEXT_SAMPLES.map((sample) => sample.id)).size).toBe(
-      9
+      12
     );
     expect(
       new Set(BASELINE_TEXT_SAMPLES.map((sample) => sample.genre)).size

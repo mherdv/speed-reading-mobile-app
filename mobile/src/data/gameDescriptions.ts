@@ -10,7 +10,7 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Read the same short passage twice at a comfortable pace, then answer a comprehension question. Compare both attempts and improve fluency without trading away meaning.',
 
   WpmTest:
-    'Read one of nine original connected passages while the timer runs, then answer three passage-dependent questions after reading time stops. Complete three different valid passages to build your personal practice estimate. Difficulty changes the number of answer choices without weakening the comprehension check.',
+    'Read one of twelve original connected passages while the timer runs, then answer three passage-dependent questions after reading time stops. Complete three different valid passages to build your personal practice estimate. Difficulty changes the number of answer choices without weakening the comprehension check.',
 
   MainIdeaSprint:
     'Read a short passage, hide it, and retrieve its central idea from memory. Immediate feedback helps you learn to separate the author’s main claim from supporting details.',
@@ -37,22 +37,22 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Take a short visual-comfort break with gentle blinking and distance focus. This routine may help you pause during screen use, but it does not improve eyesight, diagnose eye health, or measure reading speed.',
 
   VisualSpanExpansion:
-    'Recognize brief items around a central point as an optional peripheral-awareness challenge. Treat its score as drill performance, not evidence of a wider reading span.',
+    'Recognize a brief number sequence, then type it from memory. A miss pauses on your entry and the correct sequence so you can compare each position. Treat its score as drill performance, not evidence of a wider reading span.',
 
   FlashReading:
-    'Identify briefly displayed words and track response accuracy. This is a recognition challenge and does not by itself demonstrate faster connected-text reading.',
+    'Type a briefly displayed word from memory and track response accuracy. A miss keeps your entry and the correct word visible before continuing. This challenge does not by itself demonstrate faster connected-text reading.',
 
   WordsRecall:
-    'View exactly two English words, then type both from memory after they disappear. Difficulty changes only vocabulary and display time; comparison ignores case, punctuation, and extra whitespace.',
+    'View exactly two English words, then type both from memory after they disappear. A miss pauses on your entry and the correct pair. Difficulty changes only vocabulary and display time; comparison ignores case, punctuation, and extra whitespace.',
 
   SentenceRecall:
-    'Read one natural English sentence briefly, then reconstruct it after it disappears. The large prompt deck avoids immediate repetition, and comparison ignores case, punctuation, and extra whitespace.',
+    'Read one natural English sentence briefly, then reconstruct it after it disappears. A miss keeps both versions visible longer for comparison. The large prompt deck avoids immediate repetition, and comparison ignores case, punctuation, and extra whitespace.',
 
   ComprehensionTest:
     'Follow a moving chunk highlight through a connected passage, pause or finish safely, then answer passage-dependent questions. The selected WPM is a configured pacing target, not a measured reading speed.',
 
   MemoryRecall:
-    'Recall short number sequences as an optional working-memory challenge. Its accuracy describes this task only; it is not a reading-retention score.',
+    'Recall short number sequences on a phone-style keypad. A miss pauses on your entry and the correct sequence before difficulty drops or the session ends. Its accuracy describes this task only; it is not a reading-retention score.',
 
   NumberRecognition:
     'Identify target numbers in a brief visual task. This optional challenge measures number-recognition accuracy rather than reading skill.',

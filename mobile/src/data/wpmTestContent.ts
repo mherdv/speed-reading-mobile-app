@@ -157,8 +157,8 @@ export function validateBaselineReadingPool(): string[] {
     const items = getBaselineReadingPool(difficulty);
     const expectedChoices =
       difficulty === 'easy' ? 2 : difficulty === 'medium' ? 3 : 4;
-    if (new Set(items.map((item) => item.sample.id)).size < 9) {
-      errors.push(`${difficulty}: at least nine baseline passages required`);
+    if (new Set(items.map((item) => item.sample.id)).size < 12) {
+      errors.push(`${difficulty}: at least twelve baseline passages required`);
     }
     for (const item of items) {
       if (item.questions.length !== 3) {

@@ -25,6 +25,7 @@ import {
   type FlashPaceBounds,
   type FlashPaceState,
 } from '../flashPacing';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 
 const GAME_ID = 'FlashReading';
 const CORRECT_ANSWERS_TO_INCREASE = 4;
@@ -228,7 +229,7 @@ export default function FlashReading({
       } else {
         showRound();
       }
-    }, 650);
+    }, getRecallFeedbackDurationMs(currentRef.current, correct));
   }
 
   function finish(reason: FinishReason) {
@@ -379,10 +380,33 @@ export default function FlashReading({
               onSubmitEditing={submit}
             />
             {feedback === 'correct' && (
-              <Text style={styles.correctText}>Correct</Text>
+              <Text
+                accessibilityLiveRegion="polite"
+                testID="flash-recall-feedback"
+                style={styles.correctText}
+              >
+                Correct
+              </Text>
             )}
             {feedback === 'wrong' && (
-              <Text style={styles.wrongText}>Answer: {current}</Text>
+              <View
+                accessibilityLiveRegion="polite"
+                testID="flash-recall-feedback"
+                style={styles.feedbackReview}
+              >
+                <Text style={styles.wrongText}>Review this word</Text>
+                <Text style={styles.answerLabel}>Correct word</Text>
+                <Text
+                  selectable
+                  testID="flash-correct-answer"
+                  style={styles.correctAnswer}
+                >
+                  {current}
+                </Text>
+                <Text style={styles.reviewHint}>
+                  Compare it with what you typed above.
+                </Text>
+              </View>
             )}
           </View>
           {phase === 'recall' && (
@@ -534,6 +558,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginTop: 10,
+  },
+  feedbackReview: {
+    alignItems: 'center',
+    gap: 5,
+  },
+  answerLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  correctAnswer: {
+    color: colors.textPrimary,
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  reviewHint: {
+    color: colors.textSecondary,
+    fontSize: 12,
   },
   submitButton: {
     minHeight: 50,

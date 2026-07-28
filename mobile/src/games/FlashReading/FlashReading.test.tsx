@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import FlashReading from './FlashReading';
 
 describe('FlashReading', () => {
@@ -75,12 +76,12 @@ describe('FlashReading', () => {
         break;
       }
       act(() => {
-        jest.advanceTimersByTime(500);
+        jest.advanceTimersByTime(510);
       });
     }
   });
 
-  it('ends after the third consecutive recall miss', () => {
+  it('shows the correct word for a readable delay and ends after the third miss', () => {
     const onReportResult = jest.fn();
     const view = render(
       <FlashReading
@@ -97,10 +98,21 @@ describe('FlashReading', () => {
       });
       fireEvent.changeText(view.getByTestId('recall-input'), 'wrong');
       fireEvent.press(view.getByTestId('submit-btn'));
+      const correctWord = String(
+        view.getByTestId('flash-correct-answer').props.children
+      );
+      expect(correctWord).toMatch(/focus|signal/);
+      const reviewMs = getRecallFeedbackDurationMs(correctWord, false);
       act(() => {
-        jest.advanceTimersByTime(700);
+        jest.advanceTimersByTime(reviewMs - 1);
       });
-      if (miss < 2) expect(view.queryByTestId('end')).toBeNull();
+      expect(view.queryByTestId('end')).toBeNull();
+      act(() => {
+        jest.advanceTimersByTime(2);
+      });
+      if (miss < 2) {
+        expect(view.queryByTestId('end')).toBeNull();
+      }
     }
 
     expect(view.getByTestId('end')).toBeTruthy();

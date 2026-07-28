@@ -7,6 +7,7 @@ import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
 import { colors } from '../../theme/colors';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 
 const GAME_ID = 'VisualSpanExpansion';
 
@@ -27,7 +28,7 @@ type Props = {
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
-type Phase = 'idle' | 'show' | 'recall' | 'ended';
+type Phase = 'idle' | 'show' | 'recall' | 'feedback' | 'ended';
 
 function getDifficultyConfig(difficulty: Difficulty) {
   switch (difficulty) {
@@ -110,13 +111,20 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
 
     attemptsRef.current += 1;
     setAttempts(attemptsRef.current);
+    const isCorrect = input === sequence;
 
-    if (input === sequence) {
-      scoreRef.current += level * 10;
+    if (isCorrect) {
+      scoreRef.current += levelRef.current * 10;
       setScore(scoreRef.current);
       setFeedback('correct');
+    } else {
+      setFeedback('wrong');
+    }
+    setPhase('feedback');
 
-      
+    scheduleTimeout(() => {
+      if (cancelledRef.current) return;
+      if (isCorrect) {
         setFeedback(null);
         levelRef.current += 1;
         setLevel(levelRef.current);
@@ -129,11 +137,10 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
         showTimeoutRef.current = setTimeout(() => {
           setPhase('recall');
         }, displayMs);
-    } else {
-      setFeedback('wrong');
-      
+      } else {
         finish();
-    }
+      }
+    }, getRecallFeedbackDurationMs(sequence, isCorrect));
   }
 
   function finish() {
@@ -273,6 +280,68 @@ export default function VisualSpanExpansion({ startingLength: startingLengthProp
         </View>
       )}
 
+      {phase === 'feedback' && (
+        <View testID="visual-span-feedback" style={styles.gameArea}>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'level',
+                value: level,
+                label: 'Level',
+                containerStyle: [styles.statBox, styles.levelBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+            ]}
+          />
+          <View
+            accessibilityLiveRegion="polite"
+            style={[
+              styles.reviewCard,
+              feedback === 'correct' ? styles.cardCorrect : styles.cardWrong,
+            ]}
+          >
+            <Text
+              style={
+                feedback === 'correct'
+                  ? styles.reviewCorrectTitle
+                  : styles.reviewWrongTitle
+              }
+            >
+              {feedback === 'correct' ? 'Correct' : 'Review the sequence'}
+            </Text>
+            {feedback === 'wrong' && (
+              <>
+                <Text style={styles.reviewLabel}>Your answer</Text>
+                <Text testID="visual-span-user-answer" style={styles.reviewSequence}>
+                  {input ? input.split('').join(' ') : 'No answer'}
+                </Text>
+                <Text style={styles.reviewLabel}>Correct sequence</Text>
+                <Text
+                  selectable
+                  testID="visual-span-correct-answer"
+                  style={styles.reviewSequence}
+                >
+                  {sequence.split('').join(' ')}
+                </Text>
+                <Text style={styles.reviewHint}>
+                  Compare each position before the result screen appears.
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+      )}
+
       {phase === 'ended' && (
         <View testID="end" style={styles.endCard}>
           <Text style={styles.endEmoji}>🧠</Text>
@@ -354,6 +423,46 @@ const styles = StyleSheet.create({
   cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
   cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
   input: { fontSize: 28, fontWeight: '700', color: '#115E59', textAlign: 'center', letterSpacing: 4 },
+  reviewCard: {
+    borderRadius: 14,
+    borderWidth: 2,
+    gap: 8,
+    padding: 20,
+  },
+  reviewCorrectTitle: {
+    color: colors.successForeground,
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  reviewWrongTitle: {
+    color: colors.errorForeground,
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  reviewLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginTop: 4,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  reviewSequence: {
+    color: colors.textPrimary,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 4,
+    textAlign: 'center',
+  },
+  reviewHint: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
   submitBtn: { backgroundColor: colors.interactiveTeal, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   submitBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
   endCard: { alignItems: 'center', paddingVertical: 20 },

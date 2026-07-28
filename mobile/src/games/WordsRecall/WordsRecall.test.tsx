@@ -7,6 +7,7 @@ import {
   validateRecallPools,
   WORDS_RECALL_CONFIG,
 } from '../../data/recallContent';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import WordsRecall from './WordsRecall';
 
 describe('WordsRecall', () => {
@@ -68,11 +69,12 @@ describe('WordsRecall', () => {
     }
   });
 
-  it('replays and clears pending display timers on unmount', () => {
+  it('keeps a missed pair and its correct answer visible before replay', () => {
     const report = jest.fn();
+    const expected = 'quiet focus';
     const view = render(
       <WordsRecall
-        prompts={['quiet focus']}
+        prompts={[expected]}
         displayMs={10}
         totalRounds={1}
         onReportResult={report}
@@ -82,7 +84,14 @@ describe('WordsRecall', () => {
     act(() => jest.advanceTimersByTime(20));
     fireEvent.changeText(view.getByTestId('recall-input'), 'wrong');
     fireEvent.press(view.getByTestId('submit-recall'));
-    act(() => jest.advanceTimersByTime(600));
+
+    expect(view.getByTestId('recall-correct-answer')).toHaveTextContent(expected);
+    const reviewMs = getRecallFeedbackDurationMs(expected, false);
+    act(() => jest.advanceTimersByTime(reviewMs - 1));
+    expect(view.queryByTestId('end')).toBeNull();
+    act(() => jest.advanceTimersByTime(2));
+    expect(view.getByTestId('end')).toBeTruthy();
+
     fireEvent.press(view.getByTestId('play-again'));
     expect(view.getByTestId('recall-display')).toBeTruthy();
     view.unmount();

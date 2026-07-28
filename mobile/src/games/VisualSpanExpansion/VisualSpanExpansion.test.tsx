@@ -1,6 +1,13 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import VisualSpanExpansion from './VisualSpanExpansion';
+
+async function flushAsyncEffects() {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
 
 describe('VisualSpanExpansion', () => {
   beforeEach(() => {
@@ -12,24 +19,27 @@ describe('VisualSpanExpansion', () => {
     jest.useRealTimers();
   });
 
-  it('starts in idle phase and shows start button', () => {
+  it('starts in idle phase and shows start button', async () => {
     const { getByTestId } = render(<VisualSpanExpansion />);
+    await flushAsyncEffects();
     expect(getByTestId('start-button')).toBeTruthy();
   });
 
-  it('shows sequence display after pressing start', () => {
+  it('shows sequence display after pressing start', async () => {
     const { getByTestId } = render(
       <VisualSpanExpansion startingLength={3} displayMs={500} />
     );
+    await flushAsyncEffects();
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('sequence-display')).toBeTruthy();
   });
 
-  it('transitions to recall phase after display timeout', () => {
+  it('transitions to recall phase after display timeout', async () => {
     const { getByTestId } = render(
       <VisualSpanExpansion startingLength={3} displayMs={50} />
     );
+    await flushAsyncEffects();
 
     fireEvent.press(getByTestId('start-button'));
 
@@ -40,43 +50,41 @@ describe('VisualSpanExpansion', () => {
     expect(getByTestId('recall-input')).toBeTruthy();
   });
 
-  it('accepts user input and submits', () => {
-    const { getByTestId } = render(
-      <VisualSpanExpansion startingLength={2} displayMs={30} />
+  it('keeps the submitted and correct sequences visible before ending', async () => {
+    const onReportResult = jest.fn();
+    const view = render(
+      <VisualSpanExpansion
+        startingLength={2}
+        displayMs={30}
+        onReportResult={onReportResult}
+      />
     );
+    await flushAsyncEffects();
 
-    fireEvent.press(getByTestId('start-button'));
+    fireEvent.press(view.getByTestId('start-button'));
+    const expected = String(view.getByTestId('sequence').props.children);
 
     act(() => {
       jest.advanceTimersByTime(40);
     });
 
-    fireEvent.changeText(getByTestId('recall-input'), '12');
-    fireEvent.press(getByTestId('submit-btn'));
-  });
+    const wrong = `${(Number(expected[0]) + 1) % 10}${expected.slice(1)}`;
+    fireEvent.changeText(view.getByTestId('recall-input'), wrong);
+    fireEvent.press(view.getByTestId('submit-btn'));
 
-  it('calls onReportResult when game ends', () => {
-    const onReportResult = jest.fn();
-    const { getByTestId } = render(
-      <VisualSpanExpansion startingLength={2} displayMs={20} onReportResult={onReportResult} />
+    expect(view.getByTestId('visual-span-user-answer')).toHaveTextContent(
+      wrong.split('').join(' ')
+    );
+    expect(view.getByTestId('visual-span-correct-answer')).toHaveTextContent(
+      expected.split('').join(' ')
     );
 
-    fireEvent.press(getByTestId('start-button'));
-
-    // Go through a few rounds until game ends
-    for (let i = 0; i < 5; i++) {
-      act(() => {
-        jest.advanceTimersByTime(30);
-      });
-      try {
-        fireEvent.changeText(getByTestId('recall-input'), 'wrong');
-        fireEvent.press(getByTestId('submit-btn'));
-      } catch {
-        break;
-      }
-      act(() => {
-        jest.advanceTimersByTime(1600);
-      });
-    }
+    const reviewMs = getRecallFeedbackDurationMs(expected, false);
+    act(() => jest.advanceTimersByTime(reviewMs - 1));
+    expect(view.queryByTestId('end')).toBeNull();
+    expect(onReportResult).not.toHaveBeenCalled();
+    act(() => jest.advanceTimersByTime(2));
+    expect(view.getByTestId('end')).toBeTruthy();
+    await flushAsyncEffects();
   });
 });

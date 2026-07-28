@@ -6,6 +6,7 @@ import { useAutoStart, useTrackedTimeouts, type Difficulty } from '../gameHooks'
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { colors } from '../../theme/colors';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 
 const GAME_ID = 'MemoryRecall';
 const FAILURE_PENALTY = 10;
@@ -29,7 +30,15 @@ type Props = {
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
-type Phase = 'idle' | 'show' | 'recall' | 'ended';
+type Phase = 'idle' | 'show' | 'recall' | 'feedback' | 'ended';
+
+type MemoryReview = {
+  submitted: number[];
+  expected: number[];
+  correct: boolean;
+  nextLevel: number;
+  shouldFinish: boolean;
+};
 
 function generateSequence(length: number): number[] {
   return Array.from({ length }, () => Math.floor(Math.random() * 10));
@@ -53,6 +62,7 @@ export default function MemoryRecall({
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [failureStreak, setFailureStreak] = useState(0);
+  const [review, setReview] = useState<MemoryReview | null>(null);
 
   const startRef = useRef<number>(0);
   const reportedRef = useRef(false);
@@ -76,15 +86,13 @@ export default function MemoryRecall({
 
   useAutoStart(autoStart, phase, true, start);
 
-  function showSequence(
-    nextLevel: number,
-    nextFeedback: 'correct' | 'wrong' | null = null
-  ) {
+  function showSequence(nextLevel: number) {
     levelRef.current = nextLevel;
     maxLevelRef.current = Math.max(maxLevelRef.current, nextLevel);
     setLevel(nextLevel);
     setInput([]);
-    setFeedback(nextFeedback);
+    setFeedback(null);
+    setReview(null);
 
     const nextSequence = generateSequence(nextLevel);
     sequenceRef.current = nextSequence;
@@ -93,7 +101,6 @@ export default function MemoryRecall({
 
     showTimeoutRef.current = setTimeout(() => {
       if (cancelledRef.current) return;
-      setFeedback(null);
       setPhase('recall');
     }, displayMs);
   }
@@ -111,6 +118,7 @@ export default function MemoryRecall({
     maxLevelRef.current = startingLength;
     setScore(0);
     setFailureStreak(0);
+    setReview(null);
     startRef.current = Date.now();
 
     showSequence(startingLength);
@@ -124,6 +132,9 @@ export default function MemoryRecall({
 
     if (newInput.length === sequenceRef.current.length) {
       const correct = newInput.every((d, i) => d === sequenceRef.current[i]);
+      const expected = [...sequenceRef.current];
+      let nextLevel = levelRef.current;
+      let shouldFinish = false;
 
       if (correct) {
         correctSequencesRef.current += 1;
@@ -131,7 +142,7 @@ export default function MemoryRecall({
         setFailureStreak(0);
         scoreRef.current += levelRef.current * 10;
         setScore(scoreRef.current);
-        showSequence(levelRef.current + 1, 'correct');
+        nextLevel = levelRef.current + 1;
       } else {
         failuresRef.current += 1;
         consecutiveFailuresRef.current += 1;
@@ -139,20 +150,35 @@ export default function MemoryRecall({
         scoreRef.current = Math.max(0, scoreRef.current - FAILURE_PENALTY);
         setScore(scoreRef.current);
 
-        if (
-          consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES
-        ) {
-          setFeedback('wrong');
-          finish();
-          return;
-        }
-
-        const reducedLevel = Math.max(
+        shouldFinish =
+          consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES;
+        nextLevel = Math.max(
           MIN_SEQUENCE_LENGTH,
           levelRef.current - 1
         );
-        showSequence(reducedLevel, 'wrong');
       }
+
+      levelRef.current = nextLevel;
+      maxLevelRef.current = Math.max(maxLevelRef.current, nextLevel);
+      setLevel(nextLevel);
+      setFeedback(correct ? 'correct' : 'wrong');
+      setReview({
+        submitted: newInput,
+        expected,
+        correct,
+        nextLevel,
+        shouldFinish,
+      });
+      setPhase('feedback');
+
+      scheduleTimeout(() => {
+        if (cancelledRef.current) return;
+        if (shouldFinish) {
+          finish();
+          return;
+        }
+        showSequence(nextLevel);
+      }, getRecallFeedbackDurationMs(expected.join(' '), correct));
     }
   }
 
@@ -259,16 +285,6 @@ export default function MemoryRecall({
           </View>
 
           <Text style={styles.instruction}>Memorize this sequence!</Text>
-          {feedback === 'correct' && (
-            <Text accessibilityLiveRegion="polite" style={styles.correctNotice}>
-              Correct · streak reset · one digit longer
-            </Text>
-          )}
-          {feedback === 'wrong' && (
-            <Text accessibilityLiveRegion="polite" style={styles.wrongNotice}>
-              Wrong · −{FAILURE_PENALTY} points · one digit shorter
-            </Text>
-          )}
         </View>
       )}
 
@@ -402,6 +418,90 @@ export default function MemoryRecall({
         </View>
       )}
 
+      {phase === 'feedback' && review && (
+        <View testID="memory-feedback" style={styles.gameArea}>
+          <StatsRow
+            style={styles.statsRow}
+            items={[
+              {
+                key: 'score',
+                value: score,
+                label: 'Score',
+                testID: 'memory-score',
+                containerStyle: styles.statBox,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'level',
+                value: level,
+                label: 'Next level',
+                testID: 'memory-level',
+                containerStyle: [styles.statBox, styles.levelBox],
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'strikes',
+                value: `${failureStreak}/${MAX_CONSECUTIVE_FAILURES}`,
+                label: 'Strikes',
+                testID: 'memory-strikes',
+                containerStyle: [styles.statBox, styles.strikeBox],
+                valueStyle: [styles.statValue, styles.strikeValue],
+                labelStyle: [styles.statLabel, styles.strikeLabel],
+              },
+            ]}
+          />
+          <View
+            accessibilityLiveRegion="polite"
+            style={[
+              styles.reviewCard,
+              review.correct ? styles.cardCorrect : styles.cardWrong,
+            ]}
+          >
+            <Text
+              style={
+                review.correct
+                  ? styles.reviewCorrectTitle
+                  : styles.reviewWrongTitle
+              }
+            >
+              {review.correct ? 'Correct' : 'Review the number sequence'}
+            </Text>
+            {!review.correct && (
+              <>
+                <Text style={styles.reviewLabel}>Your answer</Text>
+                <Text testID="memory-user-answer" style={styles.reviewSequence}>
+                  {review.submitted.join(' ')}
+                </Text>
+                <Text style={styles.reviewLabel}>Correct sequence</Text>
+                <Text
+                  selectable
+                  testID="memory-correct-answer"
+                  style={styles.reviewSequence}
+                >
+                  {review.expected.join(' ')}
+                </Text>
+                <Text style={styles.reviewHint}>
+                  −{FAILURE_PENALTY} points ·{' '}
+                  {review.nextLevel < review.expected.length
+                    ? 'difficulty reduced by one'
+                    : 'difficulty remains at the minimum'}
+                  {review.shouldFinish
+                    ? ' · session ends after this review'
+                    : ''}
+                </Text>
+              </>
+            )}
+            {review.correct && (
+              <Text style={styles.reviewHint}>
+                Streak reset · next sequence is one digit longer
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
       {phase === 'ended' && (
         <View testID="end" style={styles.endCard}>
           <Text style={styles.endEmoji}>🧠</Text>
@@ -453,20 +553,6 @@ const styles = StyleSheet.create({
   },
   sequence: { fontSize: 32, fontWeight: '800', color: '#0E4979', letterSpacing: 8 },
   instruction: { textAlign: 'center', color: '#6B7280', fontSize: 12 },
-  correctNotice: {
-    marginTop: 8,
-    color: colors.successForeground,
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  wrongNotice: {
-    marginTop: 8,
-    color: colors.errorForeground,
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
   inputCard: {
     backgroundColor: '#F3FAFD',
     borderRadius: 12,
@@ -480,6 +566,46 @@ const styles = StyleSheet.create({
   cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
   cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
   inputDisplay: { fontSize: 24, fontWeight: '700', color: '#0E4979', textAlign: 'center', letterSpacing: 4 },
+  reviewCard: {
+    borderRadius: 14,
+    borderWidth: 2,
+    gap: 8,
+    padding: 20,
+  },
+  reviewCorrectTitle: {
+    color: colors.successForeground,
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  reviewWrongTitle: {
+    color: colors.errorForeground,
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  reviewLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginTop: 4,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  reviewSequence: {
+    color: colors.textPrimary,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 4,
+    textAlign: 'center',
+  },
+  reviewHint: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
   keypad: {
     width: '100%',
     maxWidth: 300,

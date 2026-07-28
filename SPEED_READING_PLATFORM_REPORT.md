@@ -581,13 +581,13 @@ This section is the authoritative snapshot for the current source. Earlier revis
 | --- | ---: | ---: | ---: | --- |
 | Letter Mixup | 15 | 15 | 15 | Shuffled without replacement; a pool must cycle after 15 |
 | Opposites | 12 | 12 | 12 | Shuffled without replacement; a pool must cycle after 12 |
-| Text Search | 6 | 6 | 6 | No immediate passage repeat; a pool cycles after 6 |
+| Text Search | 9 | 9 | 9 | No immediate passage repeat; a pool cycles after 9 |
 | Words Recall | 120 | 120 | 120 | Exact two-word prompts; shuffled without replacement |
-| Sentence Recall | ≥100 generated | ≥100 generated | ≥100 generated | Validator enforces the minimum and avoids immediate reuse |
-| WPM Test | 9 | 3 | 3 | No immediate passage repeat; medium/hard cycle after 3 |
-| Paced Comprehension | 9 | 3 | 3 | No immediate passage repeat; medium/hard cycle after 3 |
+| Sentence Recall | 240 generated | 240 generated | 240 generated | Shuffled without replacement and avoids immediate reuse |
+| Baseline Reading | 12 | 12 | 12 | Comparable authored forms; latest six distinct forms enter the 30-day benchmark |
+| Paced Comprehension | 9 | 12 | 12 | No immediate passage repeat; question depth increases by difficulty |
 
-These are honest limits, not “unlimited content” claims. The next content investment should expand the medium/hard measured-reading and comprehension pools before adding more generic reaction games.
+These are honest limits, not “unlimited content” claims. The next content investment should add further connected-text genres and delayed-retention checks before adding more generic reaction games.
 
 ### Competitor parity and remaining delta
 
@@ -764,3 +764,23 @@ and skipped rounds are reported as omissions.
   the complete Jest suite, production web export, and installable/offline PWA
   verification. Existing non-failing React test `act(...)` warnings remain
   test-hygiene work rather than a product failure.
+
+## V11 content and mistake-review audit
+
+- The vocabulary audit found more than 80 Easy, 100 Medium, and 180 Hard flash
+  words, 120 unique two-word prompts per difficulty, and 240 sentence prompts
+  per difficulty. Adding more generated fragments would increase volume without
+  improving transfer, so the higher-value content work remains connected text.
+- Baseline Reading now includes 12 comparable original passages across science,
+  civic, history, narrative, and practical topics. Every form has separate
+  main-idea, detail/evidence, and inference/purpose questions with explanations.
+- Words Recall, Sentence Recall, Flash Recall, Visual Span, and keypad Memory
+  Recall now preserve the learner’s submitted response and reveal the correct
+  response after a miss. Incorrect feedback remains visible for 2.8–5.2 seconds,
+  increasing with sentence or sequence length; correct feedback remains brief.
+- A third consecutive miss no longer hides the correction behind the result
+  screen. The correction is reviewed first, then the session ends.
+- Final validation passed strict TypeScript, all 476 Jest tests across 71
+  suites, all 18 Expo Doctor checks, production PWA export/offline
+  verification, and a 390 × 844 browser interaction check with no horizontal
+  overflow or runtime errors.

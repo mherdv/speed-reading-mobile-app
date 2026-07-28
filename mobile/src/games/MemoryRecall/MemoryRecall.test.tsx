@@ -5,6 +5,7 @@ import {
   render,
   within,
 } from '@testing-library/react-native';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import MemoryRecall from './MemoryRecall';
 
 type MemoryRecallView = ReturnType<typeof render>;
@@ -19,7 +20,7 @@ function submitCurrentSequence(
   view: MemoryRecallView,
   displayMs: number,
   correct: boolean
-) {
+): number[] {
   const shown = readShownSequence(view);
   act(() => {
     jest.advanceTimersByTime(displayMs + 10);
@@ -30,6 +31,15 @@ function submitCurrentSequence(
     : [(shown[0]! + 1) % 10, ...shown.slice(1)];
   answer.forEach((digit) => {
     fireEvent.press(view.getByTestId(`digit-${digit}`));
+  });
+  return shown;
+}
+
+function advanceReview(shown: number[], correct: boolean) {
+  act(() => {
+    jest.advanceTimersByTime(
+      getRecallFeedbackDurationMs(shown.join(' '), correct) + 10
+    );
   });
 }
 
@@ -118,19 +128,30 @@ describe('MemoryRecall', () => {
     );
 
     fireEvent.press(view.getByTestId('start-button'));
-    submitCurrentSequence(view, 30, true);
+    const correctSequence = submitCurrentSequence(view, 30, true);
 
     expect(view.getByTestId('memory-score')).toHaveTextContent('20');
     expect(view.getByTestId('memory-level')).toHaveTextContent('3');
     expect(view.getByTestId('memory-strikes')).toHaveTextContent('0/3');
+    advanceReview(correctSequence, true);
 
-    submitCurrentSequence(view, 30, false);
+    const missedSequence = submitCurrentSequence(view, 30, false);
 
     expect(view.queryByTestId('end')).toBeNull();
     expect(view.getByTestId('memory-score')).toHaveTextContent('10');
     expect(view.getByTestId('memory-level')).toHaveTextContent('2');
     expect(view.getByTestId('memory-strikes')).toHaveTextContent('1/3');
-    expect(view.getByText('Wrong · −10 points · one digit shorter')).toBeTruthy();
+    expect(view.getByTestId('memory-correct-answer')).toHaveTextContent(
+      missedSequence.join(' ')
+    );
+    const reviewMs = getRecallFeedbackDurationMs(
+      missedSequence.join(' '),
+      false
+    );
+    act(() => jest.advanceTimersByTime(reviewMs - 1));
+    expect(view.getByTestId('memory-feedback')).toBeTruthy();
+    act(() => jest.advanceTimersByTime(2));
+    expect(view.getByTestId('sequence-display')).toBeTruthy();
   });
 
   it('resets the consecutive-failure streak after a correct sequence', () => {
@@ -139,8 +160,9 @@ describe('MemoryRecall', () => {
     );
 
     fireEvent.press(view.getByTestId('start-button'));
-    submitCurrentSequence(view, 30, false);
+    const missedSequence = submitCurrentSequence(view, 30, false);
     expect(view.getByTestId('memory-strikes')).toHaveTextContent('1/3');
+    advanceReview(missedSequence, false);
 
     submitCurrentSequence(view, 30, true);
     expect(view.getByTestId('memory-strikes')).toHaveTextContent('0/3');
@@ -155,13 +177,27 @@ describe('MemoryRecall', () => {
 
     fireEvent.press(view.getByTestId('start-button'));
 
-    submitCurrentSequence(view, 30, false);
+    let missedSequence = submitCurrentSequence(view, 30, false);
     expect(view.queryByTestId('end')).toBeNull();
+    advanceReview(missedSequence, false);
 
-    submitCurrentSequence(view, 30, false);
+    missedSequence = submitCurrentSequence(view, 30, false);
     expect(view.queryByTestId('end')).toBeNull();
+    advanceReview(missedSequence, false);
 
-    submitCurrentSequence(view, 30, false);
+    missedSequence = submitCurrentSequence(view, 30, false);
+    expect(view.getByTestId('memory-correct-answer')).toHaveTextContent(
+      missedSequence.join(' ')
+    );
+    expect(view.queryByTestId('end')).toBeNull();
+    const finalReviewMs = getRecallFeedbackDurationMs(
+      missedSequence.join(' '),
+      false
+    );
+    act(() => jest.advanceTimersByTime(finalReviewMs - 1));
+    expect(view.queryByTestId('end')).toBeNull();
+    expect(onReportResult).not.toHaveBeenCalled();
+    act(() => jest.advanceTimersByTime(2));
     expect(view.getByTestId('end')).toBeTruthy();
     expect(onReportResult).toHaveBeenCalledTimes(1);
     expect(onReportResult).toHaveBeenCalledWith(

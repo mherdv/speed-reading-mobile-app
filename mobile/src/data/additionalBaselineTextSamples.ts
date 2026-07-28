@@ -481,4 +481,243 @@ export const ADDITIONAL_BASELINE_TEXT_SAMPLES: readonly TextSample[] = [
       },
     ],
   },
+  {
+    id: 'baseline-10',
+    version: 1,
+    comparisonBand: 'general-practice-brief-v1',
+    title: 'Why a Room Sounds Different',
+    language: 'en',
+    genre: 'science',
+    complexityBand: 'baseline-brief',
+    source: 'Original editorial content',
+    license: ORIGINAL_CONTENT,
+    accessibilityNotes: ACCESSIBILITY_NOTES,
+    text:
+      'An empty room often produces a sharp echo that disappears after furniture is added. '
+      + 'The walls have not moved, but the way sound travels through the room has changed. '
+      + 'Hard, flat surfaces reflect much of the sound that reaches them. '
+      + 'When several reflections return to a listener only moments apart, speech can become difficult to understand. '
+      + 'Soft and irregular materials interrupt that pattern. '
+      + 'Curtains and upholstered seats absorb part of the sound, while shelves and other uneven surfaces scatter reflections in several directions. '
+      + 'A recording studio uses these effects carefully, but an ordinary meeting room can improve without specialized construction. '
+      + 'A rug beneath the table, fabric panels on one bare wall, or bookshelves opposite a window may reduce the strongest reflections. '
+      + 'The goal is not to remove every reflection, because a completely muted room can feel unnatural. '
+      + 'Instead, the room should preserve useful sound while preventing echoes from competing with the person who is speaking.',
+    question: {
+      prompt: 'What is the passage mainly explaining?',
+      choices: [
+        'How furnishings can make speech clearer by changing sound reflections',
+        'Why every room should remove all reflected sound',
+        'How windows make voices louder than speakers',
+        'Why empty rooms always have moving walls',
+      ],
+      correctIndex: 0,
+    },
+    questions: [
+      {
+        id: 'baseline-10-main',
+        prompt: 'What is the passage mainly explaining?',
+        choices: [
+          'How furnishings can make speech clearer by changing sound reflections',
+          'Why every room should remove all reflected sound',
+          'How windows make voices louder than speakers',
+          'Why empty rooms always have moving walls',
+        ],
+        correctIndex: 0,
+        type: 'main-idea',
+        rationale:
+          'The passage explains how hard, soft, and irregular surfaces affect reflections and therefore speech clarity.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'baseline-10-detail',
+        prompt: 'What do hard, flat surfaces do to much of the sound that reaches them?',
+        choices: [
+          'They reflect it',
+          'They store it permanently',
+          'They turn it into light',
+          'They prevent it from reaching the room',
+        ],
+        correctIndex: 0,
+        type: 'detail-evidence',
+        rationale:
+          'The passage directly states that hard, flat surfaces reflect much of the sound that reaches them.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'baseline-10-purpose',
+        prompt: 'Why does the author say the goal is not to remove every reflection?',
+        choices: [
+          'Because useful reflections can remain without overwhelming speech',
+          'Because rugs increase the strongest echoes',
+          'Because speech requires several competing echoes',
+          'Because only empty rooms can sound natural',
+        ],
+        correctIndex: 0,
+        type: 'inference-purpose',
+        rationale:
+          'The final sentences distinguish useful room sound from reflections that compete with a speaker.',
+        answerDependency: 'passage-required',
+      },
+    ],
+  },
+  {
+    id: 'baseline-11',
+    version: 1,
+    comparisonBand: 'general-practice-brief-v1',
+    title: 'The Temporary Bus Stop',
+    language: 'en',
+    genre: 'civic',
+    complexityBand: 'baseline-brief',
+    source: 'Original editorial content',
+    license: ORIGINAL_CONTENT,
+    accessibilityNotes: ACCESSIBILITY_NOTES,
+    text:
+      'A town planned to move a busy bus stop farther from a crowded intersection. '
+      + 'The map suggested that the new location would improve traffic flow, but it did not show what the change would feel like to passengers. '
+      + 'Before rebuilding the curb, the transport team marked a temporary stop with signs and tested it for one week. '
+      + 'Staff recorded how long buses needed to rejoin traffic and whether waiting passengers blocked the nearby shop entrance. '
+      + 'They also invited people with wheelchairs, walking aids, and strollers to try the route from the crossing. '
+      + 'The buses left the temporary stop more quickly, yet several passengers found the extra slope difficult. '
+      + 'Engineers therefore shifted the proposed shelter a few metres and added a level approach from the crossing. '
+      + 'The short test did not predict every future problem, but it revealed a conflict the map had hidden. '
+      + 'By testing a reversible version first, the town improved the design before concrete made the decision expensive to change.',
+    question: {
+      prompt: 'What is the central lesson of the bus-stop project?',
+      choices: [
+        'A temporary real-world test can reveal problems before a permanent change',
+        'Traffic maps contain every experience a passenger may have',
+        'Passengers should avoid testing unfinished routes',
+        'Concrete changes are easier to reverse than temporary signs',
+      ],
+      correctIndex: 0,
+    },
+    questions: [
+      {
+        id: 'baseline-11-main',
+        prompt: 'What is the central lesson of the bus-stop project?',
+        choices: [
+          'A temporary real-world test can reveal problems before a permanent change',
+          'Traffic maps contain every experience a passenger may have',
+          'Passengers should avoid testing unfinished routes',
+          'Concrete changes are easier to reverse than temporary signs',
+        ],
+        correctIndex: 0,
+        type: 'main-idea',
+        rationale:
+          'The passage emphasizes that a reversible trial exposed an accessibility problem before construction.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'baseline-11-detail',
+        prompt: 'What difficulty appeared during the temporary test?',
+        choices: [
+          'The route’s extra slope was difficult for some passengers',
+          'Buses could no longer rejoin traffic',
+          'The crossing was removed from the street',
+          'Every shop entrance became permanently blocked',
+        ],
+        correctIndex: 0,
+        type: 'detail-evidence',
+        rationale:
+          'The passage says several passengers found the extra slope difficult.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'baseline-11-purpose',
+        prompt: 'Why did the team invite people using wheelchairs, walking aids, and strollers?',
+        choices: [
+          'To test whether the proposed route worked for different access needs',
+          'To measure the price of concrete',
+          'To replace the bus drivers',
+          'To decide which shop should close',
+        ],
+        correctIndex: 0,
+        type: 'inference-purpose',
+        rationale:
+          'Those participants could reveal access barriers that traffic-flow measurements and maps would miss.',
+        answerDependency: 'passage-required',
+      },
+    ],
+  },
+  {
+    id: 'baseline-12',
+    version: 1,
+    comparisonBand: 'general-practice-brief-v1',
+    title: 'A Date in the Margin',
+    language: 'en',
+    genre: 'history',
+    complexityBand: 'baseline-brief',
+    source: 'Original editorial content',
+    license: ORIGINAL_CONTENT,
+    accessibilityNotes: ACCESSIBILITY_NOTES,
+    text:
+      'While cataloguing a box of school records, an archivist found a notebook with a storm date written in the margin. '
+      + 'A local newspaper had long reported that the storm arrived on Tuesday, but the note named Wednesday. '
+      + 'The difference seemed small until researchers noticed that the newspaper was printed only twice a week. '
+      + 'Its Thursday edition described damage that had occurred “the previous evening,” which supported the notebook’s Wednesday date. '
+      + 'The archivist still did not treat the margin note as final proof. '
+      + 'The writer was unidentified, and the date might have been added later. '
+      + 'Researchers compared it with train delays, a shopkeeper’s dated receipts, and rainfall measurements from a nearby station. '
+      + 'Together, those independent records pointed to Wednesday night. '
+      + 'The correction mattered because later accounts had used the mistaken Tuesday date to connect the storm with an event in another town. '
+      + 'Changing one date therefore altered not only the calendar entry but also the historical explanation built around it.',
+    question: {
+      prompt: 'What is the passage mainly about?',
+      choices: [
+        'How several independent records corrected a storm date and its interpretation',
+        'Why newspapers should print only twice a week',
+        'How one anonymous note automatically proves a historical claim',
+        'Why train delays cause severe storms',
+      ],
+      correctIndex: 0,
+    },
+    questions: [
+      {
+        id: 'baseline-12-main',
+        prompt: 'What is the passage mainly about?',
+        choices: [
+          'How several independent records corrected a storm date and its interpretation',
+          'Why newspapers should print only twice a week',
+          'How one anonymous note automatically proves a historical claim',
+          'Why train delays cause severe storms',
+        ],
+        correctIndex: 0,
+        type: 'main-idea',
+        rationale:
+          'The passage follows the verification of the Wednesday date and explains why that correction changed a later historical claim.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'baseline-12-detail',
+        prompt: 'Which newspaper phrase supported the Wednesday date?',
+        choices: [
+          'The previous evening',
+          'The following month',
+          'Before the train arrived',
+          'Twice every Tuesday',
+        ],
+        correctIndex: 0,
+        type: 'detail-evidence',
+        rationale:
+          'The Thursday edition said the damage occurred the previous evening, pointing to Wednesday.',
+        answerDependency: 'passage-required',
+      },
+      {
+        id: 'baseline-12-purpose',
+        prompt: 'Why did researchers compare the note with receipts, delays, and rainfall measurements?',
+        choices: [
+          'To corroborate the date with records created independently',
+          'To identify the notebook writer’s handwriting',
+          'To make the newspaper publish more often',
+          'To prove that every local record was mistaken',
+        ],
+        correctIndex: 0,
+        type: 'inference-purpose',
+        rationale:
+          'The note could have been added later, so independent dated sources were needed to support its claim.',
+        answerDependency: 'passage-required',
+      },
+    ],
+  },
 ];

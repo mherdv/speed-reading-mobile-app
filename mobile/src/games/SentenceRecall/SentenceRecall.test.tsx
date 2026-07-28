@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import SentenceRecall from './SentenceRecall';
 
 describe('SentenceRecall', () => {
@@ -41,5 +42,36 @@ describe('SentenceRecall', () => {
       accuracy: 1,
       details: { activityType: 'sentence-recall' },
     });
+  });
+
+  it('holds a missed sentence on screen long enough to compare both versions', () => {
+    const expected = 'Careful readers compare the strongest evidence.';
+    const view = render(
+      <SentenceRecall
+        prompts={[expected]}
+        displayMs={10}
+        totalRounds={1}
+      />
+    );
+    fireEvent.press(view.getByTestId('start-button'));
+    act(() => jest.advanceTimersByTime(20));
+    fireEvent.changeText(
+      view.getByTestId('recall-input'),
+      'Careful readers compare evidence.'
+    );
+    fireEvent.press(view.getByTestId('submit-recall'));
+
+    expect(view.getByTestId('recall-input')).toHaveProp(
+      'value',
+      'Careful readers compare evidence.'
+    );
+    expect(view.getByTestId('recall-correct-answer')).toHaveTextContent(
+      expected
+    );
+    const reviewMs = getRecallFeedbackDurationMs(expected, false);
+    act(() => jest.advanceTimersByTime(reviewMs - 1));
+    expect(view.queryByTestId('end')).toBeNull();
+    act(() => jest.advanceTimersByTime(2));
+    expect(view.getByTestId('end')).toBeTruthy();
   });
 });

@@ -153,9 +153,9 @@ describe('WpmTest', () => {
     expect(validateWpmTestPool()).toEqual([]);
   });
 
-  it('uses nine standalone baseline passages and keeps three questions at every difficulty', () => {
+  it('uses twelve standalone baseline passages and keeps three questions at every difficulty', () => {
     expect(validateBaselineReadingPool()).toEqual([]);
-    expect(getBaselineReadingPool('easy')).toHaveLength(9);
+    expect(getBaselineReadingPool('easy')).toHaveLength(12);
     expect(
       getBaselineReadingPool('easy').every(
         (item) =>

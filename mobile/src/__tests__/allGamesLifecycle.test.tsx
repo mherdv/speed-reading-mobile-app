@@ -43,6 +43,7 @@ import VisualSpanExpansion from '../games/VisualSpanExpansion/VisualSpanExpansio
 import WordMismatchGrid from '../games/WordMismatchGrid/WordMismatchGrid';
 import WordPairs from '../games/WordPairs/WordPairs';
 import WordSearchGame from '../games/WordSearchGame/WordSearchGame';
+import { getRecallFeedbackDurationMs } from '../games/recallFeedback';
 
 type Report = jest.Mock<void, [Record<string, unknown>]>;
 
@@ -281,9 +282,11 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
       />
     ),
     complete: (view) => {
+      const expected = String(view.getByTestId('sequence').props.children);
       advance(20);
       fireEvent.changeText(view.getByTestId('recall-input'), 'x');
       fireEvent.press(view.getByTestId('submit-btn'));
+      advance(getRecallFeedbackDurationMs(expected, false) + 10);
     },
     activeTestId: 'sequence-display',
     replayTestId: 'recall-input',
@@ -303,7 +306,7 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
       advance(20);
       fireEvent.changeText(view.getByTestId('recall-input'), 'wrong');
       fireEvent.press(view.getByTestId('submit-btn'));
-      advance(800);
+      advance(getRecallFeedbackDurationMs('focus', false) + 10);
     },
     activeTestId: 'flash-word',
     replayTestId: 'recall-input',
@@ -387,6 +390,7 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
         );
         advance(20);
         fireEvent.press(view.getByTestId(`digit-${(shown + 1) % 10}`));
+        advance(getRecallFeedbackDurationMs(String(shown), false));
       }
     },
     activeTestId: 'sequence-display',
