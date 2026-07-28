@@ -12,8 +12,16 @@ import {
   describeAdaptiveProgress,
   type GameProgress,
 } from '../progressStore';
+import { saveDifficultyPreference } from '../difficultyPreferences';
 
 describe('progressStore', () => {
+  async function enableAdaptive(gameId: string) {
+    await saveDifficultyPreference(gameId, {
+      mode: 'adaptive',
+      difficulty: 'easy',
+    });
+  }
+
   beforeEach(async () => {
     await AsyncStorage.clear();
   });
@@ -64,85 +72,123 @@ describe('progressStore', () => {
   describe('updateProgress', () => {
     it('explains exactly how adaptive level changes work', () => {
       expect(
-        describeAdaptiveProgress({ level: 4, streak: 3, totalPlays: 8 })
-      ).toBe('2 more successful sessions in a row to raise the level');
+        describeAdaptiveProgress({ level: 1, streak: 1, totalPlays: 8 })
+      ).toBe('1 more at-target session in a row to raise the difficulty');
       expect(
-        describeAdaptiveProgress({ level: 4, streak: -2, totalPlays: 8 })
+        describeAdaptiveProgress({ level: 6, streak: -1, totalPlays: 8 })
       ).toBe(
-        '1 more below-target session in a row before the level is reduced'
+        '1 more below-target session in a row before the difficulty is reduced'
       );
     });
 
-    it('increments streak on correct answer', async () => {
+    it('increments the qualification run for an adaptive session', async () => {
+      await enableAdaptive('TestGame');
       const { progress } = await updateProgress('TestGame', true);
       expect(progress.streak).toBe(1);
       expect(progress.totalPlays).toBe(1);
     });
 
-    it('levels up after 5 consecutive correct answers', async () => {
-      // Play 5 correct games
-      for (let i = 0; i < 4; i++) {
-        await updateProgress('TestGame', true);
-      }
+    it('raises the difficulty band after two consecutive at-target sessions', async () => {
+      await enableAdaptive('TestGame');
+      await updateProgress('TestGame', true);
       const { progress, levelChanged, levelDelta } = await updateProgress('TestGame', true);
       
-      expect(progress.level).toBe(2);
-      expect(progress.streak).toBe(0); // Reset after level up
+      expect(progress.level).toBe(6);
+      expect(progress.streak).toBe(0);
       expect(levelChanged).toBe(true);
       expect(levelDelta).toBe(1);
     });
 
     it('does not exceed MAX_LEVEL', async () => {
-      // Set progress to max level
+      await enableAdaptive('TestGame');
       await saveGameProgress('TestGame', {
         level: MAX_LEVEL,
-        streak: 4,
+        streak: 1,
         totalPlays: 100,
       });
 
       const { progress } = await updateProgress('TestGame', true);
-      expect(progress.level).toBe(MAX_LEVEL); // Still at max
+      expect(progress.level).toBeLessThanOrEqual(MAX_LEVEL);
+      expect(levelToDifficulty(progress.level)).toBe('hard');
     });
 
-    it('decrements streak on wrong answer', async () => {
-      // Start with some positive streak
+    it('starts a below-target run after an adaptive miss', async () => {
+      await enableAdaptive('TestGame');
       await saveGameProgress('TestGame', {
-        level: 5,
-        streak: 2,
+        level: 6,
+        streak: 1,
         totalPlays: 10,
       });
 
-      const { progress } = await updateProgress('TestGame', false);
-      expect(progress.streak).toBe(-1); // Positive streak resets to -1
+      const { progress } = await updateProgress('TestGame', false, undefined, 'medium');
+      expect(progress.streak).toBe(-1);
     });
 
-    it('levels down after 3 consecutive failures', async () => {
+    it('reduces the difficulty band after two consecutive below-target sessions', async () => {
+      await enableAdaptive('TestGame');
       await saveGameProgress('TestGame', {
-        level: 5,
+        level: 6,
         streak: 0,
         totalPlays: 10,
       });
 
-      // 3 failures should trigger level down
-      await updateProgress('TestGame', false); // streak: -1
-      await updateProgress('TestGame', false); // streak: -2
-      const { progress, levelChanged, levelDelta } = await updateProgress('TestGame', false); // streak: -3, level down
+      await updateProgress('TestGame', false, undefined, 'medium');
+      const { progress, levelChanged, levelDelta } = await updateProgress(
+        'TestGame',
+        false,
+        undefined,
+        'medium'
+      );
 
-      expect(progress.level).toBe(4);
+      expect(progress.level).toBe(1);
       expect(levelChanged).toBe(true);
       expect(levelDelta).toBe(-1);
-      expect(progress.streak).toBe(0); // Reset after level down
+      expect(progress.streak).toBe(0);
     });
 
     it('does not go below level 1', async () => {
+      await enableAdaptive('TestGame');
       await saveGameProgress('TestGame', {
         level: 1,
-        streak: -2,
+        streak: -1,
         totalPlays: 10,
       });
 
       const { progress } = await updateProgress('TestGame', false);
-      expect(progress.level).toBe(1); // Cannot go below 1
+      expect(progress.level).toBe(1);
+    });
+
+    it('never changes the adaptive band after a manual session', async () => {
+      await saveDifficultyPreference('TestGame', {
+        mode: 'manual',
+        difficulty: 'hard',
+      });
+      await saveGameProgress('TestGame', {
+        level: 6,
+        streak: 1,
+        totalPlays: 4,
+        bestScore: 80,
+        adaptiveQualificationDifficulty: 'easy',
+      });
+
+      const { progress, levelChanged } = await updateProgress(
+        'TestGame',
+        true,
+        100,
+        'hard'
+      );
+
+      expect(levelChanged).toBe(false);
+      expect(progress).toEqual(
+        expect.objectContaining({
+          level: 6,
+          streak: 1,
+          totalPlays: 5,
+          bestScore: 100,
+          adaptiveQualificationDifficulty: 'easy',
+          lastPlayedAt: expect.any(String),
+        })
+      );
     });
 
     it('updates best score when higher', async () => {
@@ -174,10 +220,12 @@ describe('progressStore', () => {
     ])(
       'moves %s across the persisted Easy-to-Medium threshold for its next session',
       async (gameId) => {
+        await enableAdaptive(gameId);
         await saveGameProgress(gameId, {
-          level: 5,
-          streak: 4,
+          level: 1,
+          streak: 1,
           totalPlays: 24,
+          adaptiveQualificationDifficulty: 'easy',
         });
 
         const { progress, levelChanged } = await updateProgress(
@@ -198,6 +246,7 @@ describe('progressStore', () => {
 
   describe('two-session reading-skill suggestion', () => {
     it('suggests the next band only after two threshold sessions', async () => {
+      await enableAdaptive('EvidenceHunt');
       const first = await updateTwoSessionDifficultySuggestion(
         'EvidenceHunt',
         'easy',
@@ -216,6 +265,7 @@ describe('progressStore', () => {
     });
 
     it('resets the qualifying run after a below-threshold session', async () => {
+      await enableAdaptive('ContextBuilder');
       await updateTwoSessionDifficultySuggestion(
         'ContextBuilder',
         'easy',
@@ -232,9 +282,11 @@ describe('progressStore', () => {
         true
       );
       expect(third.suggestedDifficulty).toBe('easy');
+      expect(third.progress.streak).toBe(1);
     });
 
     it('does not combine qualifying sessions played at different difficulties', async () => {
+      await enableAdaptive('ContextBuilder');
       const easy = await updateTwoSessionDifficultySuggestion(
         'ContextBuilder',
         'easy',
@@ -246,7 +298,7 @@ describe('progressStore', () => {
         'medium',
         true
       );
-      expect(medium.suggestedDifficulty).toBe('easy');
+      expect(medium.suggestedDifficulty).toBe('medium');
       expect(medium.progress.streak).toBe(1);
       expect(medium.progress.adaptiveQualificationDifficulty).toBe('medium');
       const secondMedium = await updateTwoSessionDifficultySuggestion(

@@ -72,6 +72,9 @@ These tiers describe **how directly an activity practices a reading behavior**. 
 ### Measurement guardrails
 
 - **Sustainable pace** requires actual connected text, measured reading time, and a comprehension threshold.
+- The personal benchmark uses only the latest six distinct eligible passages from one comparison band and content version within the last 30 days. It requires at least three distinct passage forms and never mixes bands or versions.
+- Sustainable WPM is the median of passages that individually reached at least 80% comprehension; a high aggregate score cannot make a poorly understood fast passage influence that pace.
+- Baseline answer positions are deterministically balanced while preserving the keyed answer, preventing the repeated option-position cue found during review.
 - Guided-display WPM is a presentation setting, not a measured reading rate.
 - Recognition, Schulte, visual-span, memory, and search scores are never merged into WPM charts.
 - Adaptive reading difficulty may change only from comparable recent results, not from one best score.
@@ -685,8 +688,11 @@ and skipped rounds are reported as omissions.
 - Adaptive mode is optional and changes only a future session after two
   consecutive qualifying results; it never changes a running game.
 - Today recommends no more than three ordered activities and explains each
-  choice. Home shows one Today card at a time with previous/next controls. The reading baseline is skippable and requires three different valid
-  passages before showing a personal median-WPM estimate.
+  choice. Its date-scoped snapshot keeps the assigned reading and skill stable,
+  persists swaps and skips, migrates the former skip-only record, and rolls over
+  on the next local date. Completion is derived only from an exact matching
+  result started after that item was assigned. Once all assigned items are
+  completed or skipped, the plan stays terminal and does not replenish that day.
 - Home exercise discovery is icon-first at three items per row with a compact
   level progress bar. All 31 exercises now share one searchable Home collection
   without category sections or a separate library route. Favorites persist
@@ -708,3 +714,53 @@ and skipped rounds are reported as omissions.
 - Strict TypeScript typecheck passed.
 - Seven focused Jest suites passed with **63/63 tests** covering legacy/result semantics, Power Reader completion-gated progression and truthful presentation counts, 4×4/5×5/6×6 Word Search layouts, Text Search touch targets, Word Pair Scan penalty announcements, difficulty metadata, and contrast usage.
 - The focused run still emits existing non-failing React test `act(...)` warnings from asynchronous stored-progress updates. Those warnings were not treated as product failures and were intentionally left outside this correction cycle.
+
+## P0 plan and benchmark integrity validation
+
+- Strict TypeScript typecheck passed.
+- Seven focused Jest suites passed with **44/44 tests** covering Today snapshot migration, local-date rollover, stable assignments, persisted swaps, exact post-assignment completion, terminal no-replenishment behavior, backup coverage, recent same-band/version benchmark selection, six-passage/30-day limits, per-passage comprehension gating, answer-position balance, Home presentation, and History compatibility.
+
+## V10 outcome-focused training upgrade
+
+- Adaptive progression now has one public between-session rule: two consecutive
+  at-target sessions raise the Easy/Medium/Hard band and two consecutive
+  below-target sessions reduce it. A Manual session records its history and
+  best score but cannot change the separate Adaptive suggestion.
+- Baseline Reading uses an 80% comprehension target for adaptive qualification.
+  Home and exercise descriptions present the three difficulty bands instead of
+  exposing the obsolete internal 15-step counter as if it were a learning
+  measure.
+- Measured Reading and Baseline Reading save versioned, question-level outcomes
+  after submission. Result screens can identify main-idea, detail/evidence, or
+  inference errors, show the authored explanation and correct answer, and give
+  a concrete next-pace action. Older results remain valid without diagnostics.
+- Reading display preferences are local, backed up, and available from Home:
+  three text sizes, three line spacings, three line widths, and light/warm/dark
+  reading canvases. They apply to connected passages in Measured Reading,
+  Baseline Reading, Repeated Reading, Comprehension, Main Idea, Structure Scan,
+  Evidence Hunt, Context Builder, Text Search, and Power Reader. Game stimuli
+  whose size is part of difficulty are unchanged.
+- The brand-derived navy/cyan theme remains. The reviewer found no evidence that
+  replacing an accessible coherent palette with a trend-driven recolor would
+  improve reading outcomes.
+
+## V10 reviewer correction passes
+
+- The first implementation review identified and corrected four integrity
+  gaps: removed passage IDs can no longer leave Today permanently pending,
+  Manual practice preserves an in-progress Adaptive qualification, Power
+  Reader highlights remain readable on dark passages, and its default RSVP
+  stimulus remains a focal 28/38 px rather than shrinking to body-text size.
+- Restoring a backup now reloads reading-display settings immediately in the
+  running app. Restore behaves as a replacement for supported app keys, while
+  writing imported entries before removing omitted keys so a failed storage
+  write cannot erase the user’s existing results or preferences.
+- Live iPhone-width browser QA confirmed that dark connected-reading passages
+  remain scrollable without horizontal overflow, action controls remain
+  reachable, and Back exits an active measured read without a blocking browser
+  prompt. Dark Power Reader highlight pairs measure 6.65:1 and 13.68:1
+  contrast, above the 4.5:1 WCAG AA target for normal text.
+- The final full validation passed strict TypeScript, all Expo Doctor checks,
+  the complete Jest suite, production web export, and installable/offline PWA
+  verification. Existing non-failing React test `act(...)` warnings remain
+  test-hygiene work rather than a product failure.

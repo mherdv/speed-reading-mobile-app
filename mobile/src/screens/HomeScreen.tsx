@@ -16,8 +16,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import {
   clearProgress,
+  levelToDifficulty,
   loadAllProgress,
-  MAX_LEVEL,
   type GameProgress,
 } from '../data/progressStore';
 import {
@@ -35,8 +35,13 @@ import {
 import { loadResults } from '../data/resultsStore';
 import { TEXT_SAMPLES } from '../data/textSamples';
 import {
-  loadTodayPlanSkips,
-  saveTodayPlanSkips,
+  loadOrCreateTodayPlanSnapshot,
+  replaceTodayPlanReading,
+  replaceTodayPlanSkill,
+  restoreTodayPlanItems,
+  saveTodayPlanSnapshot,
+  setTodayPlanItemSkipped,
+  type TodayPlanSnapshot,
   type TodayPlanItemId,
 } from '../data/todayPlanStore';
 import type { AttemptResult, TextSample } from '../domain/types';
@@ -47,6 +52,8 @@ import {
 import {
   buildTodayPlan,
   calculateReadingPerformanceProfile,
+  getTodayReadingCandidates,
+  resolveTodayPlanSnapshot,
 } from '../domain/readingPlan';
 import {
   borderRadius,
@@ -57,6 +64,7 @@ import {
   spacing,
 } from '../theme/colors';
 import { GameIcon } from '../ui/GameIcon';
+import { ReadingDisplayControl } from '../ui/ReadingDisplayPreferences';
 import { ResponsiveShell } from '../ui/ResponsiveShell';
 import {
   ALL_GAME_LIST,
@@ -94,7 +102,10 @@ function progressLabel(
       preference.difficulty;
     return `${label} · Manual`;
   }
-  return `Adaptive · Level ${level}`;
+  const difficulty = levelToDifficulty(level);
+  const label =
+    getGameCatalogEntry(gameId)?.difficulty[difficulty].label ?? difficulty;
+  return `${label} · Adaptive`;
 }
 
 type GameGridProps = {
@@ -128,7 +139,16 @@ function GameGrid({
         const level = gameProgress?.level ?? 1;
         const preference =
           preferences[game.id] ?? getDefaultDifficultyPreference(game.id);
-        const progressPercent = (level / MAX_LEVEL) * 100;
+        const displayedDifficulty =
+          preference.mode === 'adaptive'
+            ? levelToDifficulty(level)
+            : preference.difficulty;
+        const progressPercent =
+          displayedDifficulty === 'easy'
+            ? 33.333
+            : displayedDifficulty === 'medium'
+              ? 66.667
+              : 100;
         const iconGradient = gameGradients[game.id] ?? gradients.cardIcon.colors;
         const compactTitle =
           game.id === 'ComprehensionTest'
@@ -171,7 +191,9 @@ function GameGrid({
                   style={[styles.progressFill, { width: `${progressPercent}%` }]}
                 />
               </View>
-              <Text style={styles.levelText}>Level {level}</Text>
+              <Text style={styles.levelText}>
+                {progressLabel(game.id, level, preference)}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -215,29 +237,34 @@ export function HomeScreen({
   >({});
   const [dailyStreak, setDailyStreak] = useState(0);
   const [results, setResults] = useState<AttemptResult[]>([]);
-  const [skillSwapOffset, setSkillSwapOffset] = useState(0);
-  const [readingSwapOffset, setReadingSwapOffset] = useState(0);
-  const [skippedPlanItems, setSkippedPlanItems] = useState<
-    TodayPlanItemId[]
-  >([]);
+  const [todayPlanSnapshot, setTodayPlanSnapshot] =
+    useState<TodayPlanSnapshot | null>(null);
   const [todayIndex, setTodayIndex] = useState(0);
   const [gameSearch, setGameSearch] = useState('');
+  const [showReadingDisplay, setShowReadingDisplay] = useState(false);
   const [gamePins, setGamePins] = useState<GamePins>({
     favorites: [],
     recent: [],
   });
   const [loading, setLoading] = useState(true);
-  const todayPlan = useMemo(
+  const resolvedTodayPlan = useMemo(
     () =>
-      buildTodayPlan({
-        results,
-        samples: TEXT_SAMPLES,
-        swapOffset: skillSwapOffset,
-        readingSwapOffset,
-        skipped: skippedPlanItems,
-      }),
-    [readingSwapOffset, results, skillSwapOffset, skippedPlanItems]
+      todayPlanSnapshot
+        ? resolveTodayPlanSnapshot({
+            snapshot: todayPlanSnapshot,
+            results,
+            samples: TEXT_SAMPLES,
+          })
+        : {
+            items: [],
+            pendingItems: [],
+            completedCount: 0,
+            skippedCount: 0,
+            isComplete: false,
+          },
+    [results, todayPlanSnapshot]
   );
+  const todayPlan = resolvedTodayPlan.pendingItems;
   const readingProfile = useMemo(
     () => calculateReadingPerformanceProfile(results),
     [results]
@@ -298,16 +325,79 @@ export function HomeScreen({
   };
 
   const skipTodayItem = (itemId: TodayPlanItemId) => {
-    setSkippedPlanItems((current) => {
-      const next = current.includes(itemId) ? current : [...current, itemId];
-      void saveTodayPlanSkips(next);
+    setTodayPlanSnapshot((current) => {
+      if (!current) return current;
+      const next = setTodayPlanItemSkipped(current, itemId, true);
+      void saveTodayPlanSnapshot(next);
       return next;
     });
   };
 
   const restoreTodayPlan = () => {
-    setSkippedPlanItems([]);
-    void saveTodayPlanSkips([]);
+    setTodayPlanSnapshot((current) => {
+      if (!current) return current;
+      const next = restoreTodayPlanItems(current);
+      void saveTodayPlanSnapshot(next);
+      return next;
+    });
+  };
+
+  const swapTodayReading = () => {
+    setTodayPlanSnapshot((current) => {
+      if (!current) return current;
+      let nextOffset = current.reading.swapOffset + 1;
+      let nextSampleId = current.reading.sampleId;
+      for (
+        let attempt = 0;
+        attempt < TEXT_SAMPLES.length && nextSampleId === current.reading.sampleId;
+        attempt += 1
+      ) {
+        const candidate = buildTodayPlan({
+          results,
+          samples: TEXT_SAMPLES,
+          readingSwapOffset: nextOffset,
+        }).find((item) => item.kind === 'reading');
+        if (candidate?.kind === 'reading') {
+          nextSampleId = candidate.sample.id;
+        }
+        if (nextSampleId === current.reading.sampleId) nextOffset += 1;
+      }
+      if (nextSampleId === current.reading.sampleId) return current;
+      const next = replaceTodayPlanReading(
+        current,
+        nextSampleId,
+        nextOffset
+      );
+      void saveTodayPlanSnapshot(next);
+      return next;
+    });
+  };
+
+  const swapTodaySkill = () => {
+    setTodayPlanSnapshot((current) => {
+      if (!current) return current;
+      let nextOffset = current.skill.swapOffset + 1;
+      let nextGameId = current.skill.gameId;
+      for (
+        let attempt = 0;
+        attempt < ALL_GAME_LIST.length && nextGameId === current.skill.gameId;
+        attempt += 1
+      ) {
+        const candidate = buildTodayPlan({
+          results,
+          samples: TEXT_SAMPLES,
+          swapOffset: nextOffset,
+        }).find((item) => item.kind === 'skill');
+        if (candidate?.kind === 'skill') {
+          nextGameId = candidate.gameId;
+        }
+        if (nextGameId === current.skill.gameId) nextOffset += 1;
+      }
+      if (nextGameId === current.skill.gameId) return current;
+      const next = replaceTodayPlanSkill(current, nextGameId, nextOffset);
+      void saveTodayPlanSnapshot(next);
+      return next;
+    });
   };
 
   const handleToggleFavorite = (gameId: GameId) => {
@@ -331,20 +421,41 @@ export function HomeScreen({
 
     async function refresh() {
       setLoading(true);
-      const [results, allProgress, allPreferences, skippedToday, pins] = await Promise.all([
+      const [results, allProgress, allPreferences, pins] = await Promise.all([
         loadResults(),
         loadAllProgress(),
         loadAllDifficultyPreferences(),
-        loadTodayPlanSkips(),
         loadGamePins(),
       ]);
+      const generatedPlan = buildTodayPlan({
+        results,
+        samples: TEXT_SAMPLES,
+      });
+      const reading = generatedPlan.find(
+        (item) => item.kind === 'reading'
+      );
+      const skill = generatedPlan.find((item) => item.kind === 'skill');
+      const eligibleReadingSampleIds = getTodayReadingCandidates(
+        TEXT_SAMPLES
+      ).map((sample) => sample.id);
+      const snapshot =
+        reading?.kind === 'reading' && skill?.kind === 'skill'
+          ? await loadOrCreateTodayPlanSnapshot({
+              readingSampleId: reading.sample.id,
+              eligibleReadingSampleIds,
+              skillGameId: skill.gameId,
+              includeComfort: generatedPlan.some(
+                (item) => item.kind === 'comfort'
+              ),
+            })
+          : null;
       if (cancelled) return;
 
       setLatest(results[0] ?? null);
       setResults(results);
       setProgress(allProgress);
       setPreferences(allPreferences);
-      setSkippedPlanItems(skippedToday);
+      setTodayPlanSnapshot(snapshot);
       setGamePins(pins);
       setDailyStreak(calculateDailyStreak(results));
       setLoading(false);
@@ -410,10 +521,10 @@ export function HomeScreen({
             style={styles.trainingDescription}
           >
             {readingProfile.sustainableWpm !== undefined
-              ? `Sustainable pace: ${readingProfile.sustainableWpm} WPM · ${readingProfile.comprehensionPercent}% comprehension · ${readingProfile.confidence} confidence`
+              ? `Sustainable pace: ${readingProfile.sustainableWpm} WPM · ${readingProfile.sustainablePassageCount} understood of ${readingProfile.eligiblePassageCount} eligible passages · last ${readingProfile.benchmarkWindowDays} days · ${readingProfile.confidence} confidence`
               : readingProfile.ready
-                ? `Measured pace: ${readingProfile.measuredMedianWpm} WPM · ${readingProfile.comprehensionPercent}% comprehension · protect meaning before increasing speed`
-                : `Not enough readings for a personal estimate · ${readingProfile.validPassageCount} of 3 valid passages`}
+                ? `Measured pace: ${readingProfile.measuredMedianWpm} WPM · ${readingProfile.sustainablePassageCount} of ${readingProfile.eligiblePassageCount} passages reached 80% comprehension · last ${readingProfile.benchmarkWindowDays} days`
+                : `Not enough readings for a personal estimate · ${readingProfile.eligiblePassageCount} of 3 eligible same-band passages · last ${readingProfile.benchmarkWindowDays} days · ${readingProfile.confidence} confidence`}
           </Text>
 
           {activeTodayItem && (() => {
@@ -461,10 +572,10 @@ export function HomeScreen({
                         styles.todaySecondaryAction,
                         pressed && styles.pressed,
                       ]}
-                      onPress={() =>
+                      onPress={
                         item.kind === 'reading'
-                          ? setReadingSwapOffset((value) => value + 1)
-                          : setSkillSwapOffset((value) => value + 1)
+                          ? swapTodayReading
+                          : swapTodaySkill
                       }
                     >
                       <Text style={styles.todaySecondaryText}>Swap</Text>
@@ -545,19 +656,35 @@ export function HomeScreen({
               </Pressable>
             </View>
           )}
-          {todayPlan.length === 0 && (
-            <View testID="today-empty" style={styles.todayEmpty}>
-              <Text style={styles.todayTitle}>Plan skipped for today</Text>
-              <Text style={styles.todayReason}>
-                Skipping does not change your streak or progress.
+          {!loading && todayPlan.length === 0 && todayPlanSnapshot && (
+            <View
+              testID={
+                resolvedTodayPlan.completedCount > 0
+                  ? 'today-complete'
+                  : 'today-empty'
+              }
+              style={styles.todayEmpty}
+            >
+              <Text style={styles.todayTitle}>
+                {resolvedTodayPlan.completedCount > 0
+                  ? 'Today’s plan is complete'
+                  : 'Plan skipped for today'}
               </Text>
-              <Pressable
-                accessibilityRole="button"
-                style={styles.todaySecondaryAction}
-                onPress={restoreTodayPlan}
-              >
-                <Text style={styles.todaySecondaryText}>Restore plan</Text>
-              </Pressable>
+              <Text style={styles.todayReason}>
+                {resolvedTodayPlan.completedCount > 0
+                  ? `${resolvedTodayPlan.completedCount} completed · ${resolvedTodayPlan.skippedCount} skipped. No new items will be added until tomorrow.`
+                  : 'Skipping does not change your streak or progress.'}
+              </Text>
+              {resolvedTodayPlan.skippedCount > 0 && (
+                <Pressable
+                  accessibilityRole="button"
+                  testID="restore-today-plan"
+                  style={styles.todaySecondaryAction}
+                  onPress={restoreTodayPlan}
+                >
+                  <Text style={styles.todaySecondaryText}>Restore skipped items</Text>
+                </Pressable>
+              )}
             </View>
           )}
         </View>
@@ -706,6 +833,33 @@ export function HomeScreen({
               </Text>
             </View>
           </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showReadingDisplay }}
+            accessibilityLabel={`Reading display settings, ${showReadingDisplay ? 'expanded' : 'collapsed'}`}
+            testID="toggle-reading-display"
+            style={({ pressed }) => [
+              styles.displaySettingsToggle,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => setShowReadingDisplay((current) => !current)}
+          >
+            <View>
+              <Text style={styles.displaySettingsTitle}>Reading display</Text>
+              <Text style={styles.displaySettingsMeta}>
+                Text size, spacing, line width, and page tone
+              </Text>
+            </View>
+            <Text style={styles.displaySettingsChevron}>
+              {showReadingDisplay ? '−' : '+'}
+            </Text>
+          </Pressable>
+          {showReadingDisplay && (
+            <View style={styles.displaySettingsPanel}>
+              <ReadingDisplayControl />
+            </View>
+          )}
 
           <Pressable
             accessibilityRole="button"
@@ -1268,6 +1422,39 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 8,
+  },
+  displaySettingsToggle: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  displaySettingsTitle: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  displaySettingsMeta: {
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  displaySettingsChevron: {
+    minWidth: 44,
+    color: colors.primaryDark,
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  displaySettingsPanel: {
     marginTop: 8,
   },
   resetButtonText: {

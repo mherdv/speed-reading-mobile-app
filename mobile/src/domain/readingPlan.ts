@@ -1,6 +1,8 @@
 import type { GameId } from '../data/gameIds';
+import { normalizeGameId } from '../data/gameIds';
 import { getGameCatalogEntry } from '../data/gameCatalog';
 import { BASELINE_TEXT_SAMPLES } from '../data/textSamples';
+import type { TodayPlanSnapshot } from '../data/todayPlanStore';
 import type { AttemptResult, TextSample } from './types';
 import {
   isMeasuredReadingResult,
@@ -12,14 +14,22 @@ export type PersonalPracticeEstimate =
   | {
       ready: false;
       validPassageCount: number;
+      eligiblePassageCount: number;
       requiredPassageCount: 3;
+      benchmarkWindowDays: 30;
+      benchmarkBand?: string;
+      benchmarkContentVersion?: number;
       correct: number;
       total: number;
     }
   | {
       ready: true;
       validPassageCount: number;
+      eligiblePassageCount: number;
       requiredPassageCount: 3;
+      benchmarkWindowDays: 30;
+      benchmarkBand: string;
+      benchmarkContentVersion: number;
       medianWpm: number;
       correct: number;
       total: number;
@@ -30,9 +40,15 @@ export type ReadingConfidence = 'building' | 'developing' | 'established';
 export type ReadingPerformanceProfile = {
   ready: boolean;
   validPassageCount: number;
+  eligiblePassageCount: number;
   requiredPassageCount: 3;
+  benchmarkWindowDays: 30;
+  benchmarkLimit: 6;
+  benchmarkBand?: string;
+  benchmarkContentVersion?: number;
   measuredMedianWpm?: number;
   sustainableWpm?: number;
+  sustainablePassageCount: number;
   comprehensionPercent: number;
   correct: number;
   total: number;
@@ -71,6 +87,9 @@ export type SkillPracticeRecommendation = {
 const REQUIRED_BASELINE_PASSAGES = 3;
 const SUSTAINABLE_COMPREHENSION_PERCENT = 80;
 const SKILL_HISTORY_LIMIT = 8;
+export const READING_BENCHMARK_WINDOW_DAYS = 30;
+export const READING_BENCHMARK_LIMIT = 6;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SKILL_DEFINITIONS: readonly Omit<
   TrainingSkillSummary,
@@ -152,6 +171,20 @@ export type TodayPlanItem =
       optional: true;
     };
 
+export type TodayPlanItemStatus = 'pending' | 'completed' | 'skipped';
+
+export type ResolvedTodayPlanItem = TodayPlanItem & {
+  status: TodayPlanItemStatus;
+};
+
+export type ResolvedTodayPlan = {
+  items: ResolvedTodayPlanItem[];
+  pendingItems: ResolvedTodayPlanItem[];
+  completedCount: number;
+  skippedCount: number;
+  isComplete: boolean;
+};
+
 function numberDetail(
   result: AttemptResult,
   key: string
@@ -213,25 +246,87 @@ export function isBaselineEligibleResult(
   );
 }
 
-function latestEligibleBaselineResults(
-  results: readonly AttemptResult[]
-): AttemptResult[] {
+export type ReadingBenchmarkSelection = {
+  results: AttemptResult[];
+  eligiblePassageCount: number;
+  windowDays: 30;
+  limit: 6;
+  comparisonBand?: string;
+  contentVersion?: number;
+};
+
+export function selectReadingBenchmarkResults(
+  results: readonly AttemptResult[],
+  {
+    now = new Date(),
+    baselineSamples = BASELINE_TEXT_SAMPLES,
+  }: {
+    now?: Date;
+    baselineSamples?: readonly TextSample[];
+  } = {}
+): ReadingBenchmarkSelection {
+  const nowMs = now.getTime();
+  const windowStartMs =
+    nowMs - READING_BENCHMARK_WINDOW_DAYS * DAY_MS;
   const latestByPassage = new Map<string, AttemptResult>();
   const ordered = [...results].sort(
     (first, second) =>
       new Date(second.finishedAtIso).getTime() -
       new Date(first.finishedAtIso).getTime()
   );
+
+  const anchor = ordered.find((result) => {
+    const finishedAt = new Date(result.finishedAtIso).getTime();
+    return (
+      finishedAt >= windowStartMs &&
+      finishedAt <= nowMs &&
+      isBaselineEligibleResult(result, baselineSamples)
+    );
+  });
+  const comparisonBand =
+    typeof anchor?.details?.comparisonBand === 'string'
+      ? anchor.details.comparisonBand
+      : undefined;
+  const contentVersion =
+    typeof anchor?.details?.contentVersion === 'number'
+      ? anchor.details.contentVersion
+      : undefined;
+
+  if (comparisonBand === undefined || contentVersion === undefined) {
+    return {
+      results: [],
+      eligiblePassageCount: 0,
+      windowDays: READING_BENCHMARK_WINDOW_DAYS,
+      limit: READING_BENCHMARK_LIMIT,
+    };
+  }
+
   for (const result of ordered) {
-    if (!isBaselineEligibleResult(result)) {
+    const finishedAt = new Date(result.finishedAtIso).getTime();
+    if (
+      finishedAt < windowStartMs ||
+      finishedAt > nowMs ||
+      !isBaselineEligibleResult(result, baselineSamples) ||
+      result.details?.comparisonBand !== comparisonBand ||
+      result.details?.contentVersion !== contentVersion
+    ) {
       continue;
     }
     const contentId = result.details!.contentId as string;
     if (!latestByPassage.has(contentId)) {
       latestByPassage.set(contentId, result);
     }
+    if (latestByPassage.size >= READING_BENCHMARK_LIMIT) break;
   }
-  return [...latestByPassage.values()];
+  const selected = [...latestByPassage.values()];
+  return {
+    results: selected,
+    eligiblePassageCount: selected.length,
+    windowDays: READING_BENCHMARK_WINDOW_DAYS,
+    limit: READING_BENCHMARK_LIMIT,
+    comparisonBand,
+    contentVersion,
+  };
 }
 
 function summarizeComprehension(
@@ -263,15 +358,24 @@ function median(values: readonly number[]): number {
 }
 
 export function calculatePersonalPracticeEstimate(
-  results: readonly AttemptResult[]
+  results: readonly AttemptResult[],
+  now = new Date()
 ): PersonalPracticeEstimate {
-  const passages = latestEligibleBaselineResults(results);
+  const benchmark = selectReadingBenchmarkResults(results, { now });
+  const passages = benchmark.results;
   const comprehension = summarizeComprehension(passages);
+  const benchmarkMetadata = {
+    eligiblePassageCount: benchmark.eligiblePassageCount,
+    benchmarkWindowDays: benchmark.windowDays,
+    benchmarkBand: benchmark.comparisonBand,
+    benchmarkContentVersion: benchmark.contentVersion,
+  };
   if (passages.length < REQUIRED_BASELINE_PASSAGES) {
     return {
       ready: false,
       validPassageCount: passages.length,
       requiredPassageCount: REQUIRED_BASELINE_PASSAGES,
+      ...benchmarkMetadata,
       ...comprehension,
     };
   }
@@ -279,15 +383,20 @@ export function calculatePersonalPracticeEstimate(
     ready: true,
     validPassageCount: passages.length,
     requiredPassageCount: REQUIRED_BASELINE_PASSAGES,
+    ...benchmarkMetadata,
+    benchmarkBand: benchmark.comparisonBand!,
+    benchmarkContentVersion: benchmark.contentVersion!,
     medianWpm: median(passages.map((result) => result.wpm)),
     ...comprehension,
   };
 }
 
 export function calculateReadingPerformanceProfile(
-  results: readonly AttemptResult[]
+  results: readonly AttemptResult[],
+  now = new Date()
 ): ReadingPerformanceProfile {
-  const passages = latestEligibleBaselineResults(results);
+  const benchmark = selectReadingBenchmarkResults(results, { now });
+  const passages = benchmark.results;
   const comprehension = summarizeComprehension(passages);
   const comprehensionPercent =
     comprehension.total > 0
@@ -298,10 +407,18 @@ export function calculateReadingPerformanceProfile(
     passages.length > 0
       ? median(passages.map((result) => result.wpm))
       : undefined;
+  const sustainablePassages = passages.filter((result) => {
+    const counts = getComprehensionCounts(result);
+    return (
+      counts.total > 0 &&
+      (counts.correct / counts.total) * 100 >=
+        SUSTAINABLE_COMPREHENSION_PERCENT
+    );
+  });
   const sustainableWpm =
     ready &&
-    comprehensionPercent >= SUSTAINABLE_COMPREHENSION_PERCENT
-      ? measuredMedianWpm
+    sustainablePassages.length >= REQUIRED_BASELINE_PASSAGES
+      ? median(sustainablePassages.map((result) => result.wpm))
       : undefined;
   const confidence: ReadingConfidence =
     passages.length < REQUIRED_BASELINE_PASSAGES
@@ -324,8 +441,7 @@ export function calculateReadingPerformanceProfile(
     REQUIRED_BASELINE_PASSAGES - passages.length === 1 ? '' : 's'
   } to establish a reliable pace.`;
   if (ready && sustainableWpm === undefined) {
-    recommendation =
-      'Keep the current pace comfortable and rebuild comprehension to at least 80% before increasing speed.';
+    recommendation = `Complete at least ${REQUIRED_BASELINE_PASSAGES} individually understood passages (80% or better) in the current 30-day comparison window before increasing speed.`;
   } else if (sustainableWpm !== undefined) {
     recommendation =
       'Use this sustainable pace as the training anchor; increase it only while comprehension stays at or above 80%.';
@@ -334,9 +450,15 @@ export function calculateReadingPerformanceProfile(
   return {
     ready,
     validPassageCount: passages.length,
+    eligiblePassageCount: benchmark.eligiblePassageCount,
     requiredPassageCount: REQUIRED_BASELINE_PASSAGES,
+    benchmarkWindowDays: benchmark.windowDays,
+    benchmarkLimit: benchmark.limit,
+    benchmarkBand: benchmark.comparisonBand,
+    benchmarkContentVersion: benchmark.contentVersion,
     measuredMedianWpm,
     sustainableWpm,
+    sustainablePassageCount: sustainablePassages.length,
     comprehensionPercent,
     ...comprehension,
     confidence,
@@ -507,9 +629,41 @@ export function formatReadingEstimate(
   return `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
 }
 
+function describeAssignedSkill(
+  results: readonly AttemptResult[],
+  gameId: GameId
+): SkillPracticeRecommendation {
+  const skillId = GAME_SKILLS.get(gameId);
+  const profile = calculateTrainingSkillProfile(results);
+  const skill =
+    profile.find((candidate) => candidate.id === skillId) ?? profile[0]!;
+  return {
+    gameId,
+    skill,
+    reason:
+      skill.score === undefined
+        ? `Selected to establish your ${skill.label.toLocaleLowerCase()} baseline before the plan personalizes.`
+        : `Selected because ${skill.label.toLocaleLowerCase()} was measured at ${skill.score}% when today’s plan was assigned.`,
+  };
+}
+
 function localDateKey(iso: string): string {
   const date = new Date(iso);
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+export function getTodayReadingCandidates(
+  samples: readonly TextSample[]
+): readonly TextSample[] {
+  const reviewedBaselineIds = new Set(
+    BASELINE_TEXT_SAMPLES.map((sample) => sample.id)
+  );
+  const baselineCandidates = samples.filter((sample) =>
+    reviewedBaselineIds.has(sample.id)
+  );
+  return baselineCandidates.length >= 3
+    ? baselineCandidates
+    : samples.slice(0, 3);
 }
 
 export function buildTodayPlan({
@@ -519,6 +673,9 @@ export function buildTodayPlan({
   readingSwapOffset = 0,
   skipped = [],
   now = new Date(),
+  assignedReadingSampleId,
+  assignedSkillGameId,
+  includeComfort,
 }: {
   results: readonly AttemptResult[];
   samples: readonly TextSample[];
@@ -526,23 +683,21 @@ export function buildTodayPlan({
   readingSwapOffset?: number;
   skipped?: readonly TodayPlanItem['id'][];
   now?: Date;
+  assignedReadingSampleId?: string;
+  assignedSkillGameId?: GameId;
+  includeComfort?: boolean;
 }): TodayPlanItem[] {
   if (samples.length === 0) return [];
   const skippedSet = new Set(skipped);
-  const reviewedBaselineIds = new Set(
-    BASELINE_TEXT_SAMPLES.map((sample) => sample.id)
-  );
-  const baselineCandidates = samples.filter((sample) =>
-    reviewedBaselineIds.has(sample.id)
-  );
-  const usableBaselineCandidates =
-    baselineCandidates.length >= 3 ? baselineCandidates : samples.slice(0, 3);
+  const usableBaselineCandidates = getTodayReadingCandidates(samples);
+  const benchmark = selectReadingBenchmarkResults(results, {
+    now,
+    baselineSamples: usableBaselineCandidates,
+  });
   const completedBaselineIds = new Set(
-    results
-      .filter((result) =>
-        isBaselineEligibleResult(result, usableBaselineCandidates)
-      )
-      .map((result) => result.details!.contentId as string)
+    benchmark.results.map(
+      (result) => result.details!.contentId as string
+    )
   );
   const incompleteBaseline = usableBaselineCandidates.filter(
     (sample) => !completedBaselineIds.has(sample.id)
@@ -551,14 +706,20 @@ export function buildTodayPlan({
     incompleteBaseline.length > 0
       ? incompleteBaseline
       : usableBaselineCandidates;
+  const assignedReadingSample = assignedReadingSampleId
+    ? samples.find((sample) => sample.id === assignedReadingSampleId)
+    : undefined;
   const baselineSample =
+    assignedReadingSample ??
     readingPool[
       ((readingSwapOffset % readingPool.length) + readingPool.length) %
         readingPool.length
     ]!;
   const baselineComplete = completedBaselineIds.size >= 3;
 
-  const skillRecommendation = recommendSkillPractice(results, swapOffset);
+  const skillRecommendation = assignedSkillGameId
+    ? describeAssignedSkill(results, assignedSkillGameId)
+    : recommendSkillPractice(results, swapOffset);
   const skillGameId = skillRecommendation.gameId;
   const skillGame = getGameCatalogEntry(skillGameId);
   const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
@@ -593,7 +754,7 @@ export function buildTodayPlan({
       optional: false,
     },
   ];
-  if (sustainedUse) {
+  if (includeComfort ?? sustainedUse) {
     plan.push({
       id: 'comfort',
       kind: 'comfort',
@@ -606,4 +767,90 @@ export function buildTodayPlan({
     });
   }
   return plan.filter((item) => !skippedSet.has(item.id)).slice(0, 3);
+}
+
+function resultStartedAfter(
+  result: AttemptResult,
+  assignedAtIso: string
+): boolean {
+  const startedAt = new Date(result.startedAtIso).getTime();
+  const assignedAt = new Date(assignedAtIso).getTime();
+  return (
+    Number.isFinite(startedAt) &&
+    Number.isFinite(assignedAt) &&
+    startedAt >= assignedAt
+  );
+}
+
+function isSnapshotItemCompleted(
+  itemId: TodayPlanItem['id'],
+  snapshot: TodayPlanSnapshot,
+  results: readonly AttemptResult[]
+): boolean {
+  if (itemId === 'reading') {
+    return results.some(
+      (result) =>
+        resultStartedAfter(result, snapshot.reading.assignedAtIso) &&
+        result.details?.activityType === 'measured-reading' &&
+        result.details?.contentId === snapshot.reading.sampleId
+    );
+  }
+  if (itemId === 'skill') {
+    return results.some(
+      (result) =>
+        resultStartedAfter(result, snapshot.skill.assignedAtIso) &&
+        normalizeGameId(result.sampleId) === snapshot.skill.gameId
+    );
+  }
+  if (!snapshot.comfort) return false;
+  return results.some(
+    (result) =>
+      resultStartedAfter(result, snapshot.comfort!.assignedAtIso) &&
+      normalizeGameId(result.sampleId) === snapshot.comfort!.gameId
+  );
+}
+
+export function resolveTodayPlanSnapshot({
+  snapshot,
+  results,
+  samples,
+  now = new Date(),
+}: {
+  snapshot: TodayPlanSnapshot;
+  results: readonly AttemptResult[];
+  samples: readonly TextSample[];
+  now?: Date;
+}): ResolvedTodayPlan {
+  const plan = buildTodayPlan({
+    results,
+    samples,
+    now,
+    assignedReadingSampleId: snapshot.reading.sampleId,
+    assignedSkillGameId: snapshot.skill.gameId,
+    includeComfort: snapshot.comfort !== undefined,
+  });
+  const skipped = new Set(snapshot.skipped);
+  const items = plan.map((item): ResolvedTodayPlanItem => ({
+    ...item,
+    status: skipped.has(item.id)
+      ? 'skipped'
+      : isSnapshotItemCompleted(item.id, snapshot, results)
+        ? 'completed'
+        : 'pending',
+  }));
+  const completedCount = items.filter(
+    (item) => item.status === 'completed'
+  ).length;
+  const skippedCount = items.filter(
+    (item) => item.status === 'skipped'
+  ).length;
+  return {
+    items,
+    pendingItems: items.filter((item) => item.status === 'pending'),
+    completedCount,
+    skippedCount,
+    isComplete:
+      items.length > 0 &&
+      items.every((item) => item.status !== 'pending'),
+  };
 }

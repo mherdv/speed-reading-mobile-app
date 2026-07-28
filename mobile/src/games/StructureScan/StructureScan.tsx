@@ -12,6 +12,7 @@ import { colors, shadows, spacing } from '../../theme/colors';
 import { Button } from '../../ui/Button';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
+import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
 import type { GameReportPayload } from '../registry';
 
@@ -113,6 +114,7 @@ export default function StructureScan({
   autoStart = false,
   onReportResult,
 }: Props) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const {
     gameProgress,
     setGameProgress,
@@ -313,18 +315,24 @@ export default function StructureScan({
 
           <ReadingColumn
             testID="structure-scan-reading-column"
-            style={styles.readingArea}
+            style={[styles.readingArea, readingDisplay.column]}
           >
             <ScrollView
               testID="structure-scan-article"
-              style={styles.articleCard}
+              style={[styles.articleCard, readingDisplay.surface]}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.articleTitle}>{currentRound.title}</Text>
+              <Text style={[styles.articleTitle, readingDisplay.title]}>
+                {currentRound.title}
+              </Text>
               {visibleSections.map((section) => (
                 <View key={section.heading} style={styles.articleSection}>
-                  <Text style={styles.sectionHeading}>{section.heading}</Text>
-                  <Text style={styles.bodyText}>{section.body}</Text>
+                  <Text style={[styles.sectionHeading, readingDisplay.title]}>
+                    {section.heading}
+                  </Text>
+                  <Text style={[styles.bodyText, readingDisplay.text]}>
+                    {section.body}
+                  </Text>
                 </View>
               ))}
             </ScrollView>

@@ -7,6 +7,7 @@ import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { colors } from '../../theme/colors';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
+import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import { TEXT_SEARCH_VARIATIONS } from '../../data/textSearchContent';
 import { formatDuration } from '../../domain/results';
 
@@ -44,13 +45,14 @@ function getDifficultyConfig(difficulty: Difficulty) {
   }
 }
 
-export default function TextSearch({ 
+export default function TextSearch({
   paragraph: paragraphProp, 
   targetWord: targetWordProp, 
   difficulty = 'medium',
   autoStart = false,
   onReportResult 
 }: Props) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const [phase, setPhase] = useState<Phase>('idle');
   const variationPool = TEXT_SEARCH_VARIATIONS[difficulty];
   const [currentVariation, setCurrentVariation] = useState(variationPool[0]!);
@@ -288,9 +290,12 @@ export default function TextSearch({
 
           <ReadingColumn
             testID="text-search-reading-column"
-            style={styles.readingArea}
+            style={[styles.readingArea, readingDisplay.column]}
           >
-            <ScrollView testID="paragraph-display" style={styles.textBox}>
+            <ScrollView
+              testID="paragraph-display"
+              style={[styles.textBox, readingDisplay.surface]}
+            >
               <View style={styles.wordWrap}>
               {words.map((word, i) => {
                 const isTarget = targetIndices.includes(i);
@@ -313,6 +318,7 @@ export default function TextSearch({
                     <Text
                       style={[
                         styles.word,
+                        readingDisplay.text,
                         isFound && styles.wordFound,
                         isFeedback && styles.wordFeedback,
                         wrongFeedback === i && styles.wordWrongFeedback,

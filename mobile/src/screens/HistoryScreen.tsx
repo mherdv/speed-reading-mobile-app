@@ -38,7 +38,7 @@ import { colors } from '../theme/colors';
 
 type Props = {
   onBack: () => void;
-  onDataRestored?: () => void;
+  onDataRestored?: () => void | Promise<void>;
   refreshToken: number;
   optimisticResult?: AttemptResult;
 };
@@ -178,7 +178,7 @@ export function HistoryScreen({
       const backup = await pickDataBackup();
       await restoreDataBackup(backup);
       setResults(await loadResults());
-      onDataRestored?.();
+      await onDataRestored?.();
       setDataTransferMessage('Backup restored. Your saved data is ready.');
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;

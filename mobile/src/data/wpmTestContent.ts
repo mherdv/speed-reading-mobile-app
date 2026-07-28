@@ -58,6 +58,27 @@ function withDifficultyChoices(
   };
 }
 
+function withCorrectChoiceAt(
+  question: WpmQuestion,
+  targetIndex: number
+): WpmQuestion {
+  const answer = question.choices[question.correctIndex];
+  if (answer === undefined || question.choices.length === 0) return question;
+  const choices = question.choices.filter(
+    (_choice, index) => index !== question.correctIndex
+  );
+  const safeIndex = Math.min(
+    Math.max(0, targetIndex),
+    question.choices.length - 1
+  );
+  choices.splice(safeIndex, 0, answer);
+  return {
+    ...question,
+    choices,
+    correctIndex: safeIndex,
+  };
+}
+
 /**
  * The standalone baseline keeps three comprehension checks at every level so a
  * valid attempt can contribute to the personal estimate. Difficulty changes
@@ -66,11 +87,18 @@ function withDifficultyChoices(
 export function getBaselineReadingPool(
   difficulty: Difficulty
 ): WpmTestItem[] {
-  return BASELINE_TEXT_SAMPLES.map((sample) => ({
+  const choiceCount =
+    difficulty === 'easy' ? 2 : difficulty === 'medium' ? 3 : 4;
+  return BASELINE_TEXT_SAMPLES.map((sample, sampleIndex) => ({
     sample,
     questions: questionsFor(sample)
       .slice(0, 3)
-      .map((question) => withDifficultyChoices(question, difficulty)),
+      .map((question, questionIndex) =>
+        withCorrectChoiceAt(
+          withDifficultyChoices(question, difficulty),
+          (sampleIndex * 3 + questionIndex) % choiceCount
+        )
+      ),
   }));
 }
 
@@ -80,17 +108,47 @@ export function getBaselineReadingPool(
  */
 export function getWpmTestPool(difficulty: Difficulty): WpmTestItem[] {
   if (difficulty === 'easy') {
-    return TEXT_SAMPLES.slice(3, 12).map((sample) => ({
+    return TEXT_SAMPLES.slice(3, 12).map((sample, sampleIndex) => ({
       sample,
-      questions: [legacyQuestion(sample)],
+      questions: [
+        withCorrectChoiceAt(
+          legacyQuestion(sample),
+          sampleIndex % sample.question.choices.length
+        ),
+      ],
     }));
   }
 
   const questionCount = difficulty === 'medium' ? 2 : 3;
-  return BASELINE_TEXT_SAMPLES.map((sample) => ({
+  return BASELINE_TEXT_SAMPLES.map((sample, sampleIndex) => ({
     sample,
-    questions: questionsFor(sample).slice(0, questionCount),
+    questions: questionsFor(sample)
+      .slice(0, questionCount)
+      .map((question, questionIndex) =>
+        withCorrectChoiceAt(
+          question,
+          (sampleIndex * questionCount + questionIndex) %
+            question.choices.length
+        )
+      ),
   }));
+}
+
+function validateBalancedAnswerPositions(
+  questions: readonly WpmQuestion[],
+  choiceCount: number,
+  label: string,
+  errors: string[]
+): void {
+  const counts = Array.from({ length: choiceCount }, () => 0);
+  for (const question of questions) {
+    if (question.correctIndex >= 0 && question.correctIndex < choiceCount) {
+      counts[question.correctIndex] += 1;
+    }
+  }
+  if (Math.max(...counts) - Math.min(...counts) > 1) {
+    errors.push(`${label}: correct-answer positions are not balanced`);
+  }
 }
 
 export function validateBaselineReadingPool(): string[] {
@@ -120,6 +178,12 @@ export function validateBaselineReadingPool(): string[] {
         );
       }
     }
+    validateBalancedAnswerPositions(
+      items.flatMap((item) => item.questions),
+      expectedChoices,
+      difficulty,
+      errors
+    );
   }
   return errors;
 }
@@ -149,6 +213,16 @@ export function validateWpmTestPool(): string[] {
       ) {
         errors.push(`${difficulty}/${item.sample.id}: invalid dependent question`);
       }
+    }
+    const allQuestions = items.flatMap((item) => item.questions);
+    const choiceCount = allQuestions[0]?.choices.length ?? 0;
+    if (choiceCount > 0) {
+      validateBalancedAnswerPositions(
+        allQuestions,
+        choiceCount,
+        difficulty,
+        errors
+      );
     }
   }
   return errors;

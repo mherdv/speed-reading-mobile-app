@@ -18,6 +18,7 @@ import { ResultScreen } from '../screens/ResultScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 import { GameScreen } from '../screens/GameScreen';
 import { colors } from '../theme/colors';
+import { useReadingDisplay } from '../ui/ReadingDisplayPreferences';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -73,9 +74,15 @@ function GameRoute({
 
 export function RootNavigator() {
   const [refreshToken, setRefreshToken] = useState(0);
+  const { reload: reloadReadingDisplay } = useReadingDisplay();
 
   const refreshResults = () => {
     setRefreshToken((t) => t + 1);
+  };
+
+  const refreshRestoredData = async () => {
+    refreshResults();
+    await reloadReadingDisplay?.();
   };
 
   return (
@@ -201,7 +208,7 @@ export function RootNavigator() {
             <HistoryScreen
               refreshToken={refreshToken}
               optimisticResult={route.params?.optimisticResult}
-              onDataRestored={refreshResults}
+              onDataRestored={refreshRestoredData}
               onBack={() => navigation.goBack()}
             />
           </SafeAreaView>

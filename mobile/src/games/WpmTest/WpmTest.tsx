@@ -8,10 +8,12 @@ import {
   type WpmQuestion,
 } from '../../data/wpmTestContent';
 import { assessReadingMeasurement, formatDuration } from '../../domain/results';
+import { createQuestionOutcomes } from '../../domain/comprehensionDiagnostics';
 import type { TextSample } from '../../domain/types';
 import { computeWpm, countWords } from '../../domain/wpm';
 import { colors } from '../../theme/colors';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
+import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import type { Difficulty } from '../gameHooks';
 import { useAutoStart } from '../gameHooks';
@@ -57,6 +59,7 @@ export default function WpmTest({
   autoStart = false,
   onReportResult,
 }: Props) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const pool = useMemo(() => getBaselineReadingPool(difficulty), [difficulty]);
   const initialItem = pool[0]!;
   const [activeSample, setActiveSample] = useState<TextSample>(
@@ -168,6 +171,7 @@ export default function WpmTest({
     );
     const accuracy = correct / activeQuestions.length;
     const quality = assessReadingMeasurement(wordCount, readingElapsedMs);
+    const questionOutcomes = createQuestionOutcomes(activeQuestions, answers);
     setResult({
       wpm,
       wordCount,
@@ -176,9 +180,12 @@ export default function WpmTest({
       qualityFlag: quality.reason,
     });
     setPhase('ended');
-    void updateProgress(GAME_ID, accuracy >= 0.7 && quality.valid, wpm).catch(
-      () => undefined
-    );
+    void updateProgress(
+      GAME_ID,
+      accuracy >= 0.8 && quality.valid,
+      wpm,
+      difficulty
+    ).catch(() => undefined);
     onReportResult?.({
       startedAtIso: new Date(startedAtRef.current).toISOString(),
       finishedAtIso: new Date(readingFinishedAtRef.current).toISOString(),
@@ -196,6 +203,7 @@ export default function WpmTest({
         comprehensionCorrect: correct === activeQuestions.length,
         comprehensionCorrectCount: correct,
         comprehensionQuestionCount: activeQuestions.length,
+        questionOutcomes,
         measurementValid: quality.valid,
         qualityFlag: quality.reason,
         difficulty,
@@ -229,10 +237,16 @@ export default function WpmTest({
             </Text>
             <Text style={styles.wordCount}>{countWords(activeSample.text)} words</Text>
           </View>
-          <ReadingColumn>
-            <View style={styles.passageCard}>
-              <Text style={styles.passageTitle}>{activeSample.title}</Text>
-              <Text testID="wpm-passage" selectable style={styles.passageText}>
+          <ReadingColumn style={readingDisplay.column}>
+            <View style={[styles.passageCard, readingDisplay.surface]}>
+              <Text style={[styles.passageTitle, readingDisplay.title]}>
+                {activeSample.title}
+              </Text>
+              <Text
+                testID="wpm-passage"
+                selectable
+                style={[styles.passageText, readingDisplay.text]}
+              >
                 {activeSample.text}
               </Text>
             </View>

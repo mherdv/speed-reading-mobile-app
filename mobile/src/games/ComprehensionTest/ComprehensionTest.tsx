@@ -11,6 +11,7 @@ import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import { borderRadius, colors, spacing } from '../../theme/colors';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
+import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, type Difficulty } from '../gameHooks';
@@ -51,6 +52,7 @@ export default function ComprehensionTest({
   autoStart = false,
   onReportResult,
 }: Props) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const pool = COMPREHENSION_PASSAGE_POOLS[difficulty];
   const fallback = getComprehensionChallenge(difficulty);
   const [challenge, setChallenge] = useState<ComprehensionPassage>(fallback);
@@ -238,14 +240,19 @@ export default function ComprehensionTest({
               },
             ]}
           />
-          <ReadingColumn style={styles.readingArea}>
-            <ScrollView style={styles.passageBox}>
-              <Text testID="passage" style={styles.passage}>
+          <ReadingColumn
+            style={[styles.readingArea, readingDisplay.column]}
+          >
+            <ScrollView style={[styles.passageBox, readingDisplay.surface]}>
+              <Text
+                testID="passage"
+                style={[styles.passage, readingDisplay.text]}
+              >
                 {chunks.map((chunk, index) => (
                   <Text
                     key={`${index}-${chunk}`}
                     testID={`paced-chunk-${index}`}
-                    style={index === chunkIndex ? styles.activeChunk : styles.inactiveChunk}
+                    style={index === chunkIndex ? styles.activeChunk : undefined}
                   >
                     {chunk}{index < chunks.length - 1 ? ' ' : ''}
                   </Text>
@@ -367,7 +374,6 @@ const styles = StyleSheet.create({
     color: colors.warningForeground,
     fontWeight: '800',
   },
-  inactiveChunk: { color: colors.textSecondary },
   controls: { flexDirection: 'row', gap: 8 },
   primaryButton: {
     alignItems: 'center',

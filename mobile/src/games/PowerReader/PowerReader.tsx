@@ -12,6 +12,11 @@ import { formatDuration } from '../../domain/results';
 import { useAutoStart, useGameProgress } from '../gameHooks';
 import { StatsRow } from '../../ui/StatsRow';
 import { GameDifficultyControl } from '../../ui/GameDifficultyControl';
+import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
+import type {
+  ReadingFontSize,
+  ReadingTheme,
+} from '../../data/readingDisplayPreferences';
 import {
   fetchFreeBooksPage,
   fetchFreeBookText,
@@ -36,6 +41,36 @@ const COMPLETION_THRESHOLD = 0.9;
 
 type Intensity = 'beginner' | 'intermediate' | 'advanced';
 type PresentationMode = 'flow' | 'line' | 'rsvp';
+
+export function getPowerReaderReadingWordStyles(theme: ReadingTheme) {
+  return {
+    highlight:
+      theme === 'dark'
+        ? {
+            color: '#FFFFFF',
+            backgroundColor: '#0B628F',
+          }
+        : {
+            color: '#073B5C',
+            backgroundColor: '#D9EEF7',
+          },
+    selected: {
+      color: '#211B15',
+      backgroundColor: '#FDE68A',
+    },
+  } as const;
+}
+
+export function getPowerReaderRsvpTypography(fontSize: ReadingFontSize) {
+  if (fontSize === 'compact') {
+    return { fontSize: 26, lineHeight: 36 };
+  }
+  if (fontSize === 'large') {
+    return { fontSize: 32, lineHeight: 44 };
+  }
+  return { fontSize: 28, lineHeight: 38 };
+}
+
 type StoredBookPosition = {
   bookId: string;
   pageIndex: number;
@@ -157,6 +192,18 @@ export default function PowerReader({
   onReportResult,
   difficulty = 'medium',
 }: Props & { difficulty?: Difficulty }) {
+  const {
+    preferences: readingDisplayPreferences,
+    tokens: readingDisplay,
+  } = useReadingDisplay();
+  const readingWordStyles = useMemo(
+    () => getPowerReaderReadingWordStyles(readingDisplayPreferences.theme),
+    [readingDisplayPreferences.theme]
+  );
+  const rsvpTypography = useMemo(
+    () => getPowerReaderRsvpTypography(readingDisplayPreferences.fontSize),
+    [readingDisplayPreferences.fontSize]
+  );
   const initialOfflineArticle =
     getOfflinePowerReaderArticles(difficulty)[0] ?? STARTER_ARTICLE;
   const [articles, setArticles] = useState<PowerReaderArticle[]>([]);
@@ -1650,7 +1697,12 @@ export default function PowerReader({
 
           <View
             testID="chunk-display"
-            style={[styles.pageCard, presentationMode === 'rsvp' && styles.rsvpCard]}
+            style={[
+              styles.pageCard,
+              readingDisplay.column,
+              presentationMode !== 'rsvp' && readingDisplay.surface,
+              presentationMode === 'rsvp' && styles.rsvpCard,
+            ]}
             ref={pageCardRef}
             onStartShouldSetResponder={() => presentationMode === 'flow' && isPaused && selectionMode === 'phrase'}
             onMoveShouldSetResponder={() => presentationMode === 'flow' && isPaused && selectionMode === 'phrase'}
@@ -1666,7 +1718,10 @@ export default function PowerReader({
             }}
           >
             {presentationMode === 'flow' && (
-              <Text testID="flow-display" style={styles.pageText}>
+              <Text
+                testID="flow-display"
+                style={[styles.pageText, readingDisplay.text]}
+              >
                 {pageWords.map((word, index) => {
                   const isHighlighted = index >= highlightStart && index < highlightEnd;
                   const isSelected =
@@ -1679,8 +1734,9 @@ export default function PowerReader({
                       key={`${pageIndex}-${index}`}
                       style={[
                         styles.pageWord,
-                        isHighlighted && styles.highlightWord,
-                        isSelected && styles.selectedWord,
+                        { color: readingDisplay.text.color },
+                        isHighlighted && readingWordStyles.highlight,
+                        isSelected && readingWordStyles.selected,
                       ]}
                       onPress={() => handleSelectWord(index)}
                       onLayout={(event) => {
@@ -1699,14 +1755,21 @@ export default function PowerReader({
             )}
 
             {presentationMode === 'line' && (
-              <Text testID="line-display" style={styles.focusLineText}>
+              <Text
+                testID="line-display"
+                style={[styles.focusLineText, readingDisplay.text]}
+              >
                 {pageWords.slice(lineStart, lineEnd).map((word, relativeIndex) => {
                   const index = lineStart + relativeIndex;
                   const isHighlighted = index >= highlightStart && index < highlightEnd;
                   return (
                     <Text
                       key={`${pageIndex}-line-${index}`}
-                      style={[styles.lineWord, isHighlighted && styles.focusLineHighlight]}
+                      style={[
+                        styles.lineWord,
+                        { color: readingDisplay.text.color },
+                        isHighlighted && readingWordStyles.highlight,
+                      ]}
                     >
                       {word}{' '}
                     </Text>
@@ -1718,7 +1781,13 @@ export default function PowerReader({
             {presentationMode === 'rsvp' && (
               <View testID="rsvp-display" style={styles.rsvpDisplay}>
                 <View style={styles.rsvpGuide} />
-                <Text style={styles.rsvpText}>
+                <Text
+                  testID="rsvp-text"
+                  style={[
+                    styles.rsvpText,
+                    rsvpTypography,
+                  ]}
+                >
                   {pageWords.slice(highlightStart, highlightEnd).join(' ')}
                 </Text>
                 <View style={styles.rsvpGuide} />
@@ -2441,9 +2510,6 @@ const styles = StyleSheet.create({
   pageWord: {
     color: '#111827',
   },
-  highlightWord: {
-    color: '#0B628F',
-  },
   focusLineText: {
     marginVertical: 'auto',
     textAlign: 'center',
@@ -2453,11 +2519,6 @@ const styles = StyleSheet.create({
   },
   lineWord: {
     color: colors.textMuted,
-  },
-  focusLineHighlight: {
-    color: '#111827',
-    backgroundColor: '#D9EEF7',
-    fontWeight: '800',
   },
   rsvpCard: {
     justifyContent: 'center',
@@ -2482,9 +2543,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 38,
     fontWeight: '700',
-  },
-  selectedWord: {
-    backgroundColor: '#FEF08A',
   },
   progressBar: { height: 8, backgroundColor: '#D9EEF7', borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: '#0E4979' },

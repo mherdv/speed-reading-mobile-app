@@ -257,5 +257,21 @@ describe('research-cycle reviewed content', () => {
         (sample) => (sample.questions?.length ?? 0) >= 3
       )
     ).toBe(true);
+    const allPositionCounts = [0, 0, 0, 0];
+    const mainIdeaPositionCounts = [0, 0, 0, 0];
+    for (const sample of BASELINE_TEXT_SAMPLES) {
+      for (const question of sample.questions ?? []) {
+        allPositionCounts[question.correctIndex] += 1;
+        if (question.type === 'main-idea') {
+          mainIdeaPositionCounts[question.correctIndex] += 1;
+        }
+      }
+    }
+    expect(Math.max(...allPositionCounts) - Math.min(...allPositionCounts))
+      .toBeLessThanOrEqual(1);
+    expect(
+      Math.max(...mainIdeaPositionCounts) -
+        Math.min(...mainIdeaPositionCounts)
+    ).toBeLessThanOrEqual(1);
   });
 });

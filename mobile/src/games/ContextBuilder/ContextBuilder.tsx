@@ -23,6 +23,7 @@ import { colors, shadows, spacing } from '../../theme/colors';
 import { Button } from '../../ui/Button';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
+import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import {
   useAutoStart,
   useGameProgress,
@@ -79,6 +80,7 @@ function TargetSentence({
   sentenceNumber: number;
   boldText: boolean;
 }) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const sentence = round.sentences.find(
     (candidate) => candidate.id === round.targetSentenceId
   );
@@ -90,7 +92,11 @@ function TargetSentence({
     return (
       <Text
         testID={`context-sentence-${sentenceNumber}`}
-        style={[styles.paragraphText, boldText && styles.boldParagraphText]}
+        style={[
+          styles.paragraphText,
+          readingDisplay.text,
+          boldText && styles.boldParagraphText,
+        ]}
       >
         <Text style={styles.sentenceNumber}>Sentence {sentenceNumber}: </Text>
         {sentence.text}
@@ -106,7 +112,11 @@ function TargetSentence({
   return (
     <Text
       testID={`context-sentence-${sentenceNumber}`}
-      style={[styles.paragraphText, boldText && styles.boldParagraphText]}
+      style={[
+        styles.paragraphText,
+        readingDisplay.text,
+        boldText && styles.boldParagraphText,
+      ]}
     >
       <Text style={styles.sentenceNumber}>Sentence {sentenceNumber}: </Text>
       {before}
@@ -129,6 +139,7 @@ export default function ContextBuilder({
   autoStart = false,
   onReportResult,
 }: Props) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const {
     gameProgress,
     setGameProgress,
@@ -394,15 +405,17 @@ export default function ContextBuilder({
 
           <ReadingColumn
             testID="context-reading-column"
-            style={styles.readingArea}
+            style={[styles.readingArea, readingDisplay.column]}
           >
             <ScrollView
               testID="context-paragraph"
-              style={styles.passage}
+              style={[styles.passage, readingDisplay.surface]}
               contentContainerStyle={styles.passageContent}
               showsVerticalScrollIndicator={false}
             >
-            <Text style={styles.passageTitle}>{current.title}</Text>
+            <Text style={[styles.passageTitle, readingDisplay.title]}>
+              {current.title}
+            </Text>
             {current.sentences.map((sentence, sentenceIndex) =>
               sentence.id === current.targetSentenceId ? (
                 <TargetSentence
@@ -417,6 +430,7 @@ export default function ContextBuilder({
                   testID={`context-sentence-${sentenceIndex + 1}`}
                   style={[
                     styles.paragraphText,
+                    readingDisplay.text,
                     boldText && styles.boldParagraphText,
                   ]}
                 >

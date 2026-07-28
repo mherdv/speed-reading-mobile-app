@@ -100,6 +100,23 @@ describe('WpmTest', () => {
         wpm: 6,
         comprehensionCorrect: true,
         comprehensionQuestionCount: 3,
+        questionOutcomes: [
+          expect.objectContaining({
+            questionId: 'q1',
+            selectedAnswer: 'six',
+            correct: true,
+          }),
+          expect.objectContaining({
+            questionId: 'q2',
+            selectedAnswer: 'one',
+            correct: true,
+          }),
+          expect.objectContaining({
+            questionId: 'q3',
+            selectedAnswer: 'six',
+            correct: true,
+          }),
+        ],
         measurementValid: true,
         difficulty: 'hard',
         source: 'TEXT_SAMPLES',
@@ -151,6 +168,16 @@ describe('WpmTest', () => {
         (item) => item.questions.length === 3
       )
     ).toBe(true);
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      for (const item of getBaselineReadingPool(difficulty)) {
+        item.questions.forEach((question, index) => {
+          const authored = item.sample.questions![index]!;
+          expect(question.choices[question.correctIndex]).toBe(
+            authored.choices[authored.correctIndex]
+          );
+        });
+      }
+    }
   });
 
   it('falls back to the sample question when an empty override is supplied', () => {

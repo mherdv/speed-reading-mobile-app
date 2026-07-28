@@ -3,6 +3,7 @@ import { render } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { AttemptResult } from '../domain/types';
+import { TEXT_SAMPLES } from '../data/textSamples';
 import { ResultScreen } from './ResultScreen';
 
 function result(overrides: Partial<AttemptResult>): AttemptResult {
@@ -77,5 +78,49 @@ describe('ResultScreen truthful metric cards', () => {
     expect(view.getByText('2/4')).toBeTruthy();
     expect(view.getByText('Evidence credit')).toBeTruthy();
     expect(view.getByText('Median locate time')).toBeTruthy();
+  });
+
+  it('shows a next-session action and question-level correction', () => {
+    const sample = TEXT_SAMPLES.find(
+      (candidate) => candidate.questions?.length === 3
+    )!;
+    const question = sample.questions![0]!;
+    const wrongIndex = question.correctIndex === 0 ? 1 : 0;
+    const view = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: sample.id,
+          sampleTitle: sample.title,
+          details: {
+            activityType: 'measured-reading',
+            measurementValid: true,
+            contentId: sample.id,
+            contentVersion: sample.version ?? 1,
+            comparisonBand: sample.comparisonBand,
+            comprehensionCorrectCount: 0,
+            comprehensionQuestionCount: 1,
+            questionOutcomes: [
+              {
+                questionId: question.id,
+                type: question.type,
+                selectedIndex: wrongIndex,
+                selectedAnswer: question.choices[wrongIndex],
+                correct: false,
+              },
+            ],
+          },
+        })}
+      />
+    );
+
+    expect(view.getByTestId('next-session-coaching')).toBeTruthy();
+    expect(view.getByTestId('comprehension-review')).toBeTruthy();
+    expect(view.getByText(`Your answer: ${question.choices[wrongIndex]}`)).toBeTruthy();
+    expect(
+      view.getByText(
+        `Correct answer: ${question.choices[question.correctIndex]}`
+      )
+    ).toBeTruthy();
   });
 });

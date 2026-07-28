@@ -2,7 +2,7 @@ import type { TextSample } from '../domain/types';
 import { countWords } from '../domain/wpm';
 import { ADDITIONAL_BASELINE_TEXT_SAMPLES } from './additionalBaselineTextSamples';
 
-export const TEXT_SAMPLES: TextSample[] = [
+const RAW_TEXT_SAMPLES: TextSample[] = [
   {
     id: 'sample-1',
     version: 1,
@@ -622,6 +622,66 @@ export const TEXT_SAMPLES: TextSample[] = [
   },
 ];
 
+function moveCorrectChoiceToIndex<
+  T extends {
+    choices: readonly string[];
+    correctIndex: number;
+  },
+>(question: T, targetIndex: number): T & {
+  choices: string[];
+  correctIndex: number;
+} {
+  const answer = question.choices[question.correctIndex];
+  if (answer === undefined || question.choices.length === 0) {
+    return {
+      ...question,
+      choices: [...question.choices],
+      correctIndex: question.correctIndex,
+    };
+  }
+  const choices = question.choices.filter(
+    (_choice, index) => index !== question.correctIndex
+  );
+  const safeIndex = Math.min(
+    Math.max(0, targetIndex),
+    question.choices.length - 1
+  );
+  choices.splice(safeIndex, 0, answer);
+  return {
+    ...question,
+    choices,
+    correctIndex: safeIndex,
+  };
+}
+
+let baselineSampleIndex = 0;
+export const TEXT_SAMPLES: TextSample[] = RAW_TEXT_SAMPLES.map((sample) => {
+  if (sample.complexityBand !== 'baseline-brief' || !sample.questions) {
+    return sample;
+  }
+  const samplePosition = baselineSampleIndex;
+  baselineSampleIndex += 1;
+  const questions = sample.questions.map((question, questionIndex) =>
+    moveCorrectChoiceToIndex(
+      question,
+      (samplePosition * 3 + questionIndex) % question.choices.length
+    )
+  );
+  const primary = questions[0];
+  return {
+    ...sample,
+    question: primary
+      ? {
+          ...sample.question,
+          prompt: primary.prompt,
+          choices: [...primary.choices],
+          correctIndex: primary.correctIndex,
+        }
+      : sample.question,
+    questions,
+  };
+});
+
 export const BASELINE_TEXT_SAMPLES = TEXT_SAMPLES.filter(
   (sample) => sample.complexityBand === 'baseline-brief'
 );
@@ -633,6 +693,8 @@ export function validateBaselineTextSamples(
   if (new Set(samples.map((sample) => sample.id)).size < 3) {
     errors.push('Baseline requires at least three distinct passage IDs');
   }
+  const answerPositionCounts = [0, 0, 0, 0];
+  const mainIdeaPositionCounts = [0, 0, 0, 0];
   for (const sample of samples) {
     const wordCount = countWords(sample.text);
     if (typeof sample.version !== 'number') {
@@ -655,6 +717,12 @@ export function validateBaselineTextSamples(
       errors.push(`${sample.id}: main idea, detail, and inference required`);
     }
     for (const question of sample.questions ?? []) {
+      if (question.correctIndex >= 0 && question.correctIndex < 4) {
+        answerPositionCounts[question.correctIndex] += 1;
+        if (question.type === 'main-idea') {
+          mainIdeaPositionCounts[question.correctIndex] += 1;
+        }
+      }
       if (!question.rationale.trim()) {
         errors.push(`${sample.id}/${question.id}: rationale required`);
       }
@@ -668,6 +736,22 @@ export function validateBaselineTextSamples(
         errors.push(`${sample.id}/${question.id}: invalid correct answer`);
       }
     }
+  }
+  if (
+    Math.max(...answerPositionCounts) -
+      Math.min(...answerPositionCounts) >
+    1
+  ) {
+    errors.push('Baseline correct-answer positions must be evenly balanced');
+  }
+  if (
+    Math.max(...mainIdeaPositionCounts) -
+      Math.min(...mainIdeaPositionCounts) >
+    1
+  ) {
+    errors.push(
+      'Baseline main-idea answer positions must be evenly balanced'
+    );
   }
   return errors;
 }

@@ -75,16 +75,26 @@ export function GameIdlePanel({
           </Text>
         </View>
         <Text style={[styles.descriptionText, descriptionStyle]}>{description}</Text>
-        <View style={[styles.progressInfo, progressInfoStyle]}>
-          <Text style={[styles.levelLabel, levelLabelStyle]}>Level {level}</Text>
-          <Text
-            accessibilityLabel={`${stars} of 5 difficulty stars`}
-            style={[styles.starsDisplay, starsStyle]}
-          >
-            {'★'.repeat(stars)}
-            {'☆'.repeat(5 - stars)}
-          </Text>
-        </View>
+        {difficultyControl ? (
+          <View style={[styles.progressInfo, progressInfoStyle]}>
+            <Text style={[styles.levelLabel, levelLabelStyle]}>
+              {difficultyControl.mode === 'adaptive'
+                ? `Adaptive target: ${difficultyLabel}`
+                : `Manual setting: ${difficultyLabel}`}
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.progressInfo, progressInfoStyle]}>
+            <Text style={[styles.levelLabel, levelLabelStyle]}>Level {level}</Text>
+            <Text
+              accessibilityLabel={`${stars} of 5 difficulty stars`}
+              style={[styles.starsDisplay, starsStyle]}
+            >
+              {'★'.repeat(stars)}
+              {'☆'.repeat(5 - stars)}
+            </Text>
+          </View>
+        )}
         <GameDifficultyControl />
         {children}
         <Pressable

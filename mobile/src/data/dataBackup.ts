@@ -9,7 +9,9 @@ export const BACKED_UP_STORAGE_KEYS = [
   'speed-reading:progress:v1',
   'speed-reading:difficulty-preferences:v1',
   'speed-reading:game-pins:v1',
+  'speed-reading:today-plan:v2',
   'speed-reading:today-skips:v1',
+  'speed-reading:reading-display:v1',
   'powerReaderBookProgress',
   'powerReaderRecentBooks',
   'powerReaderLocalLibrary:v1',
@@ -98,7 +100,16 @@ export async function restoreDataBackup(
   if (entries.length === 0) {
     throw new Error('This backup does not contain any saved app data.');
   }
+  const restoredKeys = new Set(Object.keys(backup.entries));
+  const absentKeys = BACKED_UP_STORAGE_KEYS.filter(
+    (key) => !restoredKeys.has(key)
+  );
+  // Write the imported snapshot before removing keys it omits. If storage is
+  // full or unavailable, the user's current data remains intact.
   await AsyncStorage.multiSet(entries);
+  if (absentKeys.length > 0) {
+    await AsyncStorage.multiRemove([...absentKeys]);
+  }
 }
 
 function requireWebDocument(): void {

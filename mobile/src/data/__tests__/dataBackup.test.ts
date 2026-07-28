@@ -18,6 +18,14 @@ describe('app data backup', () => {
       'speed-reading:results:v1',
       JSON.stringify([{ id: 'result-1' }])
     );
+    await AsyncStorage.setItem(
+      'speed-reading:today-plan:v2',
+      JSON.stringify({ schemaVersion: 2, localDate: '2026-6-28' })
+    );
+    await AsyncStorage.setItem(
+      'speed-reading:reading-display:v1',
+      JSON.stringify({ fontScale: 1.1, lineHeightScale: 1.2 })
+    );
     await AsyncStorage.setItem('unrelated-key', JSON.stringify('ignore'));
 
     const backup = await createDataBackup(
@@ -29,6 +37,10 @@ describe('app data backup', () => {
       createdAtIso: '2026-07-28T10:00:00.000Z',
     });
     expect(backup.entries['speed-reading:results:v1']).toBeTruthy();
+    expect(backup.entries['speed-reading:today-plan:v2']).toBeTruthy();
+    expect(
+      backup.entries['speed-reading:reading-display:v1']
+    ).toBeTruthy();
     expect(backup.entries['unrelated-key']).toBeUndefined();
 
     await AsyncStorage.clear();
@@ -56,5 +68,61 @@ describe('app data backup', () => {
         })
       )
     ).toThrow('damaged');
+  });
+
+  it('replaces app data so absent keys from an older backup do not linger', async () => {
+    await AsyncStorage.setItem(
+      'speed-reading:reading-display:v1',
+      JSON.stringify({ theme: 'dark' })
+    );
+    await AsyncStorage.setItem('unrelated-key', JSON.stringify('keep'));
+
+    await restoreDataBackup({
+      app: BACKUP_APP_ID,
+      version: BACKUP_VERSION,
+      createdAtIso: '2026-07-28T10:00:00.000Z',
+      entries: {
+        'speed-reading:results:v1': JSON.stringify([{ id: 'restored' }]),
+      },
+    });
+
+    expect(
+      await AsyncStorage.getItem('speed-reading:reading-display:v1')
+    ).toBeNull();
+    expect(await AsyncStorage.getItem('unrelated-key')).toBe(
+      JSON.stringify('keep')
+    );
+  });
+
+  it('keeps current data when imported entries cannot be written', async () => {
+    const currentResults = JSON.stringify([{ id: 'current' }]);
+    const currentDisplay = JSON.stringify({ theme: 'dark' });
+    await AsyncStorage.setItem('speed-reading:results:v1', currentResults);
+    await AsyncStorage.setItem(
+      'speed-reading:reading-display:v1',
+      currentDisplay
+    );
+    const writeFailure = jest
+      .spyOn(AsyncStorage, 'multiSet')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+
+    await expect(
+      restoreDataBackup({
+        app: BACKUP_APP_ID,
+        version: BACKUP_VERSION,
+        createdAtIso: '2026-07-28T10:00:00.000Z',
+        entries: {
+          'speed-reading:results:v1': JSON.stringify([{ id: 'imported' }]),
+        },
+      })
+    ).rejects.toThrow('Storage unavailable');
+
+    expect(await AsyncStorage.getItem('speed-reading:results:v1')).toBe(
+      currentResults
+    );
+    expect(
+      await AsyncStorage.getItem('speed-reading:reading-display:v1')
+    ).toBe(currentDisplay);
+    writeFailure.mockRestore();
   });
 });

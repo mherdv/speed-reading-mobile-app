@@ -12,7 +12,10 @@ import {
   formatReadingEstimate,
   isBaselineEligibleResult,
   recommendSkillPractice,
+  resolveTodayPlanSnapshot,
+  selectReadingBenchmarkResults,
 } from './readingPlan';
+import type { TodayPlanSnapshot } from '../data/todayPlanStore';
 
 function reading(
   id: string,
@@ -54,7 +57,11 @@ describe('reading-first Today and baseline model', () => {
     expect(calculatePersonalPracticeEstimate(two)).toEqual({
       ready: false,
       validPassageCount: 2,
+      eligiblePassageCount: 2,
       requiredPassageCount: 3,
+      benchmarkWindowDays: 30,
+      benchmarkBand: 'general-practice-brief-v1',
+      benchmarkContentVersion: 1,
       correct: 5,
       total: 6,
     });
@@ -66,7 +73,11 @@ describe('reading-first Today and baseline model', () => {
     ).toEqual({
       ready: true,
       validPassageCount: 3,
+      eligiblePassageCount: 3,
       requiredPassageCount: 3,
+      benchmarkWindowDays: 30,
+      benchmarkBand: 'general-practice-brief-v1',
+      benchmarkContentVersion: 1,
       medianWpm: 260,
       correct: 6,
       total: 9,
@@ -76,16 +87,19 @@ describe('reading-first Today and baseline model', () => {
   it('protects the reported training pace with an 80% comprehension floor', () => {
     const strongProfile = calculateReadingPerformanceProfile([
       reading('1', 'sample-1', 210, 3),
-      reading('2', 'sample-2', 230, 2),
+      reading('2', 'sample-2', 230, 3),
       reading('3', 'sample-3', 260, 3),
     ]);
     expect(strongProfile).toMatchObject({
       ready: true,
       measuredMedianWpm: 230,
       sustainableWpm: 230,
-      comprehensionPercent: 89,
+      comprehensionPercent: 100,
       confidence: 'developing',
       paceRange: { lowerWpm: 210, upperWpm: 260 },
+      eligiblePassageCount: 3,
+      sustainablePassageCount: 3,
+      benchmarkWindowDays: 30,
     });
 
     const rushedProfile = calculateReadingPerformanceProfile([
@@ -97,9 +111,114 @@ describe('reading-first Today and baseline model', () => {
       ready: true,
       measuredMedianWpm: 330,
       comprehensionPercent: 56,
+      sustainablePassageCount: 0,
     });
     expect(rushedProfile.sustainableWpm).toBeUndefined();
     expect(rushedProfile.recommendation).toContain('80%');
+  });
+
+  it('uses only individually understood passages for sustainable WPM', () => {
+    const profile = calculateReadingPerformanceProfile([
+      reading('1', 'sample-1', 200, 4, 5),
+      reading('2', 'sample-2', 220, 4, 5),
+      reading('3', 'sample-3', 240, 5, 5),
+      reading('4', 'baseline-4', 500, 3, 5),
+    ]);
+
+    expect(profile).toMatchObject({
+      ready: true,
+      eligiblePassageCount: 4,
+      measuredMedianWpm: 230,
+      sustainablePassageCount: 3,
+      sustainableWpm: 220,
+    });
+  });
+
+  it('selects at most the latest six distinct passages in one 30-day band/version cohort', () => {
+    const now = new Date('2026-07-28T12:00:00.000Z');
+    const dated = BASELINE_TEXT_SAMPLES.slice(0, 8).map(
+      (sample, index): AttemptResult => ({
+        ...reading(
+          `result-${index}`,
+          sample.id,
+          200 + index * 10,
+          3
+        ),
+        startedAtIso: new Date(
+          now.getTime() - (index + 1) * 24 * 60 * 60 * 1000 - 60_000
+        ).toISOString(),
+        finishedAtIso: new Date(
+          now.getTime() - (index + 1) * 24 * 60 * 60 * 1000
+        ).toISOString(),
+      })
+    );
+    const tooOld = {
+      ...reading('old', 'baseline-9', 999, 3),
+      startedAtIso: '2026-06-01T11:59:00.000Z',
+      finishedAtIso: '2026-06-01T12:00:00.000Z',
+    };
+    const selection = selectReadingBenchmarkResults(
+      [...dated, tooOld],
+      { now }
+    );
+
+    expect(selection.results).toHaveLength(6);
+    expect(selection.results.map((result) => result.id)).toEqual(
+      dated.slice(0, 6).map((result) => result.id)
+    );
+    expect(selection).toMatchObject({
+      eligiblePassageCount: 6,
+      windowDays: 30,
+      limit: 6,
+      comparisonBand: 'general-practice-brief-v1',
+      contentVersion: 1,
+    });
+  });
+
+  it('never mixes comparison bands or content versions in one benchmark', () => {
+    const now = new Date('2026-07-28T12:00:00.000Z');
+    const customSamples = BASELINE_TEXT_SAMPLES.slice(0, 6).map(
+      (sample, index) => ({
+        ...sample,
+        comparisonBand: index < 3 ? 'band-a' : 'band-b',
+        version: index < 3 ? 1 : 2,
+      })
+    );
+    const cohortA = customSamples.slice(0, 3).map((sample, index) => ({
+      ...reading(`a-${index}`, sample.id, 210 + index * 10, 3),
+      startedAtIso: `2026-07-2${index}T09:59:00.000Z`,
+      finishedAtIso: `2026-07-2${index}T10:00:00.000Z`,
+      details: {
+        ...reading(`a-${index}`, sample.id, 210, 3).details,
+        comparisonBand: 'band-a',
+        contentVersion: 1,
+      },
+    }));
+    const cohortB = customSamples.slice(3).map((sample, index) => ({
+      ...reading(`b-${index}`, sample.id, 240 + index * 10, 3),
+      startedAtIso: `2026-07-2${index + 4}T09:59:00.000Z`,
+      finishedAtIso: `2026-07-2${index + 4}T10:00:00.000Z`,
+      details: {
+        ...reading(`b-${index}`, sample.id, 240, 3).details,
+        comparisonBand: 'band-b',
+        contentVersion: 2,
+      },
+    }));
+
+    const selection = selectReadingBenchmarkResults(
+      [...cohortA, ...cohortB],
+      { now, baselineSamples: customSamples }
+    );
+    expect(selection.results.map((result) => result.id)).toEqual([
+      'b-2',
+      'b-1',
+      'b-0',
+    ]);
+    expect(selection).toMatchObject({
+      comparisonBand: 'band-b',
+      contentVersion: 2,
+      eligiblePassageCount: 3,
+    });
   });
 
   it('scores skills separately and recommends the weakest measured skill', () => {
@@ -237,7 +356,11 @@ describe('reading-first Today and baseline model', () => {
     ).toEqual({
       ready: false,
       validPassageCount: 0,
+      eligiblePassageCount: 0,
       requiredPassageCount: 3,
+      benchmarkWindowDays: 30,
+      benchmarkBand: undefined,
+      benchmarkContentVersion: undefined,
       correct: 0,
       total: 0,
     });
@@ -285,5 +408,66 @@ describe('reading-first Today and baseline model', () => {
     expect(formatReadingEstimate(sample)).toBe(
       `About ${estimateReadingMinutes(sample)} minutes`
     );
+  });
+
+  it('derives terminal Today states only from exact results started after assignment', () => {
+    const snapshot: TodayPlanSnapshot = {
+      schemaVersion: 2,
+      localDate: '2026-6-26',
+      createdAtIso: '2026-07-26T09:00:00.000Z',
+      reading: {
+        sampleId: 'sample-1',
+        assignedAtIso: '2026-07-26T09:00:00.000Z',
+        swapOffset: 0,
+      },
+      skill: {
+        gameId: 'ContextBuilder',
+        assignedAtIso: '2026-07-26T09:00:00.000Z',
+        swapOffset: 0,
+      },
+      skipped: [],
+    };
+    const beforeAssignment = reading('before', 'sample-1', 220, 3);
+    const wrongSkill: AttemptResult = {
+      ...reading('wrong-skill', 'EvidenceHunt', 0, 0),
+      startedAtIso: '2026-07-26T10:00:00.000Z',
+      finishedAtIso: '2026-07-26T10:01:00.000Z',
+      details: { activityType: 'evidence-hunt' },
+    };
+    const pending = resolveTodayPlanSnapshot({
+      snapshot,
+      results: [beforeAssignment, wrongSkill],
+      samples: TEXT_SAMPLES,
+      now: new Date('2026-07-26T12:00:00.000Z'),
+    });
+    expect(pending.pendingItems.map((item) => item.id)).toEqual([
+      'reading',
+      'skill',
+    ]);
+
+    const completedReading: AttemptResult = {
+      ...reading('completed-reading', 'sample-1', 230, 3),
+      startedAtIso: '2026-07-26T10:00:00.000Z',
+      finishedAtIso: '2026-07-26T10:02:00.000Z',
+    };
+    const completedSkill: AttemptResult = {
+      ...reading('completed-skill', 'ContextBuilder', 0, 0),
+      startedAtIso: '2026-07-26T10:03:00.000Z',
+      finishedAtIso: '2026-07-26T10:04:00.000Z',
+      details: { activityType: 'context-builder' },
+    };
+    const complete = resolveTodayPlanSnapshot({
+      snapshot,
+      results: [completedReading, completedSkill],
+      samples: TEXT_SAMPLES,
+      now: new Date('2026-07-26T12:00:00.000Z'),
+    });
+    expect(complete.pendingItems).toEqual([]);
+    expect(complete.completedCount).toBe(2);
+    expect(complete.isComplete).toBe(true);
+    expect(complete.items.map((item) => item.status)).toEqual([
+      'completed',
+      'completed',
+    ]);
   });
 });

@@ -5,17 +5,20 @@ import { NavigationContainer } from '@react-navigation/native';
 
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { PwaUpdateBanner } from './src/ui/PwaUpdateBanner';
+import { ReadingDisplayProvider } from './src/ui/ReadingDisplayPreferences';
 
 export default function App() {
   const statusBarStyle = useMemo(() => 'dark' as const, []);
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <RootNavigator />
-        <PwaUpdateBanner />
-        <StatusBar style={statusBarStyle} />
-      </NavigationContainer>
+      <ReadingDisplayProvider>
+        <NavigationContainer>
+          <RootNavigator />
+          <PwaUpdateBanner />
+          <StatusBar style={statusBarStyle} />
+        </NavigationContainer>
+      </ReadingDisplayProvider>
     </SafeAreaProvider>
   );
 }

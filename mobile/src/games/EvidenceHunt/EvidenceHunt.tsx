@@ -23,6 +23,7 @@ import { colors, shadows, spacing } from '../../theme/colors';
 import { Button } from '../../ui/Button';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
+import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import {
   useAutoStart,
   useGameProgress,
@@ -96,6 +97,7 @@ export default function EvidenceHunt({
   autoStart = false,
   onReportResult,
 }: Props) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const {
     gameProgress,
     setGameProgress,
@@ -428,15 +430,17 @@ export default function EvidenceHunt({
 
           <ReadingColumn
             testID="evidence-reading-column"
-            style={styles.readingArea}
+            style={[styles.readingArea, readingDisplay.column]}
           >
             <ScrollView
               testID="evidence-passage"
-              style={styles.passage}
+              style={[styles.passage, readingDisplay.surface]}
               contentContainerStyle={styles.passageContent}
               showsVerticalScrollIndicator={false}
             >
-            <Text style={styles.passageTitle}>{current.title}</Text>
+            <Text style={[styles.passageTitle, readingDisplay.title]}>
+              {current.title}
+            </Text>
             {current.sentences.map((sentence, index) => {
               const selected = selectedEvidence.includes(sentence.id);
               return (
@@ -449,6 +453,7 @@ export default function EvidenceHunt({
                   testID={`evidence-sentence-${sentence.id}`}
                   style={({ pressed }) => [
                     styles.sentence,
+                    readingDisplay.surface,
                     selected && styles.sentenceSelected,
                     pressed && styles.pressed,
                   ]}
@@ -458,6 +463,7 @@ export default function EvidenceHunt({
                   <Text
                     style={[
                       styles.sentenceText,
+                      readingDisplay.text,
                       selected && styles.selectedText,
                       screenReader && styles.screenReaderText,
                     ]}

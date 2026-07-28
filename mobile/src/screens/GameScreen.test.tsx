@@ -49,7 +49,7 @@ describe('GameScreen difficulty control', () => {
   });
 
   it('offers both adaptive and manual modes for reading games', async () => {
-    const { getByTestId } = render(
+    const { getByTestId, getByText } = render(
       <GameScreen
         gameId="RepeatedReading"
         onBack={jest.fn()}
@@ -63,11 +63,13 @@ describe('GameScreen difficulty control', () => {
     expect(getByTestId('difficulty-choice-adaptive')).toHaveAccessibilityState({
       checked: true,
     });
+    expect(getByText('Adaptive target: Easy')).toBeTruthy();
 
     fireEvent.press(getByTestId('difficulty-choice-medium'));
     expect(getByTestId('difficulty-choice-medium')).toHaveAccessibilityState({
       checked: true,
     });
+    expect(getByText('Manual setting: Medium')).toBeTruthy();
   });
 
   it.each([

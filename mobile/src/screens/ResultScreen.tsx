@@ -10,6 +10,7 @@ import {
   isValidProgressMeasurement,
 } from '../domain/results';
 import { getComprehensionCounts } from '../domain/readingPlan';
+import { getComprehensionDiagnostic } from '../domain/comprehensionDiagnostics';
 import { TEXT_SAMPLES } from '../data/textSamples';
 import { BackButton } from '../ui/BackButton';
 import { ProgressChart } from '../ui/ProgressChart';
@@ -83,6 +84,67 @@ function encouragement(
     };
 }
 
+function nextSessionRecommendation(
+  result: AttemptResult,
+  measuredReading: boolean
+): { title: string; body: string } {
+  const comprehension = getComprehensionCounts(result);
+  const comprehensionPercent =
+    comprehension.total > 0
+      ? Math.round((comprehension.correct / comprehension.total) * 100)
+      : undefined;
+  const difficultyMode = result.details?.difficultyMode;
+  const modeSuffix =
+    difficultyMode === 'manual'
+      ? ' Your manual difficulty will stay unchanged.'
+      : difficultyMode === 'adaptive'
+        ? ' Adaptive difficulty changes only after two consecutive at-target or below-target sessions.'
+        : '';
+
+  if (measuredReading && comprehensionPercent !== undefined) {
+    if (comprehensionPercent < 80) {
+      const nextWpm = Math.max(60, Math.round((result.wpm * 0.9) / 5) * 5);
+      return {
+        title: 'Protect meaning next',
+        body: `Try about ${nextWpm} WPM on a fresh passage. Increase pace only after comprehension returns to at least 80%.`,
+      };
+    }
+    if (comprehensionPercent >= 90) {
+      return {
+        title: 'Confirm before increasing',
+        body: `Repeat near ${result.wpm} WPM on a comparable fresh passage. Two strong readings are a better signal than one peak.`,
+      };
+    }
+    return {
+      title: 'Hold this pace',
+      body: `Stay near ${result.wpm} WPM until comprehension is consistently above 80%, then make a small increase.`,
+    };
+  }
+
+  const accuracy =
+    typeof result.accuracy === 'number'
+      ? result.accuracy <= 1
+        ? result.accuracy
+        : result.accuracy / 100
+      : undefined;
+  if (accuracy !== undefined && accuracy >= 0.85) {
+    return {
+      title: 'Repeat once at this challenge',
+      body: `Accuracy is stable enough to confirm this level once more before increasing it.${modeSuffix}`,
+    };
+  }
+  if (accuracy !== undefined && accuracy < 0.7) {
+    return {
+      title: 'Reduce one source of difficulty',
+      body: `Slow the pace or choose an easier setting, then repeat with accuracy as the priority.${modeSuffix}`,
+    };
+  }
+  return {
+    title: 'Build consistency',
+    body: `Repeat this task at the same setting and aim for at least 85% accuracy.${modeSuffix}`,
+  };
+}
+
 export function ResultScreen({
   result,
   onDone,
@@ -96,6 +158,8 @@ export function ResultScreen({
     TEXT_SAMPLES.some((sample) => sample.id === result.sampleId);
   const hasAccuracy = typeof result.accuracy === 'number';
   const message = encouragement(result, measuredReading);
+  const nextSession = nextSessionRecommendation(result, measuredReading);
+  const comprehensionDiagnostic = getComprehensionDiagnostic(result);
   const validProgressMeasurement = isValidProgressMeasurement(result);
   const activityType =
     typeof result.details?.activityType === 'string'
@@ -224,6 +288,40 @@ export function ResultScreen({
         ))}
       </View>
 
+      <View testID="next-session-coaching" style={styles.coachingCard}>
+        <Text style={styles.coachingEyebrow}>NEXT SESSION</Text>
+        <Text style={styles.coachingTitle}>{nextSession.title}</Text>
+        <Text style={styles.coachingText}>{nextSession.body}</Text>
+        {comprehensionDiagnostic.available && (
+          <Text style={styles.coachingAction}>
+            {comprehensionDiagnostic.nextAction}
+          </Text>
+        )}
+      </View>
+
+      {comprehensionDiagnostic.wrongAnswers.length > 0 && (
+        <View testID="comprehension-review" style={styles.reviewCard}>
+          <Text style={styles.reviewTitle}>Review what changed the answer</Text>
+          <Text style={styles.reviewSubtitle}>
+            Use the explanation, then reread only the relevant part when you
+            train again.
+          </Text>
+          {comprehensionDiagnostic.wrongAnswers.slice(0, 3).map((item) => (
+            <View key={item.questionId} style={styles.reviewItem}>
+              <Text style={styles.reviewType}>{item.typeLabel}</Text>
+              <Text style={styles.reviewPrompt}>{item.prompt}</Text>
+              <Text style={styles.reviewWrong}>
+                Your answer: {item.selectedAnswer}
+              </Text>
+              <Text style={styles.reviewCorrect}>
+                Correct answer: {item.correctAnswer}
+              </Text>
+              <Text style={styles.reviewRationale}>{item.rationale}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
           <View>
@@ -287,6 +385,96 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.md,
     paddingBottom: spacing.xl,
+  },
+  coachingCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceTonal,
+  },
+  coachingEyebrow: {
+    color: colors.primaryDark,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  coachingTitle: {
+    marginTop: 4,
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  coachingText: {
+    marginTop: 5,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  coachingAction: {
+    marginTop: 9,
+    color: colors.primaryDark,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  reviewCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.cardBackground,
+    ...shadows.small,
+  },
+  reviewTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  reviewSubtitle: {
+    marginTop: 3,
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  reviewItem: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  reviewType: {
+    color: colors.primaryDark,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  reviewPrompt: {
+    marginTop: 4,
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  reviewWrong: {
+    marginTop: 8,
+    color: colors.errorForeground,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  reviewCorrect: {
+    marginTop: 2,
+    color: colors.successForeground,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  reviewRationale: {
+    marginTop: 5,
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
   },
   qualityWarning: {
     marginTop: spacing.md,

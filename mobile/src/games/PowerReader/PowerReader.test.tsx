@@ -4,6 +4,8 @@ import { StyleSheet } from 'react-native';
 import PowerReader, {
   createSerializedProgressWriter,
   getOfflinePowerReaderArticles,
+  getPowerReaderReadingWordStyles,
+  getPowerReaderRsvpTypography,
   OFFLINE_POWER_READER_ARTICLES,
 } from './PowerReader';
 import * as progressStore from '../../data/progressStore';
@@ -124,6 +126,41 @@ describe('PowerReader', () => {
     fireEvent.press(getByTestId('start-button'));
 
     expect(getByTestId(displayTestId)).toBeTruthy();
+  });
+
+  it('uses accessible dark reading highlight and selection pairs', () => {
+    expect(getPowerReaderReadingWordStyles('dark')).toEqual({
+      highlight: {
+        color: '#FFFFFF',
+        backgroundColor: '#0B628F',
+      },
+      selected: {
+        color: '#211B15',
+        backgroundColor: '#FDE68A',
+      },
+    });
+  });
+
+  it('preserves a large focal size for default RSVP reading', () => {
+    expect(getPowerReaderRsvpTypography('comfortable')).toEqual({
+      fontSize: 28,
+      lineHeight: 38,
+    });
+
+    const { getByTestId } = render(
+      <PowerReader
+        text="One two three four"
+        chunkSize={2}
+        intervalMs={100}
+      />
+    );
+    fireEvent.press(getByTestId('mode-rsvp'));
+    fireEvent.press(getByTestId('start-button'));
+
+    expect(getByTestId('rsvp-text')).toHaveStyle({
+      fontSize: 28,
+      lineHeight: 38,
+    });
   });
 
   it('reports configured guided pace instead of inferring measured WPM', () => {

@@ -11,6 +11,7 @@ import { colors, shadows, spacing } from '../../theme/colors';
 import { Button } from '../../ui/Button';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
+import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
 import type { GameReportPayload } from '../registry';
 
@@ -58,6 +59,7 @@ export default function MainIdeaSprint({
   autoStart = false,
   onReportResult,
 }: Props) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const {
     gameProgress,
     setGameProgress,
@@ -230,14 +232,19 @@ export default function MainIdeaSprint({
 
           <ReadingColumn
             testID="main-idea-reading-column"
-            style={styles.readingArea}
+            style={[styles.readingArea, readingDisplay.column]}
           >
             <ScrollView
-              style={styles.passageCard}
+              style={[styles.passageCard, readingDisplay.surface]}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.passageTitle}>{currentPassage.title}</Text>
-              <Text testID="main-idea-passage" style={styles.passageText}>
+              <Text style={[styles.passageTitle, readingDisplay.title]}>
+                {currentPassage.title}
+              </Text>
+              <Text
+                testID="main-idea-passage"
+                style={[styles.passageText, readingDisplay.text]}
+              >
                 {currentPassage.text}
               </Text>
             </ScrollView>

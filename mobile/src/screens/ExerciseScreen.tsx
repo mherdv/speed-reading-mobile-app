@@ -14,9 +14,14 @@ import {
   formatDuration,
 } from '../domain/results';
 import { formatReadingEstimate } from '../domain/readingPlan';
+import {
+  createQuestionOutcomes,
+  type StoredQuestionOutcome,
+} from '../domain/comprehensionDiagnostics';
 import { BackButton } from '../ui/BackButton';
 import { Button } from '../ui/Button';
 import { ReadingColumn, ResponsiveShell } from '../ui/ResponsiveShell';
+import { useReadingDisplay } from '../ui/ReadingDisplayPreferences';
 import {
   borderRadius,
   colors,
@@ -44,6 +49,7 @@ type Props = {
       qualityFlag?: 'too-short' | 'implausible-speed';
       comprehensionCorrectCount: number;
       comprehensionQuestionCount: number;
+      questionOutcomes: StoredQuestionOutcome[];
     };
   }) => void;
   onCancel: () => void;
@@ -52,6 +58,7 @@ type Props = {
 type Phase = 'idle' | 'reading' | 'question';
 
 export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const [phase, setPhase] = useState<Phase>('idle');
   const [elapsedMs, setElapsedMs] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<
@@ -116,6 +123,10 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
         total + (selectedAnswers[index] === question.correctIndex ? 1 : 0),
       0
     );
+    const questionOutcomes = createQuestionOutcomes(
+      questions,
+      selectedAnswers
+    );
     onFinish({
       startedAtIso: new Date(startedAt).toISOString(),
       finishedAtIso: new Date(finishedAt).toISOString(),
@@ -133,6 +144,7 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
         qualityFlag: quality.reason,
         comprehensionCorrectCount: correctCount,
         comprehensionQuestionCount: questions.length,
+        questionOutcomes,
       },
     });
   }
@@ -218,10 +230,18 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
             </View>
           </View>
 
-          <ReadingColumn testID="measured-reading-column">
-            <View style={styles.readerCard}>
-              <Text style={styles.readerTitle}>{sample.title}</Text>
-              <Text style={styles.readerText} selectable>
+          <ReadingColumn
+            testID="measured-reading-column"
+            style={readingDisplay.column}
+          >
+            <View style={[styles.readerCard, readingDisplay.surface]}>
+              <Text style={[styles.readerTitle, readingDisplay.title]}>
+                {sample.title}
+              </Text>
+              <Text
+                style={[styles.readerText, readingDisplay.text]}
+                selectable
+              >
                 {sample.text}
               </Text>
             </View>

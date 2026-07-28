@@ -14,6 +14,7 @@ import { colors, shadows, spacing } from '../../theme/colors';
 import { Button } from '../../ui/Button';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
+import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
 import type { GameReportPayload } from '../registry';
 
@@ -86,6 +87,7 @@ export default function RepeatedReading({
   random = Math.random,
   onReportResult,
 }: Props) {
+  const { tokens: readingDisplay } = useReadingDisplay();
   const {
     gameProgress,
     setGameProgress,
@@ -292,11 +294,19 @@ export default function RepeatedReading({
 
           <ReadingColumn
             testID="repeated-reading-column"
-            style={styles.readingArea}
+            style={[styles.readingArea, readingDisplay.column]}
           >
-            <ScrollView style={styles.passageCard} showsVerticalScrollIndicator={false}>
-              <Text style={styles.passageTitle}>{activeSample.title}</Text>
-              <Text testID="repeated-passage" style={styles.passageText}>
+            <ScrollView
+              style={[styles.passageCard, readingDisplay.surface]}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={[styles.passageTitle, readingDisplay.title]}>
+                {activeSample.title}
+              </Text>
+              <Text
+                testID="repeated-passage"
+                style={[styles.passageText, readingDisplay.text]}
+              >
                 {activeSample.text}
               </Text>
             </ScrollView>

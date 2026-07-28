@@ -1,12 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { normalizeGameId } from './gameIds';
+import {
+  allowsAdaptiveDifficulty,
+  loadDifficultyPreference,
+  type Difficulty,
+} from './difficultyPreferences';
 
 const STORAGE_KEY = 'speed-reading:progress:v1';
 
 export type GameProgress = {
-  /** Current difficulty level (1-15) */
+  /** Persisted adaptive band marker (1=easy, 6=medium, 11=hard). */
   level: number;
-  /** Consecutive correct answers at this level */
+  /** Positive at-target or negative below-target qualification run. */
   streak: number;
   /** Total plays of this game */
   totalPlays: number;
@@ -14,8 +19,8 @@ export type GameProgress = {
   bestScore?: number;
   /** Last played timestamp */
   lastPlayedAt?: string;
-  /** Difficulty of the current two-session adaptive qualification run. */
-  adaptiveQualificationDifficulty?: 'easy' | 'medium' | 'hard';
+  /** Difficulty of the current adaptive qualification run. */
+  adaptiveQualificationDifficulty?: Difficulty;
 };
 
 type ProgressStore = Record<string, GameProgress>;
@@ -27,23 +32,23 @@ const DEFAULT_PROGRESS: GameProgress = {
 };
 
 const MAX_LEVEL = 15;
-export const LEVEL_UP_THRESHOLD = 5;
-export const LEVEL_DOWN_THRESHOLD = 3;
+export const LEVEL_DOWN_THRESHOLD = 2;
+export const LEVEL_UP_THRESHOLD = 2;
 
 export function describeAdaptiveProgress(progress: GameProgress): string {
   if (progress.streak > 0) {
     const remaining = Math.max(1, LEVEL_UP_THRESHOLD - progress.streak);
-    return `${remaining} more successful ${
+    return `${remaining} more at-target ${
       remaining === 1 ? 'session' : 'sessions'
-    } in a row to raise the level`;
+    } in a row to raise the difficulty`;
   }
   if (progress.streak < 0) {
     const remaining = Math.max(1, LEVEL_DOWN_THRESHOLD + progress.streak);
     return `${remaining} more below-target ${
       remaining === 1 ? 'session' : 'sessions'
-    } in a row before the level is reduced`;
+    } in a row before the difficulty is reduced`;
   }
-  return `${LEVEL_UP_THRESHOLD} successful sessions in a row raise the level · ${LEVEL_DOWN_THRESHOLD} below-target sessions in a row reduce it`;
+  return `${LEVEL_UP_THRESHOLD} at-target sessions raise the difficulty · ${LEVEL_DOWN_THRESHOLD} below-target sessions reduce it`;
 }
 
 export async function loadAllProgress(): Promise<ProgressStore> {
@@ -80,35 +85,75 @@ export async function saveGameProgress(
 }
 
 /**
- * Update progress after a game attempt.
- * Returns the new progress and whether level changed.
+ * Record a completed attempt and update the next-session adaptive suggestion.
+ * Manual sessions update play count and best score only.
  */
 export async function updateProgress(
   gameId: string,
   correct: boolean,
-  score?: number
+  score?: number,
+  playedDifficulty?: Difficulty
 ): Promise<{ progress: GameProgress; levelChanged: boolean; levelDelta: number }> {
-  const current = await loadGameProgress(gameId);
+  const normalizedId = normalizeGameId(gameId);
+  const [current, preference] = await Promise.all([
+    loadGameProgress(normalizedId),
+    loadDifficultyPreference(normalizedId),
+  ]);
   let levelDelta = 0;
+  const adaptive =
+    preference.mode === 'adaptive' && allowsAdaptiveDifficulty(normalizedId);
 
-  if (correct) {
-    // On success, increment streak (reset negative streak to 1)
-    current.streak = current.streak < 0 ? 1 : current.streak + 1;
-    if (current.streak >= LEVEL_UP_THRESHOLD && current.level < MAX_LEVEL) {
-      current.level += 1;
+  if (adaptive) {
+    const activeDifficulty =
+      playedDifficulty ?? levelToDifficulty(current.level);
+    // Migrate the old 15-step counter to the public three-band model on the
+    // first adaptive completion without changing the active band.
+    current.level = difficultyToLevel(activeDifficulty);
+    if (
+      current.adaptiveQualificationDifficulty !== undefined &&
+      current.adaptiveQualificationDifficulty !== activeDifficulty
+    ) {
       current.streak = 0;
-      levelDelta = 1;
     }
-  } else {
-    // On failure, decrement streak (reset positive streak to -1)
-    current.streak = current.streak > 0 ? -1 : current.streak - 1;
-    if (current.streak <= -LEVEL_DOWN_THRESHOLD && current.level > 1) {
-      current.level -= 1;
-      current.streak = 0;
-      levelDelta = -1;
+    current.adaptiveQualificationDifficulty = activeDifficulty;
+
+    if (correct) {
+      current.streak = current.streak < 0 ? 1 : current.streak + 1;
+      if (current.streak >= LEVEL_UP_THRESHOLD) {
+        const nextDifficulty =
+          activeDifficulty === 'easy'
+            ? 'medium'
+            : activeDifficulty === 'medium'
+              ? 'hard'
+              : 'hard';
+        if (nextDifficulty !== activeDifficulty) {
+          current.level = difficultyToLevel(nextDifficulty);
+          levelDelta = 1;
+        }
+        current.streak = 0;
+        current.adaptiveQualificationDifficulty = undefined;
+      }
+    } else {
+      current.streak = current.streak > 0 ? -1 : current.streak - 1;
+      if (current.streak <= -LEVEL_DOWN_THRESHOLD) {
+        const nextDifficulty =
+          activeDifficulty === 'hard'
+            ? 'medium'
+            : activeDifficulty === 'medium'
+              ? 'easy'
+              : 'easy';
+        if (nextDifficulty !== activeDifficulty) {
+          current.level = difficultyToLevel(nextDifficulty);
+          levelDelta = -1;
+        }
+        current.streak = 0;
+        current.adaptiveQualificationDifficulty = undefined;
+      }
     }
   }
 
+  // Manual play is still saved in history/bests, while the adaptive level,
+  // qualification run, and its difficulty remain untouched.
   current.totalPlays += 1;
   current.lastPlayedAt = new Date().toISOString();
 
@@ -116,7 +161,7 @@ export async function updateProgress(
     current.bestScore = Math.max(current.bestScore ?? 0, score);
   }
 
-  await saveGameProgress(gameId, current);
+  await saveGameProgress(normalizedId, current);
 
   return {
     progress: current,
@@ -132,39 +177,19 @@ export async function updateProgress(
  */
 export async function updateTwoSessionDifficultySuggestion(
   gameId: string,
-  playedDifficulty: 'easy' | 'medium' | 'hard',
+  playedDifficulty: Difficulty,
   metThreshold: boolean,
   score?: number
-): Promise<{ progress: GameProgress; suggestedDifficulty: 'easy' | 'medium' | 'hard' }> {
-  const current = await loadGameProgress(gameId);
-  current.totalPlays += 1;
-  current.lastPlayedAt = new Date().toISOString();
-  if (!metThreshold) {
-    current.streak = 0;
-    current.adaptiveQualificationDifficulty = undefined;
-  } else if (
-    current.adaptiveQualificationDifficulty === playedDifficulty
-  ) {
-    current.streak = Math.max(0, current.streak) + 1;
-  } else {
-    current.streak = 1;
-    current.adaptiveQualificationDifficulty = playedDifficulty;
-  }
-  if (score !== undefined) {
-    current.bestScore = Math.max(current.bestScore ?? 0, score);
-  }
-
-  if (metThreshold && current.streak >= 2) {
-    if (playedDifficulty === 'easy') current.level = Math.max(current.level, 6);
-    if (playedDifficulty === 'medium') current.level = Math.max(current.level, 11);
-    current.streak = 0;
-    current.adaptiveQualificationDifficulty = undefined;
-  }
-
-  await saveGameProgress(gameId, current);
+): Promise<{ progress: GameProgress; suggestedDifficulty: Difficulty }> {
+  const { progress } = await updateProgress(
+    gameId,
+    metThreshold,
+    score,
+    playedDifficulty
+  );
   return {
-    progress: current,
-    suggestedDifficulty: levelToDifficulty(current.level),
+    progress,
+    suggestedDifficulty: levelToDifficulty(progress.level),
   };
 }
 

@@ -79,7 +79,15 @@ describe('ExerciseScreen', () => {
       expect.objectContaining({
         elapsedMs: 60_000,
         comprehensionCorrect: true,
-        details: expect.objectContaining({ measurementValid: true }),
+        details: expect.objectContaining({
+          measurementValid: true,
+          questionOutcomes: expect.arrayContaining([
+            expect.objectContaining({
+              questionId: sample.questions?.[0]?.id,
+              correct: true,
+            }),
+          ]),
+        }),
       })
     );
   });
