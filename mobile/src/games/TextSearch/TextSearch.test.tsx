@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
-import TextSearch from './TextSearch';
+import TextSearch, { buildTextSearchDeck } from './TextSearch';
 import {
   TEXT_SEARCH_VARIATIONS,
   validateTextSearchContent,
@@ -34,9 +34,25 @@ describe('TextSearch', () => {
 
   it('uses reviewed natural passage pools at every difficulty', () => {
     expect(validateTextSearchContent()).toEqual([]);
-    expect(TEXT_SEARCH_VARIATIONS.easy).toHaveLength(9);
-    expect(TEXT_SEARCH_VARIATIONS.medium).toHaveLength(9);
-    expect(TEXT_SEARCH_VARIATIONS.hard).toHaveLength(9);
+    expect(TEXT_SEARCH_VARIATIONS.easy).toHaveLength(12);
+    expect(TEXT_SEARCH_VARIATIONS.medium).toHaveLength(12);
+    expect(TEXT_SEARCH_VARIATIONS.hard).toHaveLength(12);
+  });
+
+  it('builds a full no-replacement passage cycle and protects its boundary', () => {
+    const firstDeck = buildTextSearchDeck(
+      TEXT_SEARCH_VARIATIONS.medium,
+      '',
+      () => 0
+    );
+    const secondDeck = buildTextSearchDeck(
+      TEXT_SEARCH_VARIATIONS.medium,
+      firstDeck[0]!.id,
+      () => 0
+    );
+    expect(firstDeck).toHaveLength(12);
+    expect(new Set(firstDeck.map((item) => item.id)).size).toBe(12);
+    expect(secondDeck[0]!.id).not.toBe(firstDeck[0]!.id);
   });
 
   it('does not immediately repeat a built-in passage on replay', () => {

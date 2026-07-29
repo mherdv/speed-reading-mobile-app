@@ -1,6 +1,9 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { validateVocabularyPracticeContent } from '../../data/vocabularyPracticeContent';
+import {
+  MIXUP_WORDS,
+  validateVocabularyPracticeContent,
+} from '../../data/vocabularyPracticeContent';
 import LetterJumble, { transposeWord } from './LetterJumble';
 
 describe('LetterJumble', () => {
@@ -56,6 +59,9 @@ describe('LetterJumble', () => {
 
   it('uses reviewed unique word definitions at every difficulty', () => {
     expect(validateVocabularyPracticeContent()).toEqual([]);
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      expect(MIXUP_WORDS[difficulty]).toHaveLength(32);
+    }
   });
 
   it('reports result on end', () => {

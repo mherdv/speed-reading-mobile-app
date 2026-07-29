@@ -1,4 +1,12 @@
 import type { Difficulty } from '../gameHooks';
+import {
+  getFlashWordPool,
+  uniqueStrings,
+} from '../../data/flashPracticeContent';
+import {
+  boundedRandom,
+  shuffleItems,
+} from '../../data/randomization';
 
 export type VisualSpanPositionId =
   | 'upper-left'
@@ -80,7 +88,7 @@ const POSITION_IDS_BY_SPAN: Record<number, VisualSpanPositionId[]> = {
   ],
 };
 
-const WORD_POOLS: Record<Difficulty, readonly string[]> = {
+const REVIEWED_VISUAL_SPAN_SEEDS: Record<Difficulty, readonly string[]> = {
   easy: [
     'bank',
     'bird',
@@ -171,6 +179,28 @@ const WORD_POOLS: Record<Difficulty, readonly string[]> = {
   ],
 };
 
+/**
+ * Equal-length words prevent button width from revealing the answer. The
+ * shared vocabulary bank supplies variety while these reviewed seeds preserve
+ * familiar, highly imageable examples at each length.
+ */
+export function getVisualSpanWordPool(difficulty: Difficulty): string[] {
+  const wordLength = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 5 : 6;
+  const sourceDifficulties: Difficulty[] =
+    difficulty === 'easy'
+      ? ['easy']
+      : difficulty === 'medium'
+        ? ['easy', 'medium']
+        : ['easy', 'medium'];
+
+  return uniqueStrings([
+    ...REVIEWED_VISUAL_SPAN_SEEDS[difficulty],
+    ...sourceDifficulties.flatMap(getFlashWordPool),
+  ])
+    .map((word) => word.toLocaleLowerCase('en'))
+    .filter((word) => /^[a-z]+$/u.test(word) && word.length === wordLength);
+}
+
 const VISUAL_SPAN_CONFIGS: Record<Difficulty, VisualSpanConfig> = {
   easy: {
     spanSize: 3,
@@ -204,19 +234,6 @@ export function getVisualSpanConfig(
   return VISUAL_SPAN_CONFIGS[difficulty];
 }
 
-function boundedRandom(random: () => number): number {
-  return Math.max(0, Math.min(0.999_999, random()));
-}
-
-function shuffled<T>(items: readonly T[], random: () => number): T[] {
-  const copy = [...items];
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(boundedRandom(random) * (index + 1));
-    [copy[index], copy[swapIndex]] = [copy[swapIndex]!, copy[index]!];
-  }
-  return copy;
-}
-
 export function createVisualSpanTrial(
   difficulty: Difficulty,
   requestedSpan = getVisualSpanConfig(difficulty).spanSize,
@@ -229,8 +246,8 @@ export function createVisualSpanTrial(
   );
   const positionIds =
     POSITION_IDS_BY_SPAN[spanSize] ?? POSITION_IDS_BY_SPAN[config.minimumSpan]!;
-  const wordPool = WORD_POOLS[difficulty];
-  const words = shuffled(wordPool, random).slice(0, positionIds.length);
+  const wordPool = getVisualSpanWordPool(difficulty);
+  const words = shuffleItems(wordPool, random).slice(0, positionIds.length);
   const items = positionIds.map((positionId, index) => ({
     positionId,
     positionLabel: VISUAL_SPAN_POSITION_LABELS[positionId],
@@ -239,17 +256,17 @@ export function createVisualSpanTrial(
   const targetIndex = Math.floor(boundedRandom(random) * items.length);
   const target = items[targetIndex]!;
 
-  const shownDistractors = shuffled(
+  const shownDistractors = shuffleItems(
     items
       .filter((item) => item.positionId !== target.positionId)
       .map((item) => item.word),
     random
   );
-  const unseenDistractors = shuffled(
+  const unseenDistractors = shuffleItems(
     wordPool.filter((word) => !words.includes(word)),
     random
   );
-  const options = shuffled(
+  const options = shuffleItems(
     [
       target.word,
       ...shownDistractors,

@@ -3,7 +3,10 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import { Text } from 'react-native';
 
 type TextNode = { props: { children?: unknown } };
-import WordMismatchGrid, { SIMILAR_PAIRS } from './WordMismatchGrid';
+import WordMismatchGrid, {
+  buildWordMismatchRound,
+  SIMILAR_PAIRS,
+} from './WordMismatchGrid';
 
 describe('WordMismatchGrid (card-based similar words)', () => {
   beforeEach(() => {
@@ -17,10 +20,20 @@ describe('WordMismatchGrid (card-based similar words)', () => {
   });
 
   it('has a broad pool of confusable word shapes', () => {
-    expect(SIMILAR_PAIRS.length).toBeGreaterThanOrEqual(60);
+    expect(SIMILAR_PAIRS).toHaveLength(100);
     expect(
       new Set(SIMILAR_PAIRS.flat().map((word) => word.toLocaleLowerCase())).size
     ).toBeGreaterThanOrEqual(100);
+  });
+
+  it('builds a complete deterministic round without retry loops', () => {
+    const round = buildWordMismatchRound(8, () => 0);
+    expect(round.cards).toHaveLength(8);
+    expect(new Set(round.cards.map((card) => card.id)).size).toBe(8);
+    expect(round.differentIds.size).toBe(2);
+    expect(
+      round.cards.filter((card) => card.isDifferent).map((card) => card.id)
+    ).toEqual(expect.arrayContaining([...round.differentIds]));
   });
 
   it('Start -> game runs and can select cards', () => {

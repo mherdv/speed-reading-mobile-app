@@ -4,8 +4,12 @@ import {
   BEGINNER_WORDS,
   INTERMEDIATE_WORDS,
 } from './vocabulary';
+import {
+  shuffleItems,
+  type RandomSource,
+} from './randomization';
 
-export type RandomSource = () => number;
+export { shuffleItems, type RandomSource } from './randomization';
 
 export function uniqueStrings(values: readonly string[]): string[] {
   const seen = new Set<string>();
@@ -19,18 +23,6 @@ export function uniqueStrings(values: readonly string[]): string[] {
     result.push(trimmed);
   }
 
-  return result;
-}
-
-export function shuffleItems<T>(
-  values: readonly T[],
-  random: RandomSource = Math.random
-): T[] {
-  const result = [...values];
-  for (let index = result.length - 1; index > 0; index -= 1) {
-    const target = Math.floor(random() * (index + 1));
-    [result[index], result[target]] = [result[target], result[index]];
-  }
   return result;
 }
 
@@ -224,8 +216,14 @@ const EASY_SUBJECTS = [
   'Quick foxes',
   'Bright stars',
   'Small rivers',
-  'Morning light',
+  'Morning readers',
   'Fresh ideas',
+  'Active minds',
+  'Calm hikers',
+  'Local artists',
+  'Busy gardeners',
+  'Helpful teachers',
+  'Playful dolphins',
 ] as const;
 
 const EASY_VERBS = [
@@ -241,6 +239,12 @@ const EASY_VERBS = [
   'observe',
   'question',
   'share',
+  'connect',
+  'practice',
+  'review',
+  'trace',
+  'explain',
+  'predict',
 ] as const;
 
 const EASY_OBJECTS = [
@@ -256,6 +260,12 @@ const EASY_OBJECTS = [
   'short stories',
   'main ideas',
   'key facts',
+  'word shapes',
+  'safe paths',
+  'early warnings',
+  'shared goals',
+  'quiet sounds',
+  'fresh evidence',
 ] as const;
 
 const MEDIUM_OPENERS = [
@@ -271,6 +281,12 @@ const MEDIUM_OPENERS = [
   'When the evidence conflicts',
   'Throughout the final draft',
   'Under changing conditions',
+  'Following the first interview',
+  'Inside the crowded workshop',
+  'Before the public briefing',
+  'During the second experiment',
+  'Beyond the familiar example',
+  'After comparing both accounts',
 ] as const;
 
 const MEDIUM_SUBJECTS = [
@@ -286,6 +302,12 @@ const MEDIUM_SUBJECTS = [
   'a skeptical analyst',
   'the science reporter',
   'an independent auditor',
+  'the museum curator',
+  'a community planner',
+  'the software tester',
+  'an attentive librarian',
+  'the field biologist',
+  'a patient instructor',
 ] as const;
 
 const MEDIUM_ACTIONS = [
@@ -301,6 +323,12 @@ const MEDIUM_ACTIONS = [
   'tests the proposed explanation',
   'separates observation from inference',
   'records the remaining uncertainty',
+  'maps the sequence of events',
+  'compares the likely tradeoffs',
+  'groups related details together',
+  'checks the claim against the chart',
+  'identifies the missing assumption',
+  'explains why the pattern matters',
 ] as const;
 
 const HARD_OPENERS = [
@@ -316,6 +344,12 @@ const HARD_OPENERS = [
   'If the original sample excludes an important group',
   'Once the short-term improvement begins to fade',
   'Despite the precision suggested by a single estimate',
+  'Although the summary uses confident language',
+  'Because the comparison groups differ in several ways',
+  'Whenever a definition changes across disciplines',
+  'After the original forecast misses an important shift',
+  'While the strongest result receives most attention',
+  'Even if two sources repeat the same claim',
 ] as const;
 
 const HARD_CLAUSES = [
@@ -331,6 +365,12 @@ const HARD_CLAUSES = [
   'the designer tests whether the solution transfers to a different setting',
   'the statistician examines the distribution behind the average',
   'the reporter verifies the fluent summary against the primary source',
+  'the reader tests whether the conclusion survives a counterexample',
+  'the evaluator separates implementation failure from theory failure',
+  'the archivist compares the later account with the dated record',
+  'the engineer examines how the constraint changes under stress',
+  'the facilitator distinguishes broad agreement from complete unanimity',
+  'the researcher checks whether the measure captures the intended concept',
 ] as const;
 
 const HARD_ENDINGS = [
@@ -346,50 +386,59 @@ const HARD_ENDINGS = [
   'before recommending a permanent change',
   'while distinguishing confidence from certainty',
   'and explains which tradeoff remains unresolved',
+  'before generalizing beyond the observed setting',
+  'while naming the strongest alternative explanation',
+  'and identifies which assumption carries the most risk',
+  'before combining results from incompatible measures',
+  'while preserving exceptions that affect the conclusion',
+  'and states what additional evidence would be decisive',
 ] as const;
-
-function pick<T>(
-  values: readonly T[],
-  random: RandomSource
-): T {
-  return values[Math.floor(random() * values.length)];
-}
-
-function buildPhrase(difficulty: Difficulty, random: RandomSource): string {
-  if (difficulty === 'easy') {
-    return `${pick(EASY_SUBJECTS, random)} ${pick(
-      EASY_VERBS,
-      random
-    )} ${pick(EASY_OBJECTS, random)}`;
-  }
-
-  if (difficulty === 'medium') {
-    return `${pick(MEDIUM_OPENERS, random)}, ${pick(
-      MEDIUM_SUBJECTS,
-      random
-    )} ${pick(MEDIUM_ACTIONS, random)}`;
-  }
-
-  return `${pick(HARD_OPENERS, random)}, ${pick(
-    HARD_CLAUSES,
-    random
-  )} ${pick(HARD_ENDINGS, random)}`;
-}
 
 export function generatePhrasePool(
   difficulty: Difficulty,
   count = 240,
   random: RandomSource = Math.random
 ): string[] {
-  const phrases = new Set<string>();
-  const target = Math.max(1, count);
-  const maxAttempts = target * 30;
+  if (count <= 0) return [];
+  const phrases: string[] = [];
 
-  for (let attempt = 0; phrases.size < target && attempt < maxAttempts; attempt += 1) {
-    phrases.add(buildPhrase(difficulty, random));
+  if (difficulty === 'easy') {
+    for (const subject of EASY_SUBJECTS) {
+      for (const verb of EASY_VERBS) {
+        for (const object of EASY_OBJECTS) {
+          phrases.push(`${subject} ${verb} ${object}`);
+        }
+      }
+    }
+  } else if (difficulty === 'medium') {
+    for (const opener of MEDIUM_OPENERS) {
+      for (const subject of MEDIUM_SUBJECTS) {
+        for (const action of MEDIUM_ACTIONS) {
+          phrases.push(`${opener}, ${subject} ${action}`);
+        }
+      }
+    }
+  } else {
+    for (const opener of HARD_OPENERS) {
+      for (const clause of HARD_CLAUSES) {
+        for (const ending of HARD_ENDINGS) {
+          phrases.push(`${opener}, ${clause} ${ending}`);
+        }
+      }
+    }
   }
 
-  return shuffleItems([...phrases], random);
+  return shuffleItems(phrases, random).slice(0, count);
+}
+
+export function getPhraseCombinationCount(difficulty: Difficulty): number {
+  if (difficulty === 'easy') {
+    return EASY_SUBJECTS.length * EASY_VERBS.length * EASY_OBJECTS.length;
+  }
+  if (difficulty === 'medium') {
+    return MEDIUM_OPENERS.length * MEDIUM_SUBJECTS.length * MEDIUM_ACTIONS.length;
+  }
+  return HARD_OPENERS.length * HARD_CLAUSES.length * HARD_ENDINGS.length;
 }
 
 export function countWords(value: string): number {

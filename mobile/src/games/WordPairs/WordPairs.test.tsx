@@ -1,7 +1,10 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { validateVocabularyPracticeContent } from '../../data/vocabularyPracticeContent';
-import WordPairs, { getWordPairChallenge } from './WordPairs';
+import WordPairs, {
+  buildWordPairRound,
+  getWordPairChallenge,
+} from './WordPairs';
 
 describe('WordPairs', () => {
   beforeEach(() => {
@@ -28,10 +31,20 @@ describe('WordPairs', () => {
 
   it('provides expanded, de-duplicated reviewed challenges', () => {
     expect(validateVocabularyPracticeContent()).toEqual([]);
+    const expectedCounts = { easy: 30, medium: 30, hard: 31 };
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
       const challenge = getWordPairChallenge(difficulty);
-      expect(challenge.items.length).toBeGreaterThanOrEqual(18);
+      expect(challenge.items).toHaveLength(expectedCounts[difficulty]);
     }
+  });
+
+  it('builds unique deterministic choices containing exactly one answer', () => {
+    const challenge = getWordPairChallenge('hard');
+    const item = challenge.items[0]!;
+    const round = buildWordPairRound(challenge, item, () => 1);
+    expect(round.options).toHaveLength(challenge.optionCount);
+    expect(new Set(round.options).size).toBe(round.options.length);
+    expect(round.options[round.correctIndex]).toBe(item.correct);
   });
 
   it('holds feedback and ignores a rapid second answer', () => {

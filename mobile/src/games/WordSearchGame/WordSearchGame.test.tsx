@@ -1,7 +1,10 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
-import WordSearchGame, { getWordSearchPool } from './WordSearchGame';
+import WordSearchGame, {
+  buildWordSearchGrid,
+  getWordSearchPool,
+} from './WordSearchGame';
 
 describe('WordSearchGame', () => {
   beforeEach(() => {
@@ -19,12 +22,25 @@ describe('WordSearchGame', () => {
   });
 
   it('uses large difficulty-specific target pools instead of a short fixed list', () => {
-    expect(getWordSearchPool('easy').length).toBeGreaterThan(60);
-    expect(getWordSearchPool('medium').length).toBeGreaterThan(40);
-    expect(getWordSearchPool('hard').length).toBeGreaterThan(40);
+    expect(getWordSearchPool('easy')).toHaveLength(101);
+    expect(getWordSearchPool('medium')).toHaveLength(313);
+    expect(getWordSearchPool('hard')).toHaveLength(178);
     expect(
       getWordSearchPool('hard').every((word) => word.length <= 6)
     ).toBe(true);
+  });
+
+  it('places every target safely with an upper-bound injected random source', () => {
+    const word = 'READ';
+    const result = buildWordSearchGrid(4, word, [[0, 1]] as const, () => 1);
+    expect(result.wordPositions).toHaveLength(word.length);
+    expect(new Set(result.wordPositions).size).toBe(word.length);
+    expect(
+      result.wordPositions
+        .map((position) => position.split('-').map(Number))
+        .map(([row, column]) => result.grid[row!][column!])
+        .join('')
+    ).toBe(word);
   });
 
   it.each([

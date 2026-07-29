@@ -42,6 +42,18 @@ export const MIXUP_WORDS: Record<Difficulty, readonly MixupWord[]> = {
     { word: 'field', definition: 'an open area of land', partOfSpeech: 'noun' },
     { word: 'light', definition: 'energy that makes things visible', partOfSpeech: 'noun' },
     { word: 'plant', definition: 'a living thing that usually grows in soil', partOfSpeech: 'noun' },
+    { word: 'bridge', definition: 'a structure that carries a path over a gap', partOfSpeech: 'noun' },
+    { word: 'candle', definition: 'wax with a wick that burns to give light', partOfSpeech: 'noun' },
+    { word: 'cloud', definition: 'a visible mass of tiny drops in the sky', partOfSpeech: 'noun' },
+    { word: 'craft', definition: 'skill in making something by hand', partOfSpeech: 'noun' },
+    { word: 'garden', definition: 'ground used for growing plants', partOfSpeech: 'noun' },
+    { word: 'lemon', definition: 'a yellow citrus fruit with a sour taste', partOfSpeech: 'noun' },
+    { word: 'market', definition: 'a place where goods are bought and sold', partOfSpeech: 'noun' },
+    { word: 'music', definition: 'organized sound with rhythm or melody', partOfSpeech: 'noun' },
+    { word: 'pencil', definition: 'a tool used for writing or drawing', partOfSpeech: 'noun' },
+    { word: 'rabbit', definition: 'a small animal with long ears', partOfSpeech: 'noun' },
+    { word: 'stone', definition: 'a small piece of hard natural rock', partOfSpeech: 'noun' },
+    { word: 'window', definition: 'an opening with glass that admits light', partOfSpeech: 'noun' },
   ],
   medium: [
     { word: 'achieve', definition: 'to succeed in reaching a goal', partOfSpeech: 'verb' },
@@ -64,6 +76,18 @@ export const MIXUP_WORDS: Record<Difficulty, readonly MixupWord[]> = {
     { word: 'estimate', definition: 'an approximate calculation or judgment', partOfSpeech: 'noun' },
     { word: 'reliable', definition: 'consistently accurate or dependable', partOfSpeech: 'adjective' },
     { word: 'sequence', definition: 'an ordered set of related things', partOfSpeech: 'noun' },
+    { word: 'analyze', definition: 'to examine parts and their relationships', partOfSpeech: 'verb' },
+    { word: 'archive', definition: 'a collection of records kept for reference', partOfSpeech: 'noun' },
+    { word: 'caution', definition: 'care taken to avoid danger or error', partOfSpeech: 'noun' },
+    { word: 'context', definition: 'surrounding information that clarifies meaning', partOfSpeech: 'noun' },
+    { word: 'curious', definition: 'eager to learn or know more', partOfSpeech: 'adjective' },
+    { word: 'dynamic', definition: 'changing actively rather than remaining fixed', partOfSpeech: 'adjective' },
+    { word: 'habitat', definition: 'the natural home of a plant or animal', partOfSpeech: 'noun' },
+    { word: 'maintain', definition: 'to keep something in effective condition', partOfSpeech: 'verb' },
+    { word: 'preserve', definition: 'to protect something from loss or damage', partOfSpeech: 'verb' },
+    { word: 'reflect', definition: 'to think carefully or send back light', partOfSpeech: 'verb' },
+    { word: 'strategy', definition: 'a planned approach for reaching a goal', partOfSpeech: 'noun' },
+    { word: 'translate', definition: 'to express meaning in another language', partOfSpeech: 'verb' },
   ],
   hard: [
     { word: 'acceleration', definition: 'an increase in speed or rate', partOfSpeech: 'noun' },
@@ -86,6 +110,18 @@ export const MIXUP_WORDS: Record<Difficulty, readonly MixupWord[]> = {
     { word: 'prerequisite', definition: 'something required before another step', partOfSpeech: 'noun' },
     { word: 'reconciliation', definition: 'the process of restoring agreement', partOfSpeech: 'noun' },
     { word: 'unprecedented', definition: 'never known or done before', partOfSpeech: 'adjective' },
+    { word: 'analytical', definition: 'using careful examination and logical reasoning', partOfSpeech: 'adjective' },
+    { word: 'architecture', definition: 'the design and structure of a building or system', partOfSpeech: 'noun' },
+    { word: 'comprehension', definition: 'the ability to understand meaning', partOfSpeech: 'noun' },
+    { word: 'consistency', definition: 'the quality of remaining logically or reliably similar', partOfSpeech: 'noun' },
+    { word: 'differentiation', definition: 'the act of recognizing or creating differences', partOfSpeech: 'noun' },
+    { word: 'interdisciplinary', definition: 'combining knowledge from several fields', partOfSpeech: 'adjective' },
+    { word: 'metacognition', definition: 'awareness and regulation of one’s own thinking', partOfSpeech: 'noun' },
+    { word: 'quantitative', definition: 'concerned with numerical amounts or measurement', partOfSpeech: 'adjective' },
+    { word: 'reliability', definition: 'the quality of producing dependable results', partOfSpeech: 'noun' },
+    { word: 'transparency', definition: 'openness that makes a process easy to inspect', partOfSpeech: 'noun' },
+    { word: 'uncertainty', definition: 'the state of not being fully known or predictable', partOfSpeech: 'noun' },
+    { word: 'verification', definition: 'the process of checking accuracy or truth', partOfSpeech: 'noun' },
   ],
 };
 
@@ -109,6 +145,18 @@ export const OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
     { word: 'push', correct: 'pull', partOfSpeech: 'verb', distractors: ['hold', 'carry', 'drop'] },
     { word: 'start', correct: 'finish', partOfSpeech: 'verb', distractors: ['pause', 'enter', 'follow'] },
     { word: 'noisy', correct: 'quiet', partOfSpeech: 'adjective', distractors: ['bright', 'empty', 'gentle'] },
+    { word: 'big', correct: 'small', partOfSpeech: 'adjective', distractors: ['wide', 'heavy', 'round'] },
+    { word: 'day', correct: 'night', partOfSpeech: 'noun', distractors: ['week', 'dawn', 'noon'] },
+    { word: 'near', correct: 'far', partOfSpeech: 'adjective', distractors: ['wide', 'deep', 'early'] },
+    { word: 'wet', correct: 'dry', partOfSpeech: 'adjective', distractors: ['cold', 'soft', 'clean'] },
+    { word: 'young', correct: 'old', partOfSpeech: 'adjective', distractors: ['small', 'quick', 'new'] },
+    { word: 'bright', correct: 'dim', partOfSpeech: 'adjective', distractors: ['clear', 'warm', 'pale'] },
+    { word: 'enter', correct: 'leave', partOfSpeech: 'verb', distractors: ['wait', 'open', 'visit'] },
+    { word: 'laugh', correct: 'cry', partOfSpeech: 'verb', distractors: ['speak', 'smile', 'shout'] },
+    { word: 'give', correct: 'take', partOfSpeech: 'verb', distractors: ['hold', 'send', 'keep'] },
+    { word: 'rise', correct: 'fall', partOfSpeech: 'verb', distractors: ['stand', 'climb', 'lift'] },
+    { word: 'front', correct: 'back', partOfSpeech: 'noun', distractors: ['side', 'top', 'edge'] },
+    { word: 'sweet', correct: 'sour', partOfSpeech: 'adjective', distractors: ['fresh', 'soft', 'warm'] },
   ],
   medium: [
     { word: 'scarce', correct: 'abundant', partOfSpeech: 'adjective', distractors: ['limited', 'rare', 'uneven'] },
@@ -129,6 +177,18 @@ export const OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
     { word: 'permit', correct: 'forbid', partOfSpeech: 'verb', distractors: ['request', 'delay', 'consider'] },
     { word: 'visible', correct: 'hidden', partOfSpeech: 'adjective', distractors: ['bright', 'distant', 'unclear'] },
     { word: 'combine', correct: 'separate', partOfSpeech: 'verb', distractors: ['compare', 'arrange', 'connect'] },
+    { word: 'generous', correct: 'selfish', partOfSpeech: 'adjective', distractors: ['helpful', 'careful', 'wealthy'] },
+    { word: 'legal', correct: 'illegal', partOfSpeech: 'adjective', distractors: ['formal', 'public', 'valid'] },
+    { word: 'major', correct: 'minor', partOfSpeech: 'adjective', distractors: ['central', 'common', 'serious'] },
+    { word: 'private', correct: 'public', partOfSpeech: 'adjective', distractors: ['personal', 'hidden', 'local'] },
+    { word: 'rural', correct: 'urban', partOfSpeech: 'adjective', distractors: ['remote', 'natural', 'regional'] },
+    { word: 'victory', correct: 'defeat', partOfSpeech: 'noun', distractors: ['effort', 'contest', 'result'] },
+    { word: 'borrow', correct: 'lend', partOfSpeech: 'verb', distractors: ['return', 'share', 'request'] },
+    { word: 'create', correct: 'destroy', partOfSpeech: 'verb', distractors: ['design', 'repair', 'change'] },
+    { word: 'remember', correct: 'forget', partOfSpeech: 'verb', distractors: ['notice', 'record', 'repeat'] },
+    { word: 'protect', correct: 'endanger', partOfSpeech: 'verb', distractors: ['defend', 'support', 'shelter'] },
+    { word: 'smooth', correct: 'rough', partOfSpeech: 'adjective', distractors: ['flat', 'soft', 'plain'] },
+    { word: 'attach', correct: 'detach', partOfSpeech: 'verb', distractors: ['connect', 'fasten', 'combine'] },
   ],
   hard: [
     { word: 'optimistic', correct: 'pessimistic', partOfSpeech: 'adjective', distractors: ['realistic', 'idealistic', 'opportunistic'] },
@@ -149,6 +209,19 @@ export const OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
     { word: 'ambiguous', correct: 'unambiguous', partOfSpeech: 'adjective', distractors: ['uncertain', 'indirect', 'complex'] },
     { word: 'superficial', correct: 'profound', partOfSpeech: 'adjective', distractors: ['visible', 'brief', 'external'] },
     { word: 'validate', correct: 'invalidate', partOfSpeech: 'verb', distractors: ['confirm', 'inspect', 'support'] },
+    { word: 'artificial', correct: 'natural', partOfSpeech: 'adjective', distractors: ['synthetic', 'designed', 'modified'] },
+    { word: 'benevolent', correct: 'malevolent', partOfSpeech: 'adjective', distractors: ['generous', 'tolerant', 'charitable'] },
+    { word: 'constructive', correct: 'destructive', partOfSpeech: 'adjective', distractors: ['practical', 'creative', 'productive'] },
+    { word: 'deliberate', correct: 'accidental', partOfSpeech: 'adjective', distractors: ['careful', 'planned', 'intentional'] },
+    { word: 'inferior', correct: 'superior', partOfSpeech: 'adjective', distractors: ['secondary', 'unequal', 'ordinary'] },
+    { word: 'inclusive', correct: 'exclusive', partOfSpeech: 'adjective', distractors: ['complete', 'diverse', 'collective'] },
+    { word: 'maximize', correct: 'minimize', partOfSpeech: 'verb', distractors: ['increase', 'optimize', 'multiply'] },
+    { word: 'predecessor', correct: 'successor', partOfSpeech: 'noun', distractors: ['ancestor', 'competitor', 'partner'] },
+    { word: 'transient', correct: 'enduring', partOfSpeech: 'adjective', distractors: ['mobile', 'changing', 'brief'] },
+    { word: 'uniform', correct: 'variable', partOfSpeech: 'adjective', distractors: ['regular', 'consistent', 'standard'] },
+    { word: 'theoretical', correct: 'empirical', partOfSpeech: 'adjective', distractors: ['conceptual', 'abstract', 'logical'] },
+    { word: 'accelerate', correct: 'decelerate', partOfSpeech: 'verb', distractors: ['advance', 'intensify', 'continue'] },
+    { word: 'conspicuous', correct: 'inconspicuous', partOfSpeech: 'adjective', distractors: ['prominent', 'colorful', 'distinctive'] },
   ],
 };
 
@@ -157,8 +230,8 @@ export function validateVocabularyPracticeContent(): string[] {
   const unorderedPairs = new Set<string>();
   for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     const mixups = MIXUP_WORDS[difficulty];
-    if (mixups.length < 20) {
-      errors.push(`${difficulty}: Letter Mixup requires at least 20 items`);
+    if (mixups.length < 32) {
+      errors.push(`${difficulty}: Letter Mixup requires at least 32 items`);
     }
     if (new Set(mixups.map((item) => item.word)).size !== mixups.length) {
       errors.push(`${difficulty}: duplicate Letter Mixup words`);
@@ -168,8 +241,8 @@ export function validateVocabularyPracticeContent(): string[] {
     }
 
     const opposites = OPPOSITE_ITEMS[difficulty];
-    if (opposites.length < 18) {
-      errors.push(`${difficulty}: Opposites requires at least 18 items`);
+    if (opposites.length < 30) {
+      errors.push(`${difficulty}: Opposites requires at least 30 items`);
     }
     for (const item of opposites) {
       const pairKey = [item.word, item.correct].sort().join('\u0000');

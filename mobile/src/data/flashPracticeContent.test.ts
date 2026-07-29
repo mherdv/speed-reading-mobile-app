@@ -2,6 +2,7 @@ import {
   createRecognitionOptions,
   createVariedSequence,
   generatePhrasePool,
+  getPhraseCombinationCount,
   getFlashWordPool,
   selectSimilarDistractors,
   uniqueStrings,
@@ -39,9 +40,9 @@ describe('flash practice content', () => {
   });
 
   it('provides large unique word banks for every difficulty', () => {
-    expect(getFlashWordPool('easy').length).toBeGreaterThan(80);
-    expect(getFlashWordPool('medium').length).toBeGreaterThan(100);
-    expect(getFlashWordPool('hard').length).toBeGreaterThan(180);
+    expect(getFlashWordPool('easy')).toHaveLength(272);
+    expect(getFlashWordPool('medium')).toHaveLength(230);
+    expect(getFlashWordPool('hard')).toHaveLength(307);
   });
 
   it('builds four unique, length-similar recognition options', () => {
@@ -108,6 +109,7 @@ describe('flash practice content', () => {
 
   it('generates hundreds of different phrase combinations', () => {
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      expect(getPhraseCombinationCount(difficulty)).toBe(5_832);
       const phrases = generatePhrasePool(
         difficulty,
         200,
@@ -116,5 +118,11 @@ describe('flash practice content', () => {
       expect(phrases).toHaveLength(200);
       expect(new Set(phrases).size).toBe(200);
     }
+  });
+
+  it('fills a phrase pool even when an injected random source never changes', () => {
+    const phrases = generatePhrasePool('hard', 240, () => 0);
+    expect(phrases).toHaveLength(240);
+    expect(new Set(phrases).size).toBe(240);
   });
 });

@@ -8,7 +8,14 @@ import { StatsRow } from '../../ui/StatsRow';
 import { colors } from '../../theme/colors';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
 import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
-import { TEXT_SEARCH_VARIATIONS } from '../../data/textSearchContent';
+import {
+  TEXT_SEARCH_VARIATIONS,
+  type TextSearchVariation,
+} from '../../data/textSearchContent';
+import {
+  shuffleItems,
+  type RandomSource,
+} from '../../data/randomization';
 import { formatDuration } from '../../domain/results';
 
 const GAME_ID = 'TextSearch';
@@ -33,6 +40,18 @@ type Props = {
 };
 
 type Phase = 'idle' | 'running' | 'ended';
+
+export function buildTextSearchDeck(
+  variations: readonly TextSearchVariation[],
+  avoidFirstId = '',
+  random: RandomSource = Math.random
+): TextSearchVariation[] {
+  const deck = shuffleItems(variations, random);
+  if (deck.length > 1 && deck[0]?.id === avoidFirstId) {
+    [deck[0], deck[1]] = [deck[1], deck[0]];
+  }
+  return deck;
+}
 
 function getDifficultyConfig(difficulty: Difficulty) {
   switch (difficulty) {
@@ -76,6 +95,8 @@ export default function TextSearch({
   const foundRef = useRef<number[]>([]);
   const errorsRef = useRef(0);
   const previousVariationIdRef = useRef('');
+  const variationDeckRef = useRef<TextSearchVariation[]>([]);
+  const variationDeckDifficultyRef = useRef<Difficulty | null>(null);
   const activeTargetRef = useRef(targetWord);
   const activeTargetCountRef = useRef(0);
   const activeContentIdRef = useRef('custom');
@@ -99,12 +120,18 @@ export default function TextSearch({
   function start() {
     cancelledRef.current = false;
     if (phase !== 'idle' && phase !== 'ended') return;
-    const eligible = variationPool.filter(
-      (variation) => variation.id !== previousVariationIdRef.current
-    );
+    if (
+      variationDeckRef.current.length === 0 ||
+      variationDeckDifficultyRef.current !== difficulty
+    ) {
+      variationDeckRef.current = buildTextSearchDeck(
+        variationPool,
+        previousVariationIdRef.current
+      );
+      variationDeckDifficultyRef.current = difficulty;
+    }
     const nextVariation =
-      eligible[Math.floor(Math.random() * eligible.length)] ??
-      variationPool[0]!;
+      variationDeckRef.current.shift() ?? variationPool[0]!;
     previousVariationIdRef.current = nextVariation.id;
     setCurrentVariation(nextVariation);
     const activeParagraph = paragraphProp ?? nextVariation.text;

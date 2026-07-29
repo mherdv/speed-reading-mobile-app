@@ -1,6 +1,6 @@
 # SpeedRead exercise, competitor, and game-design report
 
-Date: 2026-07-27
+Date: 2026-07-29
 Scope: mobile speed-reading practice, comprehension, scanning, recognition, and screen comfort
 
 ## Revision record
@@ -16,6 +16,7 @@ Scope: mobile speed-reading practice, comprehension, scanning, recognition, and 
 | V7 | Complete | Re-audited the requested competitor-style drills, corrected durable-name collisions, specified preview-before-search and multi-select scanning rules, separated one-word/two-word/sentence recall, and documented exact content-pool sizes and replay limits. |
 | V8 | Complete | Re-reviewed the report against the implementation, added a current 31-exercise source-of-truth inventory, made guided versus measured WPM explicit, documented Power Reader’s three modes and offline boundary, and corrected obsolete rules for Comprehension, Number Search, Opposites, Letter Mixup, Word Pair Scan, and Even Numbers. |
 | V9 | Complete | Completed two reviewer–implementer correction cycles, closed result-integrity and double-tap exploits, replaced overlapping hit areas with real phone-size targets, verified all 31 game lifecycles, and reran the full release checks plus live 320 px browser QA. |
+| V19 | Complete | Expanded every undersized lexical pool, raised phrase-template variety to 5,832 combinations per level, and replaced biased or retry-based random selection with tested bounded Fisher–Yates decks. |
 
 ## Executive decision
 
@@ -595,15 +596,26 @@ This section is the authoritative snapshot for the current source. Earlier revis
 
 | Content set | Easy | Medium | Hard | Replay behavior |
 | --- | ---: | ---: | ---: | --- |
-| Letter Mixup | 15 | 15 | 15 | Shuffled without replacement; a pool must cycle after 15 |
-| Opposites | 12 | 12 | 12 | Shuffled without replacement; a pool must cycle after 12 |
-| Text Search | 9 | 9 | 9 | No immediate passage repeat; a pool cycles after 9 |
+| Shared flash words | 272 | 230 | 307 | Shuffled without replacement; cycle boundaries avoid an immediate repeat |
+| Phrase possibilities | 5,832 | 5,832 | 5,832 | Each session shuffles and draws 240 unique phrases |
+| Letter Mixup | 32 | 32 | 32 | Shuffled without replacement; cycle boundaries avoid an immediate repeat |
+| Opposites | 30 | 30 | 31 | Shuffled without replacement; cycle boundaries avoid an immediate repeat |
+| Text Search | 12 | 12 | 12 | Full shuffled passage deck; cycle boundaries avoid an immediate repeat |
 | Words Recall | 120 | 120 | 120 | Exact two-word prompts; shuffled without replacement |
-| Sentence Recall | 240 generated | 240 generated | 240 generated | Shuffled without replacement and avoids immediate reuse |
+| Sentence Recall | 240 of 5,832 | 240 of 5,832 | 240 of 5,832 | Unique shuffled prompts sampled from the full template space |
+| Visual Span | 71 | 194 | 75 | Equal-length level-specific words; each trial is independently shuffled |
+| Word Search | 101 | 313 | 178 | Shuffled target deck without replacement; cycle boundaries avoid an immediate repeat |
+| Word Pair Scan | 100 pairs | 100 pairs | 100 pairs | Each round independently shuffles the reviewed confusable-pair bank |
 | Baseline Reading | 12 | 12 | 12 | Comparable authored forms; latest six distinct forms enter the 30-day benchmark |
 | Paced Comprehension | 9 | 12 | 12 | No immediate passage repeat; question depth increases by difficulty |
 
-These are honest limits, not “unlimited content” claims. The next content investment should add further connected-text genres and delayed-retention checks before adding more generic reaction games.
+These are honest limits, not “unlimited content” claims. The connected-text
+audit also retained 15 Main Idea passages, 15 Structure Scan rounds, 36
+Evidence Hunt rounds, 72 Context Builder rounds, 29 general reading samples,
+12 baseline forms, and 16 offline Power Reader articles. Those pools already
+have broader genre and scenario coverage than the formerly undersized lexical
+drills, so this revision concentrated new material where replay repetition was
+most visible.
 
 ### Competitor parity and remaining delta
 
@@ -947,3 +959,36 @@ and skipped rounds are reported as omissions.
   selected and correct words, preserved the review delay, returned home without
   a blocking Back prompt, and reported no runtime errors or horizontal
   overflow.
+
+## V19 vocabulary and randomization audit
+
+- The lexical inventory now contains 272 Easy, 230 Medium, and 307 Hard unique
+  flash words. These banks feed Word Flash, Flash Recall, Last Word, Words
+  Recall, Letter Mixup distractor matching, and difficulty-filtered Word Search
+  targets instead of leaving each drill dependent on a small private list.
+- Phrase Flash and Sentence Recall now draw from 18 × 18 × 18 reviewed template
+  dimensions at every difficulty: 5,832 possible phrases per level. Generation
+  enumerates the valid combinations before shuffling, so an unlucky or injected
+  random source cannot return a short pool.
+- Letter Mixup now has 32 word/definition prompts per level; Opposites has
+  30/30/31 reviewed challenges; Text Search has 12 natural passages per level;
+  and Word Pair Scan has 100 confusable pairs. Text Search and Opposites use
+  complete shuffled decks, with immediate-repeat protection at cycle
+  boundaries.
+- Visual Span now preserves the anti-guessing constraint of equal-length
+  options while drawing from 71/194/75 words instead of 24/28/30 private
+  entries. Word Search consequently exposes 101/313/178 valid grid-sized
+  targets at Easy/Medium/Hard.
+- A shared bounded Fisher–Yates utility replaced random-comparator sorting and
+  retry-until-unique selection. It protects injected boundary values, never
+  mutates the source, and supports deterministic tests. Word Search placement,
+  Word Pair Scan target positions, Opposites options, flash sequences, and
+  Text Search decks now use testable random paths without dropping or
+  duplicating items.
+- Final validation passed strict TypeScript, all 518 Jest tests across 76
+  suites, all 18 Expo Doctor checks, production PWA export, and offline-cache
+  verification. Live 390 × 844 checks started two different Letter Mixup
+  prompts, opened a randomized Text Search passage, and displayed a seven-word
+  Hard Visual Span trial with five equal-length choices. Back remained
+  nonblocking, all tested pages stayed at 390 px without horizontal overflow,
+  and the browser reported no runtime errors.

@@ -52,6 +52,21 @@ const EASY: readonly TextSearchVariation[] = [
     target: 'lantern',
     text: 'The guide lit a lantern as the group entered the old tunnel. Warm light from the lantern revealed painted numbers on the wall. At each turn, the guide raised the lantern so everyone could see the path. Outside again, she switched off the lantern and checked the group.',
   },
+  {
+    id: 'easy-station',
+    target: 'station',
+    text: 'The small station wakes before the rest of the town. A baker delivers rolls to the station café, and a cleaner opens the waiting room. When the morning train reaches the station, families gather beside the clock. After everyone boards, the station becomes quiet again.',
+  },
+  {
+    id: 'easy-notebook',
+    target: 'notebook',
+    text: 'A blue notebook lay beside the classroom map. Talia used the notebook to record each plant the group observed. She added a small drawing to the notebook after lunch and checked every label. At home, she placed the notebook near her bag for the next walk.',
+  },
+  {
+    id: 'easy-harbor',
+    target: 'harbor',
+    text: 'Fishing boats returned to the harbor before the wind grew strong. Workers at the harbor tied each rope and carried the catch into a cool shed. From the hill, visitors watched lights appear across the harbor. By evening, the harbor water was calm and empty.',
+  },
 ];
 
 const MEDIUM: readonly TextSearchVariation[] = [
@@ -99,6 +114,21 @@ const MEDIUM: readonly TextSearchVariation[] = [
     id: 'medium-network',
     target: 'network',
     text: 'A network of small weather stations now covers the valley. Each station sends temperature and rainfall data through the network every ten minutes. If one connection fails, the network stores the reading until service returns. Combining observations across the network gives farmers a clearer warning than a single distant forecast.',
+  },
+  {
+    id: 'medium-pattern',
+    target: 'pattern',
+    text: 'The transit team looked for a pattern in three months of delayed buses. One pattern appeared on rainy weekday mornings, but it disappeared during school holidays. A second pattern followed road repairs near the central bridge. By comparing each pattern with schedules and weather records, the team avoided blaming one cause for every delay.',
+  },
+  {
+    id: 'medium-context',
+    target: 'context',
+    text: 'A quotation can sound certain when removed from its context. The paragraph before it may identify a special condition, while the next sentence supplies an exception. Editors preserve enough context for readers to understand the original claim. Checking the wider context also prevents a vivid phrase from replacing the argument it was meant to support.',
+  },
+  {
+    id: 'medium-process',
+    target: 'process',
+    text: 'The repair manual divides the inspection process into four stages. Each stage of the process has a checklist, a photograph, and a place for notes. If a fault appears, the technician pauses the process and records the part number. Following the same process makes later comparisons more reliable across different teams.',
   },
 ];
 
@@ -148,6 +178,21 @@ const HARD: readonly TextSearchVariation[] = [
     target: 'mechanism',
     text: 'Observing an outcome does not automatically reveal the mechanism that produced it. A tutoring program may raise scores, yet the mechanism could involve extra practice, stronger motivation, or more frequent feedback. Identifying the mechanism matters because another school may copy the visible schedule without reproducing the active ingredient. Researchers test each proposed mechanism before recommending a broad expansion.',
   },
+  {
+    id: 'hard-validity',
+    target: 'validity',
+    text: 'A precise measurement can still have weak validity if it captures the wrong concept. A typing test may produce consistent numbers, yet its validity as a measure of reading comprehension depends on assumptions about language and motor skill. Researchers strengthen validity by comparing several measures and testing rival explanations. They also describe which population and setting the claimed validity actually covers.',
+  },
+  {
+    id: 'hard-distribution',
+    target: 'distribution',
+    text: 'An average can conceal the distribution that produced it. Two classrooms may share the same mean score even when one distribution is tightly grouped and the other contains very high and very low results. Inspecting the full distribution reveals variation, clusters, and unusual cases. Decisions based only on the average may therefore miss the part of the distribution most affected by a change.',
+  },
+  {
+    id: 'hard-qualification',
+    target: 'qualification',
+    text: 'A careful conclusion often includes a qualification that marks where the claim may not hold. The qualification is not decorative hesitation; it identifies a boundary supported by the evidence. Removing that qualification can turn a limited finding into an unjustified universal rule. Strong readers track each qualification and ask whether a later summary preserves the same boundary.',
+  },
 ];
 
 export const TEXT_SEARCH_VARIATIONS: Record<
@@ -173,7 +218,7 @@ export function validateTextSearchContent(): string[] {
   const errors: string[] = [];
   for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     const items = TEXT_SEARCH_VARIATIONS[difficulty];
-    if (items.length < 9) errors.push(`${difficulty}: at least nine passages required`);
+    if (items.length < 12) errors.push(`${difficulty}: at least twelve passages required`);
     if (new Set(items.map((item) => item.id)).size !== items.length) {
       errors.push(`${difficulty}: duplicate passage ID`);
     }

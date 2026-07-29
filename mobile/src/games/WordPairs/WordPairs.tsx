@@ -13,7 +13,9 @@ import {
 import {
   selectSimilarDistractors,
   shuffleItems,
+  type RandomSource,
 } from '../../data/flashPracticeContent';
+import { randomIndex } from '../../data/randomization';
 
 const GAME_ID = 'WordPairs';
 
@@ -35,7 +37,7 @@ type Props = {
 
 type Phase = 'idle' | 'running' | 'ended';
 
-type WordPairChallenge = {
+export type WordPairChallenge = {
   familiarity: 'common' | 'less-common' | 'advanced';
   distractorSimilarity: 'low' | 'medium' | 'high';
   optionCount: 2 | 3 | 4;
@@ -69,30 +71,23 @@ export function getWordPairChallenge(
   return WORD_PAIR_CHALLENGES[difficulty];
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function buildRound(
+export function buildWordPairRound(
   challenge: WordPairChallenge,
-  itemOverride?: OppositeItem
+  itemOverride?: OppositeItem,
+  random: RandomSource = Math.random
 ): { word: string; options: string[]; correctIndex: number } {
   const item = itemOverride ??
-    challenge.items[Math.floor(Math.random() * challenge.items.length)];
+    challenge.items[randomIndex(challenge.items.length, random)];
   const word = item.word;
   const correct = item.correct;
   const distractors = selectSimilarDistractors(
     correct,
     item.distractors,
-    challenge.optionCount - 1
+    challenge.optionCount - 1,
+    random
   );
-  
-  const options = shuffle([correct, ...distractors]);
+
+  const options = shuffleItems([correct, ...distractors], random);
   const correctIndex = options.indexOf(correct);
   
   return { word, options, correctIndex };
@@ -109,7 +104,7 @@ export default function WordPairs({
     (difficulty === 'easy' ? 45_000 : difficulty === 'medium' ? 30_000 : 20_000);
   const challenge = getWordPairChallenge(difficulty);
   const [phase, setPhase] = useState<Phase>('idle');
-  const [round, setRound] = useState(() => buildRound(challenge));
+  const [round, setRound] = useState(() => buildWordPairRound(challenge));
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [timeLeftMs, setTimeLeftMs] = useState(durationMs);
@@ -123,6 +118,7 @@ export default function WordPairs({
   const answerLockedRef = useRef(false);
   const deckRef = useRef<OppositeItem[]>([]);
   const deckIndexRef = useRef(0);
+  const previousWordRef = useRef('');
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(() => {
@@ -163,22 +159,35 @@ export default function WordPairs({
     setScore(0);
     setAttempts(0);
     setTimeLeftMs(durationMs);
-    deckRef.current = shuffleItems(challenge.items);
-    deckIndexRef.current = 0;
+    refillDeck();
     setRound(buildNextRound());
     setFeedback(null);
     startedAtRef.current = Date.now();
     setPhase('running');
   }
 
+  function refillDeck() {
+    deckRef.current = shuffleItems(challenge.items);
+    if (
+      deckRef.current.length > 1 &&
+      deckRef.current[0]?.word === previousWordRef.current
+    ) {
+      [deckRef.current[0], deckRef.current[1]] = [
+        deckRef.current[1],
+        deckRef.current[0],
+      ];
+    }
+    deckIndexRef.current = 0;
+  }
+
   function buildNextRound() {
     if (deckIndexRef.current >= deckRef.current.length) {
-      deckRef.current = shuffleItems(challenge.items);
-      deckIndexRef.current = 0;
+      refillDeck();
     }
     const item = deckRef.current[deckIndexRef.current];
     deckIndexRef.current += 1;
-    return buildRound(challenge, item);
+    previousWordRef.current = item.word;
+    return buildWordPairRound(challenge, item);
   }
 
   function finish() {

@@ -1,3 +1,8 @@
+import {
+  shuffleItems,
+  type RandomSource,
+} from './randomization';
+
 /**
  * Original English practice vocabulary maintained for this application.
  *
@@ -53,6 +58,22 @@ const BEGINNER_WORD_SOURCE: string[] = [
   'joint', 'known', 'large', 'minor', 'novel', 'outer', 'plain', 'quick',
   'rapid', 'sharp', 'thick', 'upper', 'valid', 'whole', 'young', 'basic',
   'brief', 'chief', 'daily', 'early', 'fresh', 'great', 'human', 'ideal',
+  // Broader everyday reading and visual-recognition vocabulary
+  'acorn', 'badge', 'beach', 'bell', 'berry', 'bloom', 'brick', 'brook',
+  'brush', 'cabin', 'camel', 'candle', 'canoe', 'cargo', 'cave', 'chalk',
+  'chess', 'cliff', 'coral', 'craft', 'crane', 'creek', 'crown', 'drum',
+  'eagle', 'fence', 'field', 'flower', 'forest', 'frame', 'fruit', 'globe',
+  'grape', 'grass', 'horse', 'hotel', 'house', 'kitten', 'light', 'market',
+  'metal', 'music', 'paint', 'peach', 'pearl', 'piano', 'plant', 'plate',
+  'prize', 'shell', 'shore', 'skill', 'smile', 'soil', 'space', 'spice',
+  'spoon', 'stone', 'table', 'tiger', 'tower', 'track', 'wheat', 'wheel',
+  'world', 'build', 'catch', 'chase', 'choose', 'climb', 'count', 'draw',
+  'drink', 'drive', 'gather', 'help', 'listen', 'move', 'read', 'reach',
+  'repair', 'rest', 'sail', 'solve', 'speak', 'spend', 'stand', 'study',
+  'swim', 'think', 'throw', 'touch', 'turn', 'walk', 'write', 'calm',
+  'clear', 'close', 'cool', 'fair', 'gentle', 'local', 'lucky', 'modern',
+  'neat', 'proud', 'ready', 'round', 'simple', 'slow', 'small', 'steady',
+  'sweet', 'warm',
 ];
 export const BEGINNER_WORDS = uniqueReviewedWords(BEGINNER_WORD_SOURCE);
 
@@ -79,6 +100,21 @@ const INTERMEDIATE_WORD_SOURCE: string[] = [
   'illustrate', 'immediate', 'immense', 'impact', 'imperial', 'implicit', 'improve',
   'impulse', 'incident', 'include', 'increase', 'indicate', 'indirect', 'infinite',
   'influence', 'inherit', 'initial', 'initiate', 'innovate', 'inquiry', 'instance',
+  // General, academic, and informational-text vocabulary
+  'ability', 'acquire', 'active', 'address', 'admire', 'advance', 'afford',
+  'agency', 'archive', 'balance', 'barrier', 'behave', 'biology', 'capture',
+  'caution', 'clarify', 'climate', 'combine', 'comfort', 'compare', 'compete',
+  'compose', 'concern', 'conserve', 'consult', 'consume', 'context',
+  'cooperate', 'courage', 'curious', 'decline', 'define', 'deliver', 'derive',
+  'design', 'detect', 'device', 'differ', 'digital', 'discover', 'diverse',
+  'dynamic', 'emerge', 'emotion', 'engage', 'establish', 'ethics', 'exceed',
+  'exhibit', 'extend', 'failure', 'fairness', 'feasible', 'fluent', 'forbid',
+  'habitat', 'imagine', 'inspire', 'instruct', 'interpret', 'interval',
+  'language', 'maintain', 'migrate', 'monitor', 'motivate', 'outcome',
+  'perceive', 'persist', 'predict', 'preserve', 'prevent', 'process',
+  'promote', 'propose', 'recover', 'reflect', 'respond', 'restore', 'review',
+  'select', 'simulate', 'strategy', 'summarize', 'support', 'survive',
+  'symbol', 'transfer', 'translate', 'verify', 'version',
 ];
 export const INTERMEDIATE_WORDS = uniqueReviewedWords(INTERMEDIATE_WORD_SOURCE);
 
@@ -131,6 +167,24 @@ const ADVANCED_WORD_SOURCE: string[] = [
   'transportation', 'troubleshooting', 'unambiguously', 'uncharacteristic', 'unconditionally',
   'underestimation', 'understanding', 'unfortunately', 'unpredictability', 'unprecedented',
   'visualization', 'vulnerability', 'westernization', 'wholesomeness', 'worthwhile',
+  // High-utility concepts found in academic and professional prose
+  'accessibility', 'adaptability', 'adaptation', 'algorithmic', 'allocation',
+  'ambiguity', 'analytical', 'anticipation', 'applicability', 'architecture',
+  'articulation', 'assessment', 'assumption', 'atmospheric', 'autonomous',
+  'capability', 'clarification', 'coherence', 'comparative', 'compatibility',
+  'complexity', 'conceptual', 'conservation', 'consistency', 'constraint',
+  'contextual', 'correlation', 'curriculum', 'decentralization',
+  'deterioration', 'diagnostic', 'differentiation', 'digitalization',
+  'ecological', 'educational', 'empirical', 'evaluation', 'explanatory',
+  'feasibility', 'hypothetical', 'implication', 'inclusivity',
+  'inconsistency', 'innovation', 'integration', 'interconnection',
+  'interdisciplinary', 'longitudinal', 'meaningful', 'measurement',
+  'metacognition', 'neurological', 'operational', 'perspective', 'precision',
+  'prerequisite', 'probability', 'proportional', 'qualitative',
+  'quantitative', 'readability', 'reciprocity', 'reliability', 'replication',
+  'responsive', 'significant', 'strategic', 'terminology', 'theoretical',
+  'transparency', 'uncertainty', 'variability', 'verification', 'vocabulary',
+  'cognitive', 'comprehension', 'inference',
 ];
 export const ADVANCED_WORDS = uniqueReviewedWords(ADVANCED_WORD_SOURCE);
 
@@ -376,13 +430,18 @@ export function getWordsByDifficulty(difficulty: 'easy' | 'medium' | 'hard'): st
   }
 }
 
-export function getRandomWords(count: number, difficulty?: 'easy' | 'medium' | 'hard'): string[] {
+export function getRandomWords(
+  count: number,
+  difficulty?: 'easy' | 'medium' | 'hard',
+  random: RandomSource = Math.random
+): string[] {
   const pool = difficulty ? getWordsByDifficulty(difficulty) : [...BEGINNER_WORDS, ...INTERMEDIATE_WORDS, ...ADVANCED_WORDS];
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  return shuffleItems(pool, random).slice(0, Math.max(0, count));
 }
 
-export function getRandomWordPairs(count: number): [string, string][] {
-  const shuffled = [...WORD_PAIRS].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+export function getRandomWordPairs(
+  count: number,
+  random: RandomSource = Math.random
+): [string, string][] {
+  return shuffleItems(WORD_PAIRS, random).slice(0, Math.max(0, count));
 }

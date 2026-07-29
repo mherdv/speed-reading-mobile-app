@@ -7,6 +7,11 @@ import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
 import { colors } from '../../theme/colors';
+import {
+  randomIndex,
+  shuffleItems,
+  type RandomSource,
+} from '../../data/randomization';
 
 const GAME_ID = 'WordMismatchGrid';
 
@@ -101,6 +106,46 @@ export const SIMILAR_PAIRS: [string, string][] = [
   ['price', 'prize'],
   ['wander', 'wonder'],
   ['collision', 'collusion'],
+  ['access', 'excess'],
+  ['aloud', 'allowed'],
+  ['adverse', 'averse'],
+  ['aisle', 'isle'],
+  ['appraise', 'apprise'],
+  ['bare', 'bear'],
+  ['brake', 'break'],
+  ['bridal', 'bridle'],
+  ['cite', 'sight'],
+  ['climactic', 'climatic'],
+  ['cloths', 'clothes'],
+  ['cue', 'queue'],
+  ['die', 'dye'],
+  ['discreet', 'discrete'],
+  ['eminent', 'imminent'],
+  ['envelop', 'envelope'],
+  ['faze', 'phase'],
+  ['flair', 'flare'],
+  ['forth', 'fourth'],
+  ['grate', 'great'],
+  ['heal', 'heel'],
+  ['hoard', 'horde'],
+  ['idle', 'idol'],
+  ['incidence', 'incidents'],
+  ['ingenious', 'ingenuous'],
+  ['lightning', 'lightening'],
+  ['miner', 'minor'],
+  ['pedal', 'peddle'],
+  ['pore', 'pour'],
+  ['pray', 'prey'],
+  ['role', 'roll'],
+  ['seam', 'seem'],
+  ['sole', 'soul'],
+  ['steal', 'steel'],
+  ['suite', 'sweet'],
+  ['vain', 'vein'],
+  ['wave', 'waive'],
+  ['wary', 'weary'],
+  ['your', 'you\'re'],
+  ['who', 'whom'],
 ];
 
 function getDifficultyConfig(difficulty: Difficulty) {
@@ -114,28 +159,25 @@ function getDifficultyConfig(difficulty: Difficulty) {
   }
 }
 
-function shuffleArray<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function buildRound(cardCount: number): { cards: WordCard[]; differentIds: Set<number> } {
-  const shuffledPairs = shuffleArray(SIMILAR_PAIRS);
+export function buildWordMismatchRound(
+  cardCount: number,
+  random: RandomSource = Math.random
+): { cards: WordCard[]; differentIds: Set<number> } {
+  const safeCardCount = Math.max(1, Math.floor(cardCount));
+  const shuffledPairs = shuffleItems(SIMILAR_PAIRS, random);
   const cards: WordCard[] = [];
   const differentIds = new Set<number>();
-  
-  // Decide how many cards will be different (1-3 depending on card count)
-  const differentCount = Math.max(1, Math.floor(cardCount / 3));
-  const differentIndices = new Set<number>();
-  while (differentIndices.size < differentCount) {
-    differentIndices.add(Math.floor(Math.random() * cardCount));
-  }
 
-  for (let i = 0; i < cardCount; i++) {
+  // Decide how many cards will be different (1-3 depending on card count)
+  const differentCount = Math.max(1, Math.floor(safeCardCount / 3));
+  const differentIndices = new Set(
+    shuffleItems(
+      Array.from({ length: safeCardCount }, (_, index) => index),
+      random
+    ).slice(0, differentCount)
+  );
+
+  for (let i = 0; i < safeCardCount; i++) {
     const pair = shuffledPairs[i % shuffledPairs.length];
     const isDifferent = differentIndices.has(i);
     
@@ -150,7 +192,7 @@ function buildRound(cardCount: number): { cards: WordCard[]; differentIds: Set<n
       differentIds.add(i);
     } else {
       // Same word on both sides
-      const word = Math.random() > 0.5 ? pair[0] : pair[1];
+      const word = pair[randomIndex(2, random)];
       cards.push({
         id: i,
         word1: word,
@@ -160,7 +202,7 @@ function buildRound(cardCount: number): { cards: WordCard[]; differentIds: Set<n
     }
   }
 
-  return { cards: shuffleArray(cards), differentIds };
+  return { cards: shuffleItems(cards, random), differentIds };
 }
 
 export default function WordMismatchGrid({
@@ -254,7 +296,7 @@ export default function WordMismatchGrid({
     setStartedAtMs(Date.now());
     setSelectedCards(new Set());
     // Generate fresh round
-    setRound(buildRound(currentConfig.cardCount));
+    setRound(buildWordMismatchRound(currentConfig.cardCount));
     setPhase('running');
   }
 
@@ -365,7 +407,7 @@ export default function WordMismatchGrid({
     setRounds(roundsRef.current);
     setSelectedCards(new Set());
     // Generate new round immediately (not via effect)
-    setRound(buildRound(currentConfig.cardCount));
+    setRound(buildWordMismatchRound(currentConfig.cardCount));
     setRoundIndex((r) => r + 1);
   }
 

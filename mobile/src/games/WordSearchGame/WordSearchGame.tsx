@@ -10,6 +10,10 @@ import {
   uniqueStrings,
 } from '../../data/flashPracticeContent';
 import { WORD_PAIRS } from '../../data/vocabulary';
+import {
+  randomIndex,
+  type RandomSource,
+} from '../../data/randomization';
 import { borderRadius, colors, shadows, spacing } from '../../theme/colors';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
@@ -94,17 +98,18 @@ export function getWordSearchPool(difficulty: Difficulty): string[] {
     .map((word) => word.toLocaleUpperCase());
 }
 
-function randomLetter(): string {
-  return String.fromCharCode(65 + Math.floor(Math.random() * 26));
+function randomLetter(random: RandomSource): string {
+  return String.fromCharCode(65 + randomIndex(26, random));
 }
 
-function buildGrid(
+export function buildWordSearchGrid(
   size: number,
   word: string,
-  directions: readonly Direction[]
+  directions: readonly Direction[],
+  random: RandomSource = Math.random
 ): { grid: string[][]; wordPositions: string[] } {
   const grid: string[][] = Array.from({ length: size }, () =>
-    Array.from({ length: size }, () => randomLetter())
+    Array.from({ length: size }, () => randomLetter(random))
   );
 
   const validPlacements: Array<{
@@ -132,7 +137,7 @@ function buildGrid(
   }
 
   const placement =
-    validPlacements[Math.floor(Math.random() * validPlacements.length)];
+    validPlacements[randomIndex(validPlacements.length, random)];
   const [rowDelta, columnDelta] = placement.direction;
   const wordPositions: string[] = [];
 
@@ -161,7 +166,7 @@ export default function WordSearch({
   } = useGameProgress(GAME_ID, difficulty);
   const [targetWord, setTargetWord] = useState(INITIAL_WORD);
   const [gridData, setGridData] = useState(() =>
-    buildGrid(6, INITIAL_WORD, FORWARD_DIRECTIONS)
+    buildWordSearchGrid(6, INITIAL_WORD, FORWARD_DIRECTIONS)
   );
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [wordsFound, setWordsFound] = useState(0);
@@ -242,7 +247,7 @@ export default function WordSearch({
     wordIndexRef.current = 0;
     const word = takeNextWord();
     setTargetWord(word);
-    setGridData(buildGrid(gridSize, word, currentConfig.directions));
+    setGridData(buildWordSearchGrid(gridSize, word, currentConfig.directions));
     setSelectedCells(new Set());
     setWordsFound(0);
     setMistakes(0);
@@ -301,7 +306,7 @@ export default function WordSearch({
 
         const word = takeNextWord();
         setTargetWord(word);
-        setGridData(buildGrid(gridSize, word, currentConfig.directions));
+        setGridData(buildWordSearchGrid(gridSize, word, currentConfig.directions));
         setSelectedCells(new Set());
       } else {
         setSelectedCells(nextSelectedCells);

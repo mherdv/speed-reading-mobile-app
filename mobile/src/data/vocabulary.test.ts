@@ -3,6 +3,8 @@ import {
   BEGINNER_WORDS,
   INTERMEDIATE_WORDS,
   WORD_PAIRS,
+  getRandomWordPairs,
+  getRandomWords,
 } from './vocabulary';
 
 describe('reviewed vocabulary pools', () => {
@@ -21,5 +23,23 @@ describe('reviewed vocabulary pools', () => {
       [first, second].sort().join('\u0000')
     );
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('meets the expanded reviewed inventory at every level', () => {
+    expect(BEGINNER_WORDS.length).toBeGreaterThanOrEqual(270);
+    expect(INTERMEDIATE_WORDS.length).toBeGreaterThanOrEqual(230);
+    expect(ADVANCED_WORDS.length).toBeGreaterThanOrEqual(300);
+  });
+
+  it('draws deterministic samples without random-sort bias or source mutation', () => {
+    const easySnapshot = [...BEGINNER_WORDS];
+    const words = getRandomWords(25, 'easy', () => 0);
+    const pairs = getRandomWordPairs(25, () => 1);
+
+    expect(words).toHaveLength(25);
+    expect(new Set(words).size).toBe(25);
+    expect(pairs).toHaveLength(25);
+    expect(new Set(pairs.map((pair) => pair.join('\u0000'))).size).toBe(25);
+    expect(BEGINNER_WORDS).toEqual(easySnapshot);
   });
 });

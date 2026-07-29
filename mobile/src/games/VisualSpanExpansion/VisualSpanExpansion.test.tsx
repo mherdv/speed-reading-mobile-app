@@ -9,6 +9,7 @@ import VisualSpanExpansion from './VisualSpanExpansion';
 import {
   createVisualSpanTrial,
   getVisualSpanConfig,
+  getVisualSpanWordPool,
   VISUAL_SPAN_FIXATION_CUE_MS,
 } from './visualSpanContent';
 
@@ -45,7 +46,11 @@ describe('VisualSpanExpansion', () => {
       'wide',
     ]);
 
+    const poolSizes = { easy: 71, medium: 194, hard: 75 };
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      expect(getVisualSpanWordPool(difficulty)).toHaveLength(
+        poolSizes[difficulty]
+      );
       const trial = createVisualSpanTrial(difficulty, undefined, random);
       const config = getVisualSpanConfig(difficulty);
       expect(trial.items).toHaveLength(config.spanSize);
