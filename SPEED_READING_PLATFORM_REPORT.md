@@ -199,10 +199,17 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 ### 2. Main Idea
 
 - Read a short passage.
-- Hide it and briefly retrieve the central point.
+- Hide it and state the central point without answer-choice cues.
+- After the 3/5/8-second Easy/Medium/Hard retrieval buffer, reveal the choices
+  explicitly rather than changing screens automatically.
 - Choose the best main idea from several options.
 - Review an explanation before finishing.
-- Difficulty: 3, 4, or 5 main-idea rounds. Each current passage uses four plausible answer options.
+- Difficulty: 3, 4, or 5 main-idea rounds with explicit, synthesis, or
+  qualification-focused passages. Each current passage uses four plausible
+  answer options.
+- This short buffer reduces immediate recognition cueing. It is not a
+  minutes-later or next-day retention measurement; a true delayed-recall
+  exercise still requires separate withheld prompts.
 
 ### 3. Power Reader
 
@@ -811,3 +818,23 @@ and skipped rounds are reported as omissions.
   ending, reporting, replay, and lifecycle completion. Phone-width browser QA
   confirmed that the seven-position Hard flash and five recall choices fit at
   390 × 844 with no horizontal overflow or console errors.
+
+## V13 Main Idea retrieval upgrade
+
+- The reviewer found a difficulty-contract mismatch: Main Idea advertised
+  3/4/5 rounds but launched 2 at every level. Easy, Medium, and Hard now run
+  3/4/5 non-repeating, difficulty-matched passages by default.
+- Hiding the passage now starts a choice-free 3/5/8-second recall buffer. The
+  learner forms a one-sentence central claim first, receives one readiness
+  announcement, and explicitly reveals the choices afterward. The displayed
+  number states the configured buffer duration rather than announcing a noisy
+  second-by-second countdown. This remains an immediate retrieval exercise
+  rather than a delayed-retention measure.
+- Main Idea results now report configured and completed rounds plus the active
+  retrieval-buffer duration, while preserving task accuracy and avoiding WPM.
+- Baseline Reading difficulty copy now matches its validated inventory of 12
+  reviewed passages, with a catalog contract test guarding the count.
+- Final validation passed strict TypeScript, all 482 Jest tests across 71
+  suites, all 18 Expo Doctor checks, production PWA export/offline
+  verification, and a 390 × 844 browser interaction check with no horizontal
+  overflow or runtime errors.

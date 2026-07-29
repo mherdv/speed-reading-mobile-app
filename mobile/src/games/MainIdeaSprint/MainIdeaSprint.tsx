@@ -20,16 +20,26 @@ const GAME_ID = 'MainIdeaSprint';
 type Props = {
   passages?: MainIdeaPassage[];
   roundCount?: number;
+  retrievalBufferMs?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
-type Phase = 'idle' | 'reading' | 'question' | 'feedback' | 'ended';
+type Phase =
+  | 'idle'
+  | 'reading'
+  | 'retrieve'
+  | 'question'
+  | 'feedback'
+  | 'ended';
 
 export function getMainIdeaChallenge(difficulty: Difficulty) {
   return {
-    roundCount: 2,
+    roundCount:
+      difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5,
+    retrievalBufferMs:
+      difficulty === 'easy' ? 3_000 : difficulty === 'medium' ? 5_000 : 8_000,
     passageLevel: difficulty,
     inferenceDepth:
       difficulty === 'easy'
@@ -55,6 +65,7 @@ function selectPassages(
 export default function MainIdeaSprint({
   passages = MAIN_IDEA_PASSAGES,
   roundCount,
+  retrievalBufferMs,
   difficulty = 'easy',
   autoStart = false,
   onReportResult,
@@ -72,16 +83,25 @@ export default function MainIdeaSprint({
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [lastAnswerCorrect, setLastAnswerCorrect] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
+  const [retrievalReady, setRetrievalReady] = useState(false);
 
   const sessionPassagesRef = useRef<MainIdeaPassage[]>([]);
   const sessionStartedAtRef = useRef(0);
   const correctCountRef = useRef(0);
+  const completedRoundsRef = useRef(0);
+  const sessionRetrievalBufferMsRef = useRef(0);
+  const retrievalTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
+      if (retrievalTimerRef.current) {
+        clearTimeout(retrievalTimerRef.current);
+        retrievalTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -90,9 +110,17 @@ export default function MainIdeaSprint({
   function start(force = false) {
     cancelledRef.current = false;
     if (!force && phase !== 'idle' && phase !== 'ended') return;
+    if (retrievalTimerRef.current) {
+      clearTimeout(retrievalTimerRef.current);
+      retrievalTimerRef.current = null;
+    }
 
     const challenge = getMainIdeaChallenge(selectedDifficulty);
     const configuredRoundCount = roundCount ?? challenge.roundCount;
+    sessionRetrievalBufferMsRef.current = Math.max(
+      0,
+      retrievalBufferMs ?? challenge.retrievalBufferMs
+    );
     const leveledPassages = passages.filter(
       (passage) =>
         passage.difficulty === undefined ||
@@ -105,17 +133,40 @@ export default function MainIdeaSprint({
     );
     reportedRef.current = false;
     correctCountRef.current = 0;
+    completedRoundsRef.current = 0;
     setCorrectCount(0);
     setPassageIndex(0);
     setSelectedAnswer(null);
     setLastAnswerCorrect(false);
+    setRetrievalReady(false);
     sessionStartedAtRef.current = Date.now();
     setPhase('reading');
   }
 
-  function showQuestion() {
+  function beginRetrieval() {
     if (phase !== 'reading') return;
     setSelectedAnswer(null);
+    setRetrievalReady(false);
+    setPhase('retrieve');
+
+    const bufferMs = sessionRetrievalBufferMsRef.current;
+    if (bufferMs === 0) {
+      setRetrievalReady(true);
+      return;
+    }
+    retrievalTimerRef.current = setTimeout(() => {
+      retrievalTimerRef.current = null;
+      if (cancelledRef.current) return;
+      setRetrievalReady(true);
+    }, bufferMs);
+  }
+
+  function showQuestion() {
+    if (phase !== 'retrieve' || !retrievalReady) return;
+    if (retrievalTimerRef.current) {
+      clearTimeout(retrievalTimerRef.current);
+      retrievalTimerRef.current = null;
+    }
     setPhase('question');
   }
 
@@ -128,10 +179,15 @@ export default function MainIdeaSprint({
       correctCountRef.current += 1;
       setCorrectCount(correctCountRef.current);
     }
+    completedRoundsRef.current += 1;
     setPhase('feedback');
   }
 
   function continueAfterFeedback() {
+    if (retrievalTimerRef.current) {
+      clearTimeout(retrievalTimerRef.current);
+      retrievalTimerRef.current = null;
+    }
     const nextIndex = passageIndex + 1;
     if (nextIndex >= sessionPassagesRef.current.length) {
       finish();
@@ -140,11 +196,16 @@ export default function MainIdeaSprint({
     setPassageIndex(nextIndex);
     setSelectedAnswer(null);
     setLastAnswerCorrect(false);
+    setRetrievalReady(false);
     setPhase('reading');
   }
 
   function finish() {
     if (reportedRef.current || cancelledRef.current) return;
+    if (retrievalTimerRef.current) {
+      clearTimeout(retrievalTimerRef.current);
+      retrievalTimerRef.current = null;
+    }
     reportedRef.current = true;
     const now = Date.now();
     const total = sessionPassagesRef.current.length;
@@ -152,7 +213,12 @@ export default function MainIdeaSprint({
     const score = Math.round(accuracy * 100);
 
     setPhase('ended');
-    void updateProgress(GAME_ID, accuracy >= 0.7, score).then(({ progress }) => {
+    void updateProgress(
+      GAME_ID,
+      accuracy >= 0.7,
+      score,
+      selectedDifficulty
+    ).then(({ progress }) => {
       if (cancelledRef.current) return;
       setGameProgress(progress);
     }).catch(() => undefined);
@@ -167,6 +233,9 @@ export default function MainIdeaSprint({
         activityType: 'retrieval-comprehension',
         questionsTotal: total,
         correctCount: correctCountRef.current,
+        configuredRounds: total,
+        completedRounds: completedRoundsRef.current,
+        retrievalBufferMs: sessionRetrievalBufferMsRef.current,
         difficulty: selectedDifficulty,
       },
     });
@@ -174,12 +243,24 @@ export default function MainIdeaSprint({
 
   const currentPassage =
     sessionPassagesRef.current[passageIndex] ?? passages[0];
+  const challenge = getMainIdeaChallenge(selectedDifficulty);
+  const eligiblePassageCount =
+    passages.filter(
+      (passage) =>
+        passage.difficulty === undefined ||
+        passage.difficulty === challenge.passageLevel
+    ).length || passages.length;
   const totalPassages =
     sessionPassagesRef.current.length ||
     Math.min(
-      roundCount ?? getMainIdeaChallenge(selectedDifficulty).roundCount,
-      passages.length
+      roundCount ?? challenge.roundCount,
+      eligiblePassageCount
     );
+  const activeRetrievalBufferMs = Math.max(
+    0,
+    retrievalBufferMs ?? challenge.retrievalBufferMs
+  );
+  const retrievalSeconds = activeRetrievalBufferMs / 1_000;
 
   if (!currentPassage) {
     return (
@@ -209,7 +290,8 @@ export default function MainIdeaSprint({
         >
           <View style={styles.idleMeta}>
             <Text style={styles.idleMetaText}>
-              {totalPassages} short passages · immediate feedback
+              {totalPassages} short passages · {retrievalSeconds}s cue-free
+              recall · immediate feedback
             </Text>
           </View>
         </GameIdlePanel>
@@ -259,7 +341,43 @@ export default function MainIdeaSprint({
           </View>
           <Button
             testID="hide-passage"
-            label="Hide passage and answer"
+            label="Hide passage and retrieve"
+            onPress={beginRetrieval}
+          />
+        </View>
+      )}
+
+      {phase === 'retrieve' && (
+        <View testID="main-idea-retrieval" style={styles.centerStage}>
+          <View style={styles.retrievalCard}>
+            <Text style={styles.eyebrow}>RETRIEVE WITHOUT CUES</Text>
+            <Text style={styles.retrievalTitle}>
+              State the main idea in one sentence
+            </Text>
+            <Text style={styles.feedbackText}>
+              Keep the passage and choices out of view while you form the
+              central claim in your own words.
+            </Text>
+            <View style={styles.bufferPill}>
+              <Text style={styles.bufferValue}>
+                {retrievalSeconds}s
+              </Text>
+              <Text style={styles.bufferLabel}>minimum recall buffer</Text>
+            </View>
+            {retrievalReady && (
+              <Text
+                accessibilityLiveRegion="polite"
+                testID="main-idea-retrieval-ready"
+                style={styles.readyText}
+              >
+                Choices are ready
+              </Text>
+            )}
+          </View>
+          <Button
+            testID="show-main-idea-choices"
+            label={retrievalReady ? 'Show choices' : 'Remember first…'}
+            disabled={!retrievalReady}
             onPress={showQuestion}
           />
         </View>
@@ -491,6 +609,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     marginTop: 2,
+  },
+  retrievalCard: {
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderRadius: 24,
+    backgroundColor: colors.cardBackground,
+    ...shadows.medium,
+  },
+  retrievalTitle: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+    lineHeight: 29,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  bufferPill: {
+    minWidth: 150,
+    alignItems: 'center',
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceTonal,
+  },
+  bufferValue: {
+    color: colors.primaryDark,
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  bufferLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  readyText: {
+    color: colors.success,
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: spacing.md,
   },
   choicesCard: {
     flex: 1,

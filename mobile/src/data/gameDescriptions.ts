@@ -13,7 +13,7 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Read one of twelve original connected passages while the timer runs, then answer three passage-dependent questions after reading time stops. Complete three different valid passages to build your personal practice estimate. Difficulty changes the number of answer choices without weakening the comprehension check.',
 
   MainIdeaSprint:
-    'Read a short passage, hide it, and retrieve its central idea from memory. Immediate feedback helps you learn to separate the author’s main claim from supporting details.',
+    'Read a short passage, hide it, and state its central idea before answer choices appear. A short cue-free recall buffer reduces recognition guessing; immediate feedback then helps you separate the author’s main claim from supporting details.',
 
   StructureScan:
     'Preview a short, structured article for a specific information goal, then choose the heading most likely to contain the answer. This builds purposeful skimming without pretending that skimming replaces careful reading.',

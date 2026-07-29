@@ -146,11 +146,13 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
       <MainIdeaSprint
         passages={[MAIN_IDEA_PASSAGE]}
         roundCount={1}
+        retrievalBufferMs={0}
         onReportResult={report}
       />
     ),
     complete: (view) => {
       fireEvent.press(view.getByTestId('hide-passage'));
+      fireEvent.press(view.getByTestId('show-main-idea-choices'));
       fireEvent.press(view.getByTestId('main-idea-choice-0'));
       fireEvent.press(view.getByTestId('check-main-idea'));
       fireEvent.press(view.getByTestId('continue-main-idea'));

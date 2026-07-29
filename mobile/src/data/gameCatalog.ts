@@ -87,9 +87,9 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
       'Complete three different valid passages to build your personal practice estimate.',
     ],
     difficulty: {
-      easy: option('Easy', '9 reviewed passages · 3 questions · 2 choices each'),
-      medium: option('Medium', '9 reviewed passages · 3 questions · 3 choices each'),
-      hard: option('Hard', '9 reviewed passages · 3 questions · 4 choices each'),
+      easy: option('Easy', '12 reviewed passages · 3 questions · 2 choices each'),
+      medium: option('Medium', '12 reviewed passages · 3 questions · 3 choices each'),
+      hard: option('Hard', '12 reviewed passages · 3 questions · 4 choices each'),
     },
     keywords: [
       'baseline',
@@ -108,13 +108,13 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     tier: 'reading-practice',
     rules: [
       'Read a short passage and retrieve its central point.',
-      'Choose the best main idea after the passage hides.',
+      'After the passage hides, form the main idea before choices appear.',
       'Review an explanation before completing the round.',
     ],
     difficulty: {
-      easy: option('Easy', '3 main-idea rounds'),
-      medium: option('Medium', '4 main-idea rounds'),
-      hard: option('Hard', '5 main-idea rounds'),
+      easy: option('Easy', '3 rounds · 3-second cue-free recall'),
+      medium: option('Medium', '4 rounds · 5-second cue-free recall'),
+      hard: option('Hard', '5 rounds · 8-second cue-free recall'),
     },
     keywords: ['main idea', 'retrieval', 'recall', 'summary'],
   },

@@ -1,5 +1,6 @@
 import { GAME_CATALOG } from './gameCatalog';
 import { GAME_IDS } from './gameIds';
+import { BASELINE_TEXT_SAMPLES } from './textSamples';
 import { getDifficultyOptions } from '../ui/GameDifficultyControl';
 
 describe('game catalog', () => {
@@ -9,6 +10,16 @@ describe('game catalog', () => {
       title: 'Baseline Reading',
       shortDescription: expect.stringContaining('baseline'),
     });
+  });
+
+  it('keeps the advertised baseline passage inventory in sync with content', () => {
+    const advertisedCount = `${BASELINE_TEXT_SAMPLES.length} reviewed passages`;
+    expect(BASELINE_TEXT_SAMPLES).toHaveLength(12);
+    expect(
+      Object.values(GAME_CATALOG.WpmTest.difficulty).every((option) =>
+        option.helper.includes(advertisedCount)
+      )
+    ).toBe(true);
   });
 
   it('contains complete rules and difficulty metadata for every registered game', () => {

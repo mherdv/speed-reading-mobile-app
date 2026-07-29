@@ -6,13 +6,20 @@ import { getWordPairChallenge } from './WordPairs/WordPairs';
 import { getVisualSpanConfig } from './VisualSpanExpansion/visualSpanContent';
 
 describe('meaningful difficulty contracts', () => {
-  it('changes Main Idea reasoning depth without changing the work count', () => {
+  it('changes Main Idea work count, cue-free buffer, and reasoning depth', () => {
     const easy = getMainIdeaChallenge('easy');
     const medium = getMainIdeaChallenge('medium');
     const hard = getMainIdeaChallenge('hard');
 
     expect([easy.roundCount, medium.roundCount, hard.roundCount]).toEqual([
-      2, 2, 2,
+      3, 4, 5,
+    ]);
+    expect([
+      easy.retrievalBufferMs,
+      medium.retrievalBufferMs,
+      hard.retrievalBufferMs,
+    ]).toEqual([
+      3_000, 5_000, 8_000,
     ]);
     expect([easy.inferenceDepth, medium.inferenceDepth, hard.inferenceDepth]).toEqual([
       'explicit',
