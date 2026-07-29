@@ -64,13 +64,13 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Locate matching patterns in a grid and compare speed with accuracy. Use it as an optional visual-search warm-up rather than a reading measure.',
 
   TimedPhraseRecognition:
-    'Identify briefly displayed phrases among options with similar word counts and visible lengths. Set or adapt the word-based flash pace up to 3,000 WPM; longer phrases receive proportionally more display time. Results apply to the drill and should not be read as connected-text comprehension.',
+    'Identify briefly displayed phrases among options with similar word counts and visible lengths. Set or adapt the word-based flash pace up to 3,000 WPM; longer phrases receive proportionally more display time. A miss pauses on your choice and the exact phrase for careful comparison. Results apply to the drill and should not be read as connected-text comprehension.',
 
   TimedWordRecognition:
-    'Choose a briefly displayed word from close-length, similar-looking options so exact recall matters more than button shape. Set or adapt the flash pace anywhere up to 3,000 WPM. This optional task records recognition speed and accuracy without making claims about subvocalization.',
+    'Choose a briefly displayed word from close-length, similar-looking options so exact recall matters more than button shape. Set or adapt the flash pace anywhere up to 3,000 WPM. A miss pauses on your choice and the correct word before continuing. This optional task records recognition speed and accuracy without making claims about subvocalization.',
 
   LastWordRecall:
-    'Follow a paced stream up to 3,000 WPM that stops unpredictably after 3–10 words, then identify the final word among close-length, similar-looking options. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
+    'Follow a paced stream up to 3,000 WPM that stops unpredictably after 3–10 words, then identify the final word among close-length, similar-looking options. A miss pauses on your choice and the true last word before continuing. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
 
   WordMismatchGrid:
     'Compare same-or-different word pairs and find every mismatch. A tap on a matching pair costs time immediately, so guesses cannot be removed without consequence. This is an optional visual-discrimination task, not a comprehension exercise.',

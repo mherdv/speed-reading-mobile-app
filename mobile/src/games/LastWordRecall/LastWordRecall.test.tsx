@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import LastWordRecall from './LastWordRecall';
 
 const WORDS = ['amber', 'cabin', 'delta', 'fable', 'grace', 'habit'];
@@ -62,22 +63,30 @@ describe('LastWordRecall', () => {
 
     fireEvent.press(view.getByTestId('start-button'));
     act(() => {
-      jest.advanceTimersByTime(70);
+      jest.advanceTimersByTime(50);
+    });
+    const firstAnswer = view.getByTestId('stream-word').props.children as string;
+    act(() => {
+      jest.advanceTimersByTime(20);
     });
     expect(view.getByTestId('last-word-options')).toBeTruthy();
 
-    fireEvent.press(view.getByTestId('last-word-option-0'));
+    fireEvent.press(view.getByLabelText(firstAnswer));
+    expect(view.getByTestId('last-word-feedback')).toBeTruthy();
     act(() => {
-      jest.advanceTimersByTime(70);
+      jest.advanceTimersByTime(681);
     });
-    expect(view.queryByTestId('last-word-options')).toBeNull();
-
+    const secondAnswer = view.getByTestId('stream-word').props
+      .children as string;
     act(() => {
-      jest.advanceTimersByTime(140);
+      jest.advanceTimersByTime(25);
     });
     expect(view.getByTestId('last-word-options')).toBeTruthy();
 
-    fireEvent.press(view.getByTestId('last-word-option-0'));
+    fireEvent.press(view.getByLabelText(secondAnswer));
+    act(() => {
+      jest.advanceTimersByTime(501);
+    });
     expect(onReportResult).toHaveBeenCalledWith(
       expect.objectContaining({
         details: expect.objectContaining({
@@ -91,7 +100,7 @@ describe('LastWordRecall', () => {
 
   it('finishes, reports once, and supports replay', () => {
     const onReportResult = jest.fn();
-    const { getByTestId } = render(
+    const { getByLabelText, getByTestId } = render(
       <LastWordRecall
         words={WORDS}
         wordDisplayMs={20}
@@ -103,9 +112,17 @@ describe('LastWordRecall', () => {
 
     fireEvent.press(getByTestId('start-button'));
     act(() => {
-      jest.advanceTimersByTime(90);
+      jest.advanceTimersByTime(65);
     });
-    fireEvent.press(getByTestId('last-word-option-0'));
+    const answer = getByTestId('stream-word').props.children as string;
+    act(() => {
+      jest.advanceTimersByTime(25);
+    });
+    fireEvent.press(getByLabelText(answer));
+    expect(getByTestId('last-word-feedback')).toBeTruthy();
+    act(() => {
+      jest.advanceTimersByTime(501);
+    });
 
     expect(getByTestId('end')).toBeTruthy();
     expect(onReportResult).toHaveBeenCalledTimes(1);
@@ -165,6 +182,10 @@ describe('LastWordRecall', () => {
         jest.advanceTimersByTime(400);
       });
       fireEvent.press(view.getByLabelText(answer));
+      expect(view.getByTestId('last-word-feedback')).toBeTruthy();
+      act(() => {
+        jest.advanceTimersByTime(501);
+      });
     }
     expect(view.getByText('205')).toBeTruthy();
 
@@ -184,6 +205,20 @@ describe('LastWordRecall', () => {
       fireEvent.press(
         view.getByTestId(`last-word-option-${wrongIndex ?? 0}`)
       );
+      expect(
+        view.getByTestId('last-word-feedback-correct').props.children
+      ).toBe(answer);
+      expect(
+        view.getByTestId('last-word-feedback-selected').props.children
+      ).not.toBe(answer);
+      const reviewMs = getRecallFeedbackDurationMs(answer, false);
+      act(() => {
+        jest.advanceTimersByTime(reviewMs - 1);
+      });
+      expect(view.queryByTestId('end')).toBeNull();
+      act(() => {
+        jest.advanceTimersByTime(2);
+      });
     }
 
     expect(view.getByTestId('end')).toBeTruthy();

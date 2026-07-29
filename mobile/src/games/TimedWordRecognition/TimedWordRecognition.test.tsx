@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import TimedWordRecognition from './TimedWordRecognition';
 
 describe('TimedWordRecognition', () => {
@@ -70,18 +71,25 @@ describe('TimedWordRecognition', () => {
       }
     }
 
-    // Advance through feedback
-    act(() => {
-      jest.advanceTimersByTime(700);
-    });
+    expect(getByTestId('word-choice-feedback')).toBeTruthy();
+    expect(getByTestId('word-choice-feedback-correct').props.children).toBe(
+      word
+    );
 
-    // Game should end after 1 round
+    act(() => {
+      jest.advanceTimersByTime(499);
+    });
+    expect(getByTestId('word-choice-feedback')).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(2);
+    });
     expect(getByTestId('end')).toBeTruthy();
   });
 
   it('calls onReportResult when game ends', () => {
     const onReportResult = jest.fn();
-    const { getByTestId } = render(
+    const { getByLabelText, getByTestId } = render(
       <TimedWordRecognition
         words={['apple', 'banana', 'cherry', 'date']}
         displayMs={100}
@@ -91,16 +99,16 @@ describe('TimedWordRecognition', () => {
     );
 
     fireEvent.press(getByTestId('start-button'));
+    const answer = getByTestId('word').props.children as string;
 
     act(() => {
       jest.advanceTimersByTime(150);
     });
 
-    // Click any option
-    fireEvent.press(getByTestId('option-0'));
+    fireEvent.press(getByLabelText(answer));
 
     act(() => {
-      jest.advanceTimersByTime(700);
+      jest.advanceTimersByTime(501);
     });
 
     expect(onReportResult).toHaveBeenCalled();
@@ -158,6 +166,10 @@ describe('TimedWordRecognition', () => {
         jest.advanceTimersByTime(510);
       });
       fireEvent.press(getByLabelText(answer));
+      expect(getByTestId('word-choice-feedback')).toBeTruthy();
+      act(() => {
+        jest.advanceTimersByTime(501);
+      });
     }
 
     expect(getByText('145')).toBeTruthy();
@@ -181,13 +193,25 @@ describe('TimedWordRecognition', () => {
       });
       if (correct) {
         fireEvent.press(view.getByLabelText(shown));
-        return;
+      } else {
+        const wrongIndex = [0, 1, 2, 3].find(
+          (index) =>
+            view.getByTestId(`option-${index}`).props.accessibilityLabel !==
+            shown
+        );
+        fireEvent.press(view.getByTestId(`option-${wrongIndex ?? 0}`));
+        expect(
+          view.getByTestId('word-choice-feedback-selected').props.children
+        ).not.toBe(shown);
       }
-      const wrongIndex = [0, 1, 2, 3].find(
-        (index) =>
-          view.getByTestId(`option-${index}`).props.accessibilityLabel !== shown
-      );
-      fireEvent.press(view.getByTestId(`option-${wrongIndex ?? 0}`));
+
+      expect(
+        view.getByTestId('word-choice-feedback-correct').props.children
+      ).toBe(shown);
+      const feedbackMs = getRecallFeedbackDurationMs(shown, correct);
+      act(() => {
+        jest.advanceTimersByTime(feedbackMs + 1);
+      });
     };
 
     fireEvent.press(view.getByTestId('start-button'));

@@ -87,6 +87,9 @@ describe('adaptive-eligible game progress integration', () => {
       jest.advanceTimersByTime(10);
     });
     fireEvent.press(getByTestId('option-0'));
+    act(() => {
+      jest.advanceTimersByTime(5_300);
+    });
     await expectPersistedPlay('TimedPhraseRecognition');
   });
 });

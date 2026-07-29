@@ -11,6 +11,7 @@ import {
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
+import { ChoiceAnswerFeedback } from '../../ui/ChoiceAnswerFeedback';
 import { FlashPaceControl } from '../../ui/FlashPaceControl';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
@@ -29,6 +30,7 @@ import {
   type FlashPaceBounds,
   type FlashPaceState,
 } from '../flashPacing';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 
 const GAME_ID = 'LastWordRecall';
 const CORRECT_ANSWERS_TO_INCREASE = 4;
@@ -55,8 +57,9 @@ type Props = {
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
-type Phase = 'idle' | 'flashing' | 'choose' | 'ended';
+type Phase = 'idle' | 'flashing' | 'choose' | 'feedback' | 'ended';
 type FinishReason = 'three-misses' | 'manual' | 'round-limit';
+type AnswerReview = { selectedAnswer: string; correct: boolean } | null;
 
 function getConfig(
   difficulty: Difficulty
@@ -137,6 +140,7 @@ export default function LastWordRecall({
   const [score, setScore] = useState(0);
   const [correctStreak, setCorrectStreak] = useState(0);
   const [missStreak, setMissStreak] = useState(0);
+  const [answerReview, setAnswerReview] = useState<AnswerReview>(null);
   const [finishReason, setFinishReason] =
     useState<FinishReason>('three-misses');
 
@@ -215,6 +219,7 @@ export default function LastWordRecall({
     setOptions(createLastWordOptions(sequence));
     setShownIndex(0);
     setShownWord(sequence[0] ?? answer);
+    setAnswerReview(null);
     setPhase('flashing');
     scheduleTimeout(
       revealNextWord,
@@ -237,6 +242,7 @@ export default function LastWordRecall({
     setScore(0);
     setCorrectStreak(0);
     setMissStreak(0);
+    setAnswerReview(null);
     setLiveWpm(startingWpm);
     startRef.current = Date.now();
     startRound();
@@ -246,7 +252,8 @@ export default function LastWordRecall({
 
   function choose(index: number) {
     if (phase !== 'choose') return;
-    const correct = options[index] === answerRef.current;
+    const selectedAnswer = options[index] ?? '';
+    const correct = selectedAnswer === answerRef.current;
     if (correct) {
       scoreRef.current += 10;
       correctRef.current += 1;
@@ -265,18 +272,23 @@ export default function LastWordRecall({
 
     roundRef.current += 1;
     setRound(roundRef.current);
-    if (
-      paceRef.current.missStreak >= MAX_CONSECUTIVE_FLASH_FAILURES
-    ) {
-      finish('three-misses');
-    } else if (
-      totalRounds != null &&
-      roundRef.current >= totalRounds
-    ) {
-      finish('round-limit');
-    } else {
-      startRound();
-    }
+    setAnswerReview({ selectedAnswer, correct });
+    setPhase('feedback');
+    scheduleTimeout(() => {
+      if (cancelledRef.current) return;
+      if (
+        paceRef.current.missStreak >= MAX_CONSECUTIVE_FLASH_FAILURES
+      ) {
+        finish('three-misses');
+      } else if (
+        totalRounds != null &&
+        roundRef.current >= totalRounds
+      ) {
+        finish('round-limit');
+      } else {
+        startRound();
+      }
+    }, getRecallFeedbackDurationMs(answerRef.current, correct));
   }
 
   function finish(reason: FinishReason) {
@@ -440,6 +452,19 @@ export default function LastWordRecall({
               <Text style={styles.finishButtonText}>Finish session</Text>
             </Pressable>
           )}
+        </View>
+      )}
+
+      {phase === 'feedback' && answerReview && (
+        <View style={styles.gameArea}>
+          {stats}
+          <ChoiceAnswerFeedback
+            correct={answerReview.correct}
+            selectedAnswer={answerReview.selectedAnswer}
+            correctAnswer={answerRef.current}
+            answerLabel="Correct last word"
+            testID="last-word-feedback"
+          />
         </View>
       )}
 

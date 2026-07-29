@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import TimedPhraseRecognition from './TimedPhraseRecognition';
 
 describe('TimedPhraseRecognition', () => {
@@ -73,11 +74,12 @@ describe('TimedPhraseRecognition', () => {
     });
 
     fireEvent.press(getByTestId('option-0'));
+    expect(getByTestId('phrase-choice-feedback')).toBeTruthy();
   });
 
   it('calls onReportResult when all rounds complete', () => {
     const onReportResult = jest.fn();
-    const { getByTestId } = render(
+    const { getByLabelText, getByTestId } = render(
       <TimedPhraseRecognition 
         phrases={['A', 'B']} 
         displayMs={20} 
@@ -87,16 +89,19 @@ describe('TimedPhraseRecognition', () => {
     );
 
     fireEvent.press(getByTestId('start-button'));
+    const answer = getByTestId('phrase').props.children as string;
 
     act(() => {
       jest.advanceTimersByTime(30);
     });
 
-    fireEvent.press(getByTestId('option-0'));
+    fireEvent.press(getByLabelText(answer));
+    expect(getByTestId('phrase-choice-feedback')).toBeTruthy();
 
     act(() => {
-      jest.advanceTimersByTime(600);
+      jest.advanceTimersByTime(501);
     });
+    expect(onReportResult).toHaveBeenCalledTimes(1);
   });
 
   it('continues after ordinary misses and ends on the third consecutive miss', () => {
@@ -126,7 +131,23 @@ describe('TimedPhraseRecognition', () => {
           view.getByTestId(`option-${index}`).props.accessibilityLabel !== answer
       );
       fireEvent.press(view.getByTestId(`option-${wrongIndex ?? 0}`));
-      if (miss < 2) expect(view.queryByTestId('end')).toBeNull();
+      expect(view.getByTestId('phrase-choice-feedback')).toBeTruthy();
+      expect(
+        view.getByTestId('phrase-choice-feedback-correct').props.children
+      ).toBe(answer);
+      expect(
+        view.getByTestId('phrase-choice-feedback-selected').props.children
+      ).not.toBe(answer);
+
+      const reviewMs = getRecallFeedbackDurationMs(answer, false);
+      act(() => {
+        jest.advanceTimersByTime(reviewMs - 1);
+      });
+      expect(view.queryByTestId('end')).toBeNull();
+      act(() => {
+        jest.advanceTimersByTime(2);
+      });
+      if (miss < 2) expect(view.getByTestId('phrase')).toBeTruthy();
     }
 
     expect(view.getByTestId('end')).toBeTruthy();

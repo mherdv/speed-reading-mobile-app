@@ -9,6 +9,7 @@ import {
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { levelToStars, updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
+import { ChoiceAnswerFeedback } from '../../ui/ChoiceAnswerFeedback';
 import { FlashPaceControl } from '../../ui/FlashPaceControl';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
@@ -28,6 +29,7 @@ import {
   type FlashPaceBounds,
   type FlashPaceState,
 } from '../flashPacing';
+import { getRecallFeedbackDurationMs } from '../recallFeedback';
 
 const GAME_ID = 'TimedWordRecognition';
 const CORRECT_ANSWERS_TO_INCREASE = 8;
@@ -50,8 +52,9 @@ type Props = {
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
-type Phase = 'idle' | 'show' | 'choose' | 'ended';
+type Phase = 'idle' | 'show' | 'choose' | 'feedback' | 'ended';
 type FinishReason = 'three-misses' | 'manual' | 'round-limit';
+type AnswerReview = { selectedAnswer: string; correct: boolean } | null;
 
 function getPaceConfig(difficulty: Difficulty): FlashPaceBounds & {
   baseWpm: number;
@@ -94,6 +97,7 @@ export default function TimedWordRecognition({
   const [score, setScore] = useState(0);
   const [correctStreak, setCorrectStreak] = useState(0);
   const [missStreak, setMissStreak] = useState(0);
+  const [answerReview, setAnswerReview] = useState<AnswerReview>(null);
   const [finishReason, setFinishReason] =
     useState<FinishReason>('three-misses');
 
@@ -155,6 +159,7 @@ export default function TimedWordRecognition({
     previousWordRef.current = word;
     setCurrentWord(word);
     setOptions(createRecognitionOptions(word, wordPool));
+    setAnswerReview(null);
     setPhase('show');
     scheduleTimeout(
       () => {
@@ -184,6 +189,7 @@ export default function TimedWordRecognition({
     setScore(0);
     setCorrectStreak(0);
     setMissStreak(0);
+    setAnswerReview(null);
     setLiveWpm(startingWpm);
     startRef.current = Date.now();
     showRound();
@@ -193,7 +199,8 @@ export default function TimedWordRecognition({
 
   function choose(index: number) {
     if (phase !== 'choose') return;
-    const correct = options[index] === wordRef.current;
+    const selectedAnswer = options[index] ?? '';
+    const correct = selectedAnswer === wordRef.current;
 
     if (correct) {
       scoreRef.current += 10;
@@ -213,18 +220,23 @@ export default function TimedWordRecognition({
 
     roundRef.current += 1;
     setRound(roundRef.current);
-    if (
-      paceRef.current.missStreak >= MAX_CONSECUTIVE_FLASH_FAILURES
-    ) {
-      finish('three-misses');
-    } else if (
-      totalRounds != null &&
-      roundRef.current >= totalRounds
-    ) {
-      finish('round-limit');
-    } else {
-      showRound();
-    }
+    setAnswerReview({ selectedAnswer, correct });
+    setPhase('feedback');
+    scheduleTimeout(() => {
+      if (cancelledRef.current) return;
+      if (
+        paceRef.current.missStreak >= MAX_CONSECUTIVE_FLASH_FAILURES
+      ) {
+        finish('three-misses');
+      } else if (
+        totalRounds != null &&
+        roundRef.current >= totalRounds
+      ) {
+        finish('round-limit');
+      } else {
+        showRound();
+      }
+    }, getRecallFeedbackDurationMs(wordRef.current, correct));
   }
 
   function finish(reason: FinishReason) {
@@ -376,6 +388,19 @@ export default function TimedWordRecognition({
               <Text style={styles.finishButtonText}>Finish session</Text>
             </Pressable>
           )}
+        </View>
+      )}
+
+      {phase === 'feedback' && answerReview && (
+        <View style={styles.gameArea}>
+          {stats}
+          <ChoiceAnswerFeedback
+            correct={answerReview.correct}
+            selectedAnswer={answerReview.selectedAnswer}
+            correctAnswer={wordRef.current}
+            answerLabel="Correct word"
+            testID="word-choice-feedback"
+          />
         </View>
       )}
 

@@ -923,3 +923,27 @@ and skipped rounds are reported as omissions.
   verification, and a live 3,000-WPM Word Flash interaction. The preview
   reached its answer phase at the expected rapid pace with no runtime errors
   or horizontal overflow.
+
+## V18 recognition correction review
+
+- The product review found a learning-loop gap in Word Flash, Phrase Flash,
+  and Last Word: choosing an option immediately discarded both the choice and
+  the answer. Similar distractors increased difficulty, but a learner could not
+  inspect what made a miss wrong.
+- All three exercises now enter a dedicated answer-review state after every
+  choice. Correct answers receive a brief 0.5-second confirmation; misses show
+  “You chose” beside the exact answer for 2.8–5.2 seconds, with longer phrases
+  receiving more review time.
+- Round counts, scoring, consecutive-miss logic, and adaptive WPM updates occur
+  at selection time, while the next flash or result waits for review to finish.
+  The third consecutive miss therefore reveals its correction before ending
+  the session.
+- The shared feedback card uses accessible success/error roles, centered
+  wrapping text, and a polite live-region announcement so the same comparison
+  remains usable for words and multi-word phrases.
+- Final validation passed strict TypeScript, all 508 Jest tests across 75
+  suites, all 18 Expo Doctor checks, production PWA export/offline
+  verification, and a live wrong-answer review. The browser showed both the
+  selected and correct words, preserved the review delay, returned home without
+  a blocking Back prompt, and reported no runtime errors or horizontal
+  overflow.

@@ -450,6 +450,7 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
     complete: (view) => {
       advance(20);
       fireEvent.press(view.getByTestId('option-0'));
+      advance(5_300);
     },
     activeTestId: 'phrase-flash',
     replayTestId: 'options-container',
@@ -468,6 +469,7 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
     complete: (view) => {
       advance(20);
       fireEvent.press(view.getByTestId('option-0'));
+      advance(5_300);
     },
     activeTestId: 'word-flash',
     replayTestId: 'options-container',
@@ -487,6 +489,7 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
     complete: (view) => {
       advance(50);
       fireEvent.press(view.getByTestId('last-word-option-0'));
+      advance(5_300);
     },
     activeTestId: 'word-stream',
     endTestId: 'end',
