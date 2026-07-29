@@ -12,6 +12,27 @@ describe('TimedPhraseRecognition', () => {
     jest.useRealTimers();
   });
 
+  it('uses the selected 3,000 WPM pace without a hidden phrase-duration cap', () => {
+    const view = render(
+      <TimedPhraseRecognition
+        phrases={['alpha beta gamma delta']}
+        totalRounds={1}
+      />
+    );
+
+    fireEvent.press(view.getByTestId('pace-preset-3000'));
+    fireEvent.press(view.getByTestId('start-button'));
+    act(() => {
+      jest.advanceTimersByTime(79);
+    });
+    expect(view.getByTestId('phrase-flash')).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(2);
+    });
+    expect(view.getByTestId('options-container')).toBeTruthy();
+  });
+
   it('starts in idle phase and shows start button', () => {
     const { getByTestId } = render(<TimedPhraseRecognition />);
     expect(getByTestId('start-button')).toBeTruthy();

@@ -902,3 +902,24 @@ and skipped rounds are reported as omissions.
   verification, and a complete 390 × 844 moving-grid session with one
   intentional mistake. The result and Labs history displayed Items/min, mode,
   and mistake details with no overflow or browser errors.
+
+## V17 rapid-flash pace range
+
+- Word Flash, Phrase Flash, Last Word, and Flash Recall now share a practical
+  upper setting of 3,000 WPM instead of stopping at difficulty-specific limits
+  between 240 and 540 WPM. Difficulty still selects the starting pace and
+  content complexity; it no longer prevents a learner from testing a faster
+  personally manageable pace.
+- Six tap-friendly quick settings reach 150, 300, 600, 1,000, 2,000, or 3,000
+  WPM without requiring dozens of plus-button presses. The control also shows
+  the selected pace as milliseconds per word and preserves the existing
+  25-WPM streak-based adaptation.
+- The shared presentation floor is now 20 ms per word, which makes the
+  3,000-WPM setting operational rather than cosmetic. Phrase Flash calculates
+  exposure from the actual number of words, so a five-word phrase at 3,000 WPM
+  remains visible for 100 ms and its reported pace matches the delivered pace.
+- Final validation passed strict TypeScript, all 508 Jest tests across 75
+  suites, all 18 Expo Doctor checks, production PWA export/offline
+  verification, and a live 3,000-WPM Word Flash interaction. The preview
+  reached its answer phase at the expected rapid pace with no runtime errors
+  or horizontal overflow.

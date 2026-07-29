@@ -23,6 +23,7 @@ import {
   createFlashPaceState,
   displayDurationForWpm,
   MAX_CONSECUTIVE_FLASH_FAILURES,
+  RAPID_FLASH_MAX_WPM,
   updateFlashPace,
   wpmForDisplayDuration,
   type FlashPaceBounds,
@@ -58,11 +59,11 @@ function getConfig(difficulty: Difficulty): FlashPaceBounds & {
 } {
   switch (difficulty) {
     case 'easy':
-      return { baseWpm: 180, minWpm: 120, maxWpm: 280 };
+      return { baseWpm: 180, minWpm: 120, maxWpm: RAPID_FLASH_MAX_WPM };
     case 'medium':
-      return { baseWpm: 260, minWpm: 180, maxWpm: 400 };
+      return { baseWpm: 260, minWpm: 180, maxWpm: RAPID_FLASH_MAX_WPM };
     case 'hard':
-      return { baseWpm: 360, minWpm: 260, maxWpm: 520 };
+      return { baseWpm: 360, minWpm: 260, maxWpm: RAPID_FLASH_MAX_WPM };
   }
 }
 
@@ -170,7 +171,7 @@ export default function TimedPhraseRecognition({
         if (!cancelledRef.current) setPhase('choose');
       },
       displayMsProp ??
-        displayDurationForWpm(paceRef.current.wpm, countWords(phrase), 300)
+        displayDurationForWpm(paceRef.current.wpm, countWords(phrase))
     );
   }
 

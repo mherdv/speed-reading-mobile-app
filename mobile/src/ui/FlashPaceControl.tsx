@@ -1,7 +1,11 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { FLASH_PACE_STEP, clampWpm } from '../games/flashPacing';
+import {
+  FLASH_PACE_PRESETS,
+  FLASH_PACE_STEP,
+  clampWpm,
+} from '../games/flashPacing';
 import { colors } from '../theme/colors';
 
 type Props = {
@@ -30,6 +34,9 @@ export function FlashPaceControl({
   const bounds = { minWpm, maxWpm, step };
   const decreaseDisabled = disabled || wpm <= minWpm;
   const increaseDisabled = disabled || wpm >= maxWpm;
+  const availablePresets = FLASH_PACE_PRESETS.filter(
+    (preset) => preset >= minWpm && preset <= maxWpm
+  );
 
   return (
     <View style={styles.container}>
@@ -77,9 +84,54 @@ export function FlashPaceControl({
           <Text style={styles.buttonText}>+</Text>
         </Pressable>
       </View>
+      {availablePresets.length > 0 && (
+        <View style={styles.quickSet}>
+          <Text style={styles.quickSetLabel}>
+            Quick set · up to {maxWpm.toLocaleString()} WPM
+          </Text>
+          <View
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Quick pace settings"
+            style={styles.presets}
+          >
+            {availablePresets.map((preset) => {
+              const selected = wpm === preset;
+              return (
+                <Pressable
+                  accessibilityRole="radio"
+                  accessibilityLabel={`${preset} words per minute`}
+                  accessibilityState={{
+                    checked: selected,
+                    disabled,
+                  }}
+                  disabled={disabled}
+                  key={preset}
+                  testID={`pace-preset-${preset}`}
+                  onPress={() => onChange(preset)}
+                  style={({ pressed }) => [
+                    styles.preset,
+                    selected && styles.presetSelected,
+                    disabled && styles.presetDisabled,
+                    pressed && !disabled && styles.buttonPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.presetText,
+                      selected && styles.presetTextSelected,
+                    ]}
+                  >
+                    {preset.toLocaleString()}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
       <Text style={styles.hint}>
-        Auto pace: +{step} after {correctAnswersToIncrease} correct · session
-        {' '}ends after {failureLimit} misses
+        ~{Math.round(60_000 / Math.max(1, wpm))} ms per word · Auto +{step}
+        {' '}after {correctAnswersToIncrease} correct · {failureLimit} misses end
       </Text>
     </View>
   );
@@ -133,6 +185,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primaryDark,
+  },
+  quickSet: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  quickSetLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 7,
+  },
+  presets: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  preset: {
+    minWidth: 58,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
+    paddingHorizontal: 9,
+  },
+  presetSelected: {
+    borderColor: colors.primaryDark,
+    backgroundColor: colors.primaryDark,
+  },
+  presetDisabled: {
+    backgroundColor: colors.disabledSurface,
+    borderColor: colors.border,
+  },
+  presetText: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  presetTextSelected: {
+    color: colors.onInteractive,
   },
   value: {
     color: colors.onInteractive,

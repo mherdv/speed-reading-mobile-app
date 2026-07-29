@@ -22,6 +22,7 @@ import {
   createFlashPaceState,
   displayDurationForWpm,
   MAX_CONSECUTIVE_FLASH_FAILURES,
+  RAPID_FLASH_MAX_WPM,
   updateFlashPace,
   wpmForDisplayDuration,
   type FlashPaceBounds,
@@ -57,11 +58,11 @@ function getPaceConfig(difficulty: Difficulty): FlashPaceBounds & {
 } {
   switch (difficulty) {
     case 'easy':
-      return { baseWpm: 120, minWpm: 80, maxWpm: 240 };
+      return { baseWpm: 120, minWpm: 80, maxWpm: RAPID_FLASH_MAX_WPM };
     case 'medium':
-      return { baseWpm: 220, minWpm: 140, maxWpm: 360 };
+      return { baseWpm: 220, minWpm: 140, maxWpm: RAPID_FLASH_MAX_WPM };
     case 'hard':
-      return { baseWpm: 320, minWpm: 220, maxWpm: 500 };
+      return { baseWpm: 320, minWpm: 220, maxWpm: RAPID_FLASH_MAX_WPM };
   }
 }
 

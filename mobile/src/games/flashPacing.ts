@@ -1,4 +1,7 @@
 export const FLASH_PACE_STEP = 25;
+export const RAPID_FLASH_MAX_WPM = 3000;
+export const MIN_FLASH_DISPLAY_MS = 20;
+export const FLASH_PACE_PRESETS = [150, 300, 600, 1000, 2000, 3000] as const;
 export const DEFAULT_CORRECT_ANSWERS_TO_INCREASE = 4;
 export const DEFAULT_MISSES_TO_DECREASE = 2;
 export const MAX_CONSECUTIVE_FLASH_FAILURES = 3;
@@ -28,7 +31,7 @@ export function clampWpm(
 export function displayDurationForWpm(
   wpm: number,
   wordCount = 1,
-  minMs = 120,
+  minMs = MIN_FLASH_DISPLAY_MS,
   maxMs = 4000
 ): number {
   const safeWpm = Math.max(1, wpm);

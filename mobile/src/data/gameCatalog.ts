@@ -199,7 +199,7 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     rules: [
       'View one briefly displayed word.',
       'Type the word from memory after it disappears.',
-      'The pace rises by 25 WPM after 4 correct in a row; a miss resets the streak and 3 consecutive misses end the session.',
+      'Quick-set any starting pace up to 3,000 WPM; it rises by 25 WPM after 4 correct in a row, while 3 consecutive misses end the session.',
     ],
     difficulty: {
       easy: option('Easy', 'Common words · starts at 120 WPM'),
@@ -379,7 +379,7 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     rules: [
       'View one word before it disappears.',
       'Choose the exact word from close-length, similar-looking distractors.',
-      'The pace rises by 25 WPM after 8 correct in a row; a miss resets the streak and 3 consecutive misses end the session.',
+      'Quick-set any starting pace up to 3,000 WPM; it rises by 25 WPM after 8 correct in a row, while 3 consecutive misses end the session.',
     ],
     difficulty: {
       easy: option('Easy', 'Common words · starts at 120 WPM'),
@@ -397,7 +397,7 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     rules: [
       'View one generated phrase at the selected WPM.',
       'Choose the exact phrase from four options with similar word counts and lengths.',
-      'The pace rises by 25 WPM after 8 correct in a row; a miss resets the streak and 3 consecutive misses end the session.',
+      'Quick-set any starting pace up to 3,000 WPM; it rises by 25 WPM after 8 correct in a row, while 3 consecutive misses end the session.',
     ],
     difficulty: {
       easy: option('Easy', '5-word templates · starts at 180 WPM'),
@@ -415,7 +415,7 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     rules: [
       'Watch words shown one at a time; each stream stops unpredictably after 3–10 words.',
       'After the stream ends, choose the last word from close-length, similar-looking options.',
-      'The pace rises by 25 WPM after 4 correct in a row; a miss resets the streak and 3 consecutive misses end the session.',
+      'Quick-set any starting pace up to 3,000 WPM; it rises by 25 WPM after 4 correct in a row, while 3 consecutive misses end the session.',
     ],
     difficulty: {
       easy: option('Easy', 'Common words · starts at 180 WPM'),

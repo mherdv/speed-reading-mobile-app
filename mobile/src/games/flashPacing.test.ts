@@ -1,6 +1,8 @@
 import {
   createFlashPaceState,
   displayDurationForWpm,
+  MIN_FLASH_DISPLAY_MS,
+  RAPID_FLASH_MAX_WPM,
   updateFlashPace,
   wpmForDisplayDuration,
 } from './flashPacing';
@@ -12,6 +14,13 @@ describe('flash pacing', () => {
     expect(displayDurationForWpm(300)).toBe(200);
     expect(wpmForDisplayDuration(200)).toBe(300);
     expect(displayDurationForWpm(240, 4)).toBe(1000);
+  });
+
+  it('supports rapid one-word and proportional phrase flashes at 3,000 WPM', () => {
+    expect(RAPID_FLASH_MAX_WPM).toBe(3000);
+    expect(MIN_FLASH_DISPLAY_MS).toBe(20);
+    expect(displayDurationForWpm(RAPID_FLASH_MAX_WPM)).toBe(20);
+    expect(displayDurationForWpm(RAPID_FLASH_MAX_WPM, 5)).toBe(100);
   });
 
   it('increases by one step after four consecutive correct answers by default', () => {

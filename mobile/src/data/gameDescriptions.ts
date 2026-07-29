@@ -40,7 +40,7 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Keep your eyes near a central fixation mark while equal-length words flash at several surrounding positions. After they disappear, select the word that occupied one prompted position. A miss shows both choices, costs 5 points, and temporarily narrows the next glance. Treat its score as spatial word-recall performance, not proof of faster connected-text reading.',
 
   FlashReading:
-    'Type a briefly displayed word from memory and track response accuracy. A miss keeps your entry and the correct word visible before continuing. This challenge does not by itself demonstrate faster connected-text reading.',
+    'Type a briefly displayed word from memory and track response accuracy. Set or adapt the flash pace anywhere up to 3,000 WPM. A miss keeps your entry and the correct word visible before continuing. This challenge does not by itself demonstrate faster connected-text reading.',
 
   WordsRecall:
     'View exactly two English words, then type both from memory after they disappear. A miss pauses on your entry and the correct pair. Difficulty changes only vocabulary and display time; comparison ignores case, punctuation, and extra whitespace.',
@@ -64,13 +64,13 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Locate matching patterns in a grid and compare speed with accuracy. Use it as an optional visual-search warm-up rather than a reading measure.',
 
   TimedPhraseRecognition:
-    'Identify briefly displayed phrases among options with similar word counts and visible lengths. Results apply to the drill and should not be read as connected-text comprehension.',
+    'Identify briefly displayed phrases among options with similar word counts and visible lengths. Set or adapt the word-based flash pace up to 3,000 WPM; longer phrases receive proportionally more display time. Results apply to the drill and should not be read as connected-text comprehension.',
 
   TimedWordRecognition:
-    'Choose a briefly displayed word from close-length, similar-looking options so exact recall matters more than button shape. This optional task records recognition speed and accuracy without making claims about subvocalization.',
+    'Choose a briefly displayed word from close-length, similar-looking options so exact recall matters more than button shape. Set or adapt the flash pace anywhere up to 3,000 WPM. This optional task records recognition speed and accuracy without making claims about subvocalization.',
 
   LastWordRecall:
-    'Follow a paced stream that stops unpredictably after 3–10 words, then identify the final word among close-length, similar-looking options. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
+    'Follow a paced stream up to 3,000 WPM that stops unpredictably after 3–10 words, then identify the final word among close-length, similar-looking options. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
 
   WordMismatchGrid:
     'Compare same-or-different word pairs and find every mismatch. A tap on a matching pair costs time immediately, so guesses cannot be removed without consequence. This is an optional visual-discrimination task, not a comprehension exercise.',
