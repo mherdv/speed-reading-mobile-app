@@ -380,6 +380,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: 12,
     textAlign: 'center',
+    userSelect: 'text',
   },
   buttons: { flexDirection: 'row', gap: 8 },
   primaryButton: {

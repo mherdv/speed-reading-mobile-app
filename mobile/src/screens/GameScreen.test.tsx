@@ -72,6 +72,24 @@ describe('GameScreen difficulty control', () => {
     expect(getByText('Manual setting: Medium')).toBeTruthy();
   });
 
+  it('auto-starts a Schulte replay with its previous grid mode', async () => {
+    const { getByText } = render(
+      <GameScreen
+        gameId="SchulteNumbers"
+        autoStart
+        schulteGridMode="reshuffle"
+        onBack={jest.fn()}
+        onFinish={jest.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        getByText('Moving grid · completed cells stay uncolored')
+      ).toBeTruthy();
+    });
+  });
+
   it.each([
     ['RepeatedReading', 'game-idle-scroll'],
     ['MemoryRecall', 'simple-idle-scroll'],

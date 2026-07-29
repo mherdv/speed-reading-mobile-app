@@ -5,6 +5,7 @@ import type { AttemptResult } from '../domain/types';
 import {
   formatDuration,
   getResultMetric,
+  getSchulteGridModeLabel,
   isMeasuredReadingResult,
   isReadingResult,
   isValidProgressMeasurement,
@@ -158,6 +159,7 @@ export function ResultScreen({
     TEXT_SAMPLES.some((sample) => sample.id === result.sampleId);
   const hasAccuracy = typeof result.accuracy === 'number';
   const message = encouragement(result, measuredReading);
+  const schulteGridModeLabel = getSchulteGridModeLabel(result);
   const nextSession = nextSessionRecommendation(result, measuredReading);
   const comprehensionDiagnostic = getComprehensionDiagnostic(result);
   const validProgressMeasurement = isValidProgressMeasurement(result);
@@ -264,7 +266,19 @@ export function ResultScreen({
         end={gradients.background.end}
         style={styles.heroCard}
       >
-        <Text style={styles.activityName}>{result.sampleTitle}</Text>
+        <Text
+          style={[
+            styles.activityName,
+            schulteGridModeLabel && styles.activityNameWithMode,
+          ]}
+        >
+          {result.sampleTitle}
+        </Text>
+        {schulteGridModeLabel && (
+          <Text testID="schulte-grid-mode" style={styles.modeBadge}>
+            {schulteGridModeLabel}
+          </Text>
+        )}
         <Text style={styles.messageTitle}>{message.title}</Text>
         <Text style={styles.messageBody}>{message.body}</Text>
       </LinearGradient>
@@ -381,6 +395,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
+    userSelect: 'none',
   },
   content: {
     padding: spacing.md,
@@ -523,6 +538,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     marginBottom: spacing.md,
+  },
+  activityNameWithMode: {
+    marginBottom: spacing.xs,
+  },
+  modeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    color: colors.primaryDark,
+    backgroundColor: colors.infoSurface,
+    fontSize: 11,
+    fontWeight: '800',
+    overflow: 'hidden',
   },
   messageTitle: {
     color: colors.textPrimary,

@@ -123,4 +123,28 @@ describe('ResultScreen truthful metric cards', () => {
       )
     ).toBeTruthy();
   });
+
+  it('shows the exact Schulte grid variation used', () => {
+    const view = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: 'SchulteNumbers',
+          sampleTitle: 'Schulte Numbers',
+          wordCount: 0,
+          wpm: 0,
+          score: 42,
+          accuracy: 1,
+          details: {
+            difficulty: 'easy',
+            gridMode: 'reshuffle',
+          },
+        })}
+      />
+    );
+
+    expect(view.getByTestId('schulte-grid-mode')).toHaveTextContent(
+      'Shuffle after each tap'
+    );
+  });
 });

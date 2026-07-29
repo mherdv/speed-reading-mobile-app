@@ -182,6 +182,32 @@ describe('result helpers', () => {
     );
   });
 
+  it('keeps stable and moving Schulte grids in separate comparisons', () => {
+    const legacyStable = makeResult({
+      sampleId: 'SchulteNumbers',
+      wordCount: 0,
+      wpm: 0,
+      score: 32,
+      details: { difficulty: 'medium' },
+    });
+    const explicitStable = makeResult({
+      ...legacyStable,
+      id: 'stable',
+      details: { difficulty: 'medium', gridMode: 'stable' },
+    });
+    const moving = makeResult({
+      ...legacyStable,
+      id: 'moving',
+      details: { difficulty: 'medium', gridMode: 'reshuffle' },
+    });
+
+    expect(areResultsComparable(legacyStable, explicitStable)).toBe(true);
+    expect(areResultsComparable(explicitStable, moving)).toBe(false);
+    expect(getResultComparison(moving).label).toBe(
+      'Score · Medium · Shuffle after each tap'
+    );
+  });
+
   it('labels configured pacing separately from measured WPM', () => {
     expect(
       getResultMetric(

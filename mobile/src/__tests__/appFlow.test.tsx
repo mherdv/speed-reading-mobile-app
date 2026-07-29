@@ -141,4 +141,35 @@ describe('real app navigation flows', () => {
       expect(getByText('Welcome back')).toBeTruthy();
     });
   });
+
+  it('replays Schulte at the same selected grid variation', async () => {
+    const { getByLabelText, getByTestId, getByText } = render(<App />);
+    await waitFor(() => {
+      expect(getByTestId('open-game-SchulteNumbers')).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId('open-game-SchulteNumbers'));
+    await waitFor(() => {
+      expect(getByTestId('schulte-mode-reshuffle')).toBeTruthy();
+    });
+    fireEvent.press(getByTestId('schulte-mode-reshuffle'));
+    fireEvent.press(getByTestId('start-button'));
+
+    for (let number = 1; number <= 9; number += 1) {
+      fireEvent.press(getByTestId(`cell-${number}`));
+    }
+
+    await waitFor(() => {
+      expect(getByTestId('schulte-grid-mode')).toHaveTextContent(
+        'Shuffle after each tap'
+      );
+    });
+
+    fireEvent.press(getByLabelText('Play this game again'));
+    await waitFor(() => {
+      expect(
+        getByText('Moving grid · completed cells stay uncolored')
+      ).toBeTruthy();
+    });
+  });
 });

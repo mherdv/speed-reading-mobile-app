@@ -8,6 +8,7 @@ export type RootStackParamList = {
     autoStart?: boolean;
     sessionKey?: string;
     difficulty?: 'easy' | 'medium' | 'hard';
+    schulteGridMode?: 'stable' | 'reshuffle';
   };
   Result: { result: AttemptResult };
   History: { optimisticResult?: AttemptResult } | undefined;

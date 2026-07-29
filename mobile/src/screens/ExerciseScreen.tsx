@@ -240,7 +240,6 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
               </Text>
               <Text
                 style={[styles.readerText, readingDisplay.text]}
-                selectable
               >
                 {sample.text}
               </Text>
@@ -335,6 +334,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
+    userSelect: 'none',
   },
   content: {
     flexGrow: 1,

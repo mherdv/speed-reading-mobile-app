@@ -44,6 +44,7 @@ type Props = {
   sessionKey?: string;
   autoStart?: boolean;
   difficulty?: Difficulty;
+  schulteGridMode?: 'stable' | 'reshuffle';
   onBack: () => void;
   onFinish: (result: AttemptResult) => void;
 };
@@ -57,6 +58,7 @@ export function GameScreen({
   sessionKey,
   autoStart,
   difficulty,
+  schulteGridMode,
   onBack,
   onFinish,
 }: Props) {
@@ -255,6 +257,7 @@ export function GameScreen({
               key={`${sessionKey ?? normalizedGameId}-${difficultyControl.mode}-${difficultyControl.difficulty}`}
               autoStart={autoStart}
               difficulty={difficultyControl.difficulty}
+              defaultGridMode={schulteGridMode}
               onReportResult={(p: GameReportPayload) =>
                 void handleGameReport({
                   ...p,
@@ -284,6 +287,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 24,
     backgroundColor: colors.background,
+    userSelect: 'none',
   },
   header: {
     position: 'relative',

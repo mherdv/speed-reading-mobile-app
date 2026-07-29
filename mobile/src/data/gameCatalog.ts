@@ -269,16 +269,16 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     category: 'scanning',
     tier: 'experimental',
     rules: [
-      'Keep the entire shuffled grid comfortably visible.',
+      'Choose a stable grid or the harder mode that reshuffles after every correct tap.',
       'Tap every number in ascending order from 1.',
-      'Incorrect taps add mistakes without advancing the sequence.',
+      'Wrong taps add mistakes without advancing; completed cells stay uncolored in shuffle mode.',
     ],
     difficulty: {
       easy: option('3 × 3', '9 targets'),
       medium: option('4 × 4', '16 targets'),
       hard: option('5 × 5', '25 targets'),
     },
-    keywords: ['schulte', 'numbers', 'sequence', 'visual search'],
+    keywords: ['schulte', 'numbers', 'sequence', 'visual search', 'moving grid'],
   },
   SchulteLetters: {
     id: 'SchulteLetters',
@@ -287,16 +287,16 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     category: 'scanning',
     tier: 'experimental',
     rules: [
-      'Keep the entire shuffled letter grid visible.',
+      'Choose a stable grid or the harder mode that reshuffles after every correct tap.',
       'Tap letters alphabetically from A.',
-      'Incorrect taps add mistakes without advancing the sequence.',
+      'Wrong taps add mistakes without advancing; completed cells stay uncolored in shuffle mode.',
     ],
     difficulty: {
       easy: option('3 × 3', 'Letters A–I'),
       medium: option('4 × 4', 'Letters A–P'),
       hard: option('5 × 5', 'Letters A–Y'),
     },
-    keywords: ['schulte', 'letters', 'alphabet', 'visual search'],
+    keywords: ['schulte', 'letters', 'alphabet', 'visual search', 'moving grid'],
   },
   SchulteMix: {
     id: 'SchulteMix',
@@ -305,16 +305,16 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     category: 'scanning',
     tier: 'experimental',
     rules: [
-      'Read the next displayed number-or-letter target.',
+      'Choose a stable grid or the harder mode that reshuffles after every correct tap.',
       'Alternate through the shuffled sequence in order.',
-      'Incorrect taps add mistakes without advancing.',
+      'Wrong taps add mistakes without advancing; completed cells stay uncolored in shuffle mode.',
     ],
     difficulty: {
       easy: option('3 × 3', '9 alternating targets'),
       medium: option('4 × 4', '16 alternating targets'),
       hard: option('5 × 5', '25 alternating targets'),
     },
-    keywords: ['schulte', 'switching', 'numbers', 'letters'],
+    keywords: ['schulte', 'switching', 'numbers', 'letters', 'moving grid'],
   },
   EyeMovementTraining: {
     id: 'EyeMovementTraining',

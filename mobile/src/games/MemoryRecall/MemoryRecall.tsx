@@ -476,7 +476,6 @@ export default function MemoryRecall({
                 </Text>
                 <Text style={styles.reviewLabel}>Correct sequence</Text>
                 <Text
-                  selectable
                   testID="memory-correct-answer"
                   style={styles.reviewSequence}
                 >

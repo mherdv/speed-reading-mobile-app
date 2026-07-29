@@ -7,6 +7,15 @@ import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useGameProgress, useTrackedTimeouts, type Difficulty } from '../gameHooks';
 import { colors } from '../../theme/colors';
+import { SchulteGridModeControl } from '../SchulteGridModeControl';
+import {
+  measuredElapsedMs,
+  monotonicNowMs,
+  reshuffleSchulteGrid,
+  shuffleSchulteGrid,
+  type SchulteClock,
+  type SchulteGridMode,
+} from '../schulteShared';
 
 const GAME_ID = 'SchulteMix';
 
@@ -24,6 +33,9 @@ type GameReportPayload = {
 
 type Props = {
   gridSize?: number;
+  defaultGridMode?: SchulteGridMode;
+  random?: () => number;
+  clock?: SchulteClock;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
@@ -43,20 +55,11 @@ function getDifficultyConfig(difficulty: Difficulty) {
   }
 }
 
-function shuffleArray<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function generateGrid(size: number): CellType[] {
+function generateGrid(size: number, random: () => number): CellType[] {
   const half = Math.floor((size * size) / 2);
   const numbers: CellType[] = Array.from({ length: half }, (_, i) => ({ value: String(i + 1), type: 'number' }));
   const letters: CellType[] = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, size * size - half).split('').map(l => ({ value: l, type: 'letter' }));
-  return shuffleArray([...numbers, ...letters]);
+  return shuffleSchulteGrid([...numbers, ...letters], random);
 }
 
 function generateSequence(size: number): CellType[] {
@@ -74,6 +77,9 @@ function generateSequence(size: number): CellType[] {
 
 export default function SchulteMix({ 
   gridSize: gridSizeProp,
+  defaultGridMode = 'stable',
+  random = Math.random,
+  clock = monotonicNowMs,
   difficulty = 'medium',
   autoStart = false, 
   onReportResult 
@@ -91,8 +97,14 @@ export default function SchulteMix({
   const [mistakes, setMistakes] = useState(0);
   const [tapped, setTapped] = useState<Set<string>>(new Set());
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [selectedGridMode, setSelectedGridMode] =
+    useState<SchulteGridMode>(defaultGridMode);
+  const [sessionGridMode, setSessionGridMode] =
+    useState<SchulteGridMode>(defaultGridMode);
 
   const startedAtRef = useRef<number>(0);
+  const startedAtIsoRef = useRef<string>('');
+  const reshuffleCountRef = useRef(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
 
@@ -136,13 +148,16 @@ export default function SchulteMix({
     clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
-    setGrid(generateGrid(gridSize));
+    setGrid(generateGrid(gridSize, random));
     setSequence(generateSequence(gridSize));
     setNextIndex(0);
     setMistakes(0);
     setTapped(new Set());
     setElapsedMs(0);
-    startedAtRef.current = Date.now();
+    setSessionGridMode(selectedGridMode);
+    reshuffleCountRef.current = 0;
+    startedAtRef.current = clock();
+    startedAtIsoRef.current = new Date().toISOString();
     setPhase('running');
   }
 
@@ -152,29 +167,42 @@ export default function SchulteMix({
     reportedRef.current = true;
     clearTrackedTimeouts();
     
-    const now = Date.now();
-    const completedElapsedMs = now - startedAtRef.current;
+    const completedElapsedMs = measuredElapsedMs(startedAtRef.current, clock);
+    const finishedAtIso = new Date().toISOString();
     setElapsedMs(completedElapsedMs);
     const attempts = total + mistakes;
     const accuracy = attempts > 0 ? total / attempts : 1;
+    const itemsPerMinute = Math.round(
+      (total / Math.max(completedElapsedMs, 1)) * 60_000 * accuracy
+    );
     
     // Update progress - success if accuracy >= 70%
     const success = accuracy >= 0.7;
-    updateProgress(GAME_ID, success, total).then(({ progress }) => {
+    updateProgress(
+      GAME_ID,
+      success,
+      itemsPerMinute,
+      selectedDifficulty
+    ).then(({ progress }) => {
+      if (cancelledRef.current) return;
       setGameProgress(progress);
-    });
+    }).catch(() => undefined);
 
     onReportResult?.({
-      startedAtIso: new Date(startedAtRef.current).toISOString(),
-      finishedAtIso: new Date(now).toISOString(),
+      startedAtIso: startedAtIsoRef.current,
+      finishedAtIso,
       elapsedMs: completedElapsedMs,
-      score: total,
+      score: itemsPerMinute,
       accuracy,
       details: {
         gridSize,
         mistakes,
+        itemsPerMinute,
         timeMs: completedElapsedMs,
         timePenaltyMs: 0,
+        gridMode: sessionGridMode,
+        reshuffleCount: reshuffleCountRef.current,
+        timingMethod: 'monotonic-elapsed',
         difficulty: selectedDifficulty,
       },
     });
@@ -191,6 +219,10 @@ export default function SchulteMix({
       if (nextIndex === sequence.length - 1) {
         finish();
       } else {
+        if (sessionGridMode === 'reshuffle') {
+          reshuffleCountRef.current += 1;
+          setGrid((current) => reshuffleSchulteGrid(current, random));
+        }
         setNextIndex(nextIndex + 1);
       }
     } else {
@@ -204,7 +236,11 @@ export default function SchulteMix({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Schulte Mix</Text>
-        <Text style={styles.subtitle}>Alternate: 1, A, 2, B, 3, C...</Text>
+        <Text style={styles.subtitle}>
+          {phase === 'running' && sessionGridMode === 'reshuffle'
+            ? 'Moving grid · completed cells stay uncolored'
+            : 'Alternate: 1, A, 2, B, 3, C...'}
+        </Text>
       </View>
 
       {phase === 'idle' && (
@@ -220,7 +256,12 @@ export default function SchulteMix({
           starsStyle={styles.starsDisplay}
           buttonStyle={styles.startBtn}
           buttonTextStyle={styles.startBtnText}
-        />
+        >
+          <SchulteGridModeControl
+            value={selectedGridMode}
+            onChange={setSelectedGridMode}
+          />
+        </GameIdlePanel>
       )}
 
       {phase === 'running' && (
@@ -272,8 +313,20 @@ export default function SchulteMix({
                     if (!cell) return null;
                     const key = `${cell.type}-${cell.value}`;
                     const isDone = tapped.has(key);
+                    const showDone = isDone && sessionGridMode === 'stable';
+                    const cellLabel = `${
+                      cell.type === 'number' ? 'Number' : 'Letter'
+                    } ${cell.value}`;
                     return (
-                      <Pressable accessibilityRole="button"
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          cell.value === nextCell?.value &&
+                          cell.type === nextCell?.type
+                            ? `${cellLabel}, next target`
+                            : cellLabel
+                        }
+                        accessibilityState={{ disabled: isDone }}
                         key={colIndex}
                         testID={`cell-${cell.type}-${cell.value}`}
                         style={[
@@ -284,12 +337,12 @@ export default function SchulteMix({
                             marginRight: colIndex < gridSize - 1 ? cellGap : 0,
                           },
                           cell.type === 'number' ? styles.cellNumber : styles.cellLetter,
-                          isDone && styles.cellDone,
+                          showDone && styles.cellDone,
                         ]}
                         onPress={() => onTap(cell)}
                         disabled={isDone}
                       >
-                        <Text style={[styles.cellText, { fontSize: cellSize * 0.4 }, isDone && styles.cellTextDone]}>
+                        <Text style={[styles.cellText, { fontSize: cellSize * 0.4 }, showDone && styles.cellTextDone]}>
                           {cell.value}
                         </Text>
                       </Pressable>
@@ -313,6 +366,9 @@ export default function SchulteMix({
             {mistakes === 0 ? 'Perfect! No mistakes' : `${mistakes} mistake${mistakes > 1 ? 's' : ''}`}
           </Text>
           <Text style={styles.endDifficulty}>Difficulty: {selectedDifficulty}</Text>
+          <Text style={styles.endMode}>
+            Grid: {sessionGridMode === 'reshuffle' ? 'shuffle after tap' : 'stable'}
+          </Text>
           <View style={styles.progressRow}>
             <Text style={styles.levelText}>Level {gameProgress.level}</Text>
             <Text style={styles.starsText}>
@@ -402,6 +458,7 @@ const styles = StyleSheet.create({
   endTime: { fontSize: 32, fontWeight: '800', color: '#0E4979', marginVertical: 8 },
   endMeta: { fontSize: 14, color: '#6B7280' },
   endDifficulty: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
+  endMode: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
   levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
   starsText: { fontSize: 16, color: colors.warningForeground },

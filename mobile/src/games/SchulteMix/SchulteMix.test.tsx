@@ -40,14 +40,21 @@ describe('SchulteMix', () => {
   });
 
   it('records a wrong tap without changing the measured session time', () => {
-    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    let monotonicTime = 1_000;
+    const clock = () => monotonicTime;
+    const wallClock = jest.spyOn(Date, 'now').mockReturnValue(10_000);
     const onReportResult = jest.fn();
     const { getByTestId, getByText } = render(
-      <SchulteMix gridSize={2} onReportResult={onReportResult} />
+      <SchulteMix
+        gridSize={2}
+        clock={clock}
+        onReportResult={onReportResult}
+      />
     );
 
     fireEvent.press(getByTestId('start-button'));
-    now.mockReturnValue(5_320);
+    monotonicTime = 5_320;
+    wallClock.mockReturnValue(999_999);
     fireEvent.press(getByTestId('cell-letter-A'));
     fireEvent.press(getByTestId('cell-number-1'));
     fireEvent.press(getByTestId('cell-letter-A'));
@@ -60,11 +67,67 @@ describe('SchulteMix', () => {
         details: expect.objectContaining({
           mistakes: 1,
           timePenaltyMs: 0,
+          timingMethod: 'monotonic-elapsed',
         }),
       })
     );
     expect(getByText('4.32s')).toBeTruthy();
-    now.mockRestore();
+    wallClock.mockRestore();
+  });
+
+  it('reshuffles after correct taps without coloring completed cells', () => {
+    const onReportResult = jest.fn();
+    const { getByTestId } = render(
+      <SchulteMix
+        gridSize={2}
+        random={() => 0}
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(getByTestId('schulte-mode-reshuffle'));
+    fireEvent.press(getByTestId('start-button'));
+    const grid = getByTestId('schulte-mix-grid');
+    const before = grid
+      .findAll(
+        (node: TestNode) =>
+          typeof node.props.testID === 'string' &&
+          node.props.testID.startsWith('cell-')
+      )
+      .map((node: TestNode) => node.props.testID);
+
+    fireEvent.press(getByTestId('cell-number-1'));
+
+    const after = getByTestId('schulte-mix-grid')
+      .findAll(
+        (node: TestNode) =>
+          typeof node.props.testID === 'string' &&
+          node.props.testID.startsWith('cell-')
+      )
+      .map((node: TestNode) => node.props.testID);
+    expect(after).not.toEqual(before);
+    expect(
+      StyleSheet.flatten(getByTestId('cell-number-1').props.style)
+        .backgroundColor
+    ).toBe('#EFF6FF');
+    expect(
+      StyleSheet.flatten(
+        getByTestId('cell-number-1').findByType('Text').props.style
+      ).color
+    ).toBe('#1F2937');
+
+    fireEvent.press(getByTestId('cell-letter-A'));
+    fireEvent.press(getByTestId('cell-number-2'));
+    fireEvent.press(getByTestId('cell-letter-B'));
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          gridMode: 'reshuffle',
+          reshuffleCount: 3,
+        }),
+      })
+    );
   });
 
   it('uses consistent grid padding and row gaps (no extra bottom gap)', () => {

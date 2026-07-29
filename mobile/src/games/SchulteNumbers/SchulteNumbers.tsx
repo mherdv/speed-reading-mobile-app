@@ -7,6 +7,15 @@ import { borderRadius, colors, shadows, spacing } from '../../theme/colors';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useGameProgress, type Difficulty } from '../gameHooks';
+import { SchulteGridModeControl } from '../SchulteGridModeControl';
+import {
+  measuredElapsedMs,
+  monotonicNowMs,
+  reshuffleSchulteGrid,
+  shuffleSchulteGrid,
+  type SchulteClock,
+  type SchulteGridMode,
+} from '../schulteShared';
 
 const GAME_ID = 'SchulteNumbers';
 
@@ -24,6 +33,9 @@ type GameReportPayload = {
 
 type Props = {
   gridSize?: number;
+  defaultGridMode?: SchulteGridMode;
+  random?: () => number;
+  clock?: SchulteClock;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
@@ -42,23 +54,17 @@ function getDifficultyConfig(difficulty: Difficulty) {
   }
 }
 
-function shuffleArray<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function generateGrid(size: number): number[] {
+function generateGrid(size: number, random: () => number): number[] {
   const total = size * size;
   const nums = Array.from({ length: total }, (_, i) => i + 1);
-  return shuffleArray(nums);
+  return shuffleSchulteGrid(nums, random);
 }
 
 export default function SchulteNumbers({
   gridSize: gridSizeProp,
+  defaultGridMode = 'stable',
+  random = Math.random,
+  clock = monotonicNowMs,
   difficulty = 'medium',
   autoStart = false,
   onReportResult
@@ -76,8 +82,14 @@ export default function SchulteNumbers({
   const [mistakes, setMistakes] = useState(0);
   const [tapped, setTapped] = useState<Set<number>>(new Set());
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [selectedGridMode, setSelectedGridMode] =
+    useState<SchulteGridMode>(defaultGridMode);
+  const [sessionGridMode, setSessionGridMode] =
+    useState<SchulteGridMode>(defaultGridMode);
 
   const startedAtRef = useRef<number>(0);
+  const startedAtIsoRef = useRef<string>('');
+  const reshuffleCountRef = useRef(0);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
 
@@ -124,14 +136,17 @@ export default function SchulteNumbers({
     // Reset all state completely for fresh restart
     reportedRef.current = false;
     const currentGridSize = gridSizeProp ?? getDifficultyConfig(selectedDifficulty).gridSize;
-    const newGrid = generateGrid(currentGridSize);
+    const newGrid = generateGrid(currentGridSize, random);
     setActiveGridSize(currentGridSize); // Track the actual grid size being used
     setGrid(newGrid);
     setNextNumber(1);
     setMistakes(0);
     setTapped(new Set());
     setElapsedMs(0);
-    startedAtRef.current = Date.now();
+    setSessionGridMode(selectedGridMode);
+    reshuffleCountRef.current = 0;
+    startedAtRef.current = clock();
+    startedAtIsoRef.current = new Date().toISOString();
     setPhase('running');
   }
 
@@ -140,26 +155,31 @@ export default function SchulteNumbers({
     if (reportedRef.current) return;
     reportedRef.current = true;
 
-    const now = Date.now();
-    const elapsedMs = now - startedAtRef.current;
-    setElapsedMs(elapsedMs);
+    const completedElapsedMs = measuredElapsedMs(startedAtRef.current, clock);
+    const finishedAtIso = new Date().toISOString();
+    setElapsedMs(completedElapsedMs);
     const attempts = total + mistakes;
     const accuracy = attempts > 0 ? total / attempts : 1;
     const itemsPerMinute = Math.round(
-      (total / Math.max(elapsedMs, 1)) * 60000 * accuracy
+      (total / Math.max(completedElapsedMs, 1)) * 60000 * accuracy
     );
 
     // Update progress - success if accuracy >= 70%
     const success = accuracy >= 0.7;
-    updateProgress(GAME_ID, success, itemsPerMinute).then(({ progress }) => {
+    updateProgress(
+      GAME_ID,
+      success,
+      itemsPerMinute,
+      selectedDifficulty
+    ).then(({ progress }) => {
       if (cancelledRef.current) return;
       setGameProgress(progress);
     });
 
     onReportResult?.({
-      startedAtIso: new Date(startedAtRef.current).toISOString(),
-      finishedAtIso: new Date(now).toISOString(),
-      elapsedMs,
+      startedAtIso: startedAtIsoRef.current,
+      finishedAtIso,
+      elapsedMs: completedElapsedMs,
       score: itemsPerMinute,
       accuracy,
       details: {
@@ -167,6 +187,9 @@ export default function SchulteNumbers({
         mistakes,
         itemsPerMinute,
         timePenaltyMs: 0,
+        gridMode: sessionGridMode,
+        reshuffleCount: reshuffleCountRef.current,
+        timingMethod: 'monotonic-elapsed',
         difficulty: selectedDifficulty,
       },
     });
@@ -184,6 +207,10 @@ export default function SchulteNumbers({
       if (num === total) {
         finish();
       } else {
+        if (sessionGridMode === 'reshuffle') {
+          reshuffleCountRef.current += 1;
+          setGrid((current) => reshuffleSchulteGrid(current, random));
+        }
         setNextNumber(num + 1);
       }
     } else {
@@ -195,7 +222,11 @@ export default function SchulteNumbers({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Schulte Numbers</Text>
-        <Text style={styles.subtitle}>Tap numbers 1 to {total} in order</Text>
+        <Text style={styles.subtitle}>
+          {phase === 'running' && sessionGridMode === 'reshuffle'
+            ? 'Moving grid · completed cells stay uncolored'
+            : `Tap numbers 1 to ${total} in order`}
+        </Text>
       </View>
 
       {phase === 'idle' && (
@@ -206,7 +237,12 @@ export default function SchulteNumbers({
           onStart={start}
           startLabel="Start number search"
           containerStyle={styles.idleContent}
-        />
+        >
+          <SchulteGridModeControl
+            value={selectedGridMode}
+            onChange={setSelectedGridMode}
+          />
+        </GameIdlePanel>
       )}
 
       {phase === 'running' && (
@@ -256,6 +292,7 @@ export default function SchulteNumbers({
                     const cellIndex = rowIndex * gridSize + colIndex;
                     const num = grid[cellIndex];
                     const isDone = tapped.has(num);
+                    const showDone = isDone && sessionGridMode === 'stable';
                     return (
                       <Pressable
                         accessibilityRole="button"
@@ -274,12 +311,12 @@ export default function SchulteNumbers({
                             height: cellSize,
                             marginRight: colIndex < gridSize - 1 ? cellGap : 0,
                           },
-                          isDone && styles.cellDone,
+                          showDone && styles.cellDone,
                         ]}
                         onPress={() => onTap(num)}
                         disabled={isDone}
                       >
-                        <Text style={[styles.cellText, { fontSize: cellSize * 0.4 }, isDone && styles.cellTextDone]}>
+                        <Text style={[styles.cellText, { fontSize: cellSize * 0.4 }, showDone && styles.cellTextDone]}>
                           {num}
                         </Text>
                       </Pressable>
@@ -303,6 +340,9 @@ export default function SchulteNumbers({
             {mistakes === 0 ? 'Perfect! No mistakes' : `${mistakes} mistake${mistakes > 1 ? 's' : ''}`}
           </Text>
           <Text style={styles.endDifficulty}>Difficulty: {selectedDifficulty}</Text>
+          <Text style={styles.endMode}>
+            Grid: {sessionGridMode === 'reshuffle' ? 'shuffle after tap' : 'stable'}
+          </Text>
           <View style={styles.progressRow}>
             <Text style={styles.levelText}>Level {gameProgress.level}</Text>
             <Text style={styles.starsText}>
@@ -416,6 +456,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     textTransform: 'capitalize',
+  },
+  endMode: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
   },
   progressRow: {
     flexDirection: 'row',

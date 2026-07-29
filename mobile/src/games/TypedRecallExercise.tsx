@@ -270,7 +270,6 @@ export function TypedRecallExercise({
                       <Text style={styles.wrongText}>Review this answer</Text>
                       <Text style={styles.answerLabel}>Correct answer</Text>
                       <Text
-                        selectable
                         testID="recall-correct-answer"
                         style={styles.correctAnswer}
                       >
@@ -354,6 +353,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    userSelect: 'text',
   },
   multilineInput: { minHeight: 100, textAlignVertical: 'top' },
   primaryButton: {

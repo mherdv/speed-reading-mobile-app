@@ -161,12 +161,15 @@ export function getResultComparisonKeyForMetric(
   const comparisonBand =
     optionalDetailString(result.details, 'comparisonBand') ??
     (isMeasuredReadingResult(result) ? result.sampleId : undefined);
-  return [
+  const parts = [
     activity,
     metric.label,
     difficulty ?? 'difficulty-unspecified',
     comparisonBand ?? 'comparison-band-unspecified',
-  ].join('|');
+  ];
+  const gridMode = getSchulteGridMode(result);
+  if (gridMode) parts.push(`grid-${gridMode}`);
+  return parts.join('|');
 }
 
 function optionalDetailString(
@@ -175,6 +178,35 @@ function optionalDetailString(
 ): string | undefined {
   const value = details?.[key];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+export function getSchulteGridMode(
+  result: AttemptResult
+): 'stable' | 'reshuffle' | undefined {
+  const explicitMode = optionalDetailString(result.details, 'gridMode');
+  if (explicitMode === 'stable' || explicitMode === 'reshuffle') {
+    return explicitMode;
+  }
+
+  const normalizedGameId = normalizeGameId(result.sampleId);
+  if (
+    normalizedGameId === 'SchulteNumbers' ||
+    normalizedGameId === 'SchulteLetters' ||
+    normalizedGameId === 'SchulteMix'
+  ) {
+    return 'stable';
+  }
+
+  return undefined;
+}
+
+export function getSchulteGridModeLabel(
+  result: AttemptResult
+): string | undefined {
+  const mode = getSchulteGridMode(result);
+  if (mode === 'stable') return 'Stable grid';
+  if (mode === 'reshuffle') return 'Shuffle after each tap';
+  return undefined;
 }
 
 export function getResultComparison(result: AttemptResult): ResultComparison {
@@ -186,16 +218,19 @@ export function getResultComparison(result: AttemptResult): ResultComparison {
     (activity === 'measured-reading' ? result.sampleId : undefined);
   const comparisonBand =
     optionalDetailString(result.details, 'comparisonBand') ?? content;
+  const gridMode = getSchulteGridMode(result);
   const parts = [
     activity,
     metric.label,
     difficulty ?? 'difficulty-unspecified',
     comparisonBand ?? 'comparison-band-unspecified',
   ];
+  if (gridMode) parts.push(`grid-${gridMode}`);
   const labelParts = [
     metric.label,
     difficulty ? `${difficulty[0].toUpperCase()}${difficulty.slice(1)}` : null,
     comparisonBand ? 'same reading band' : null,
+    getSchulteGridModeLabel(result) ?? null,
   ].filter((part): part is string => part !== null);
 
   return {

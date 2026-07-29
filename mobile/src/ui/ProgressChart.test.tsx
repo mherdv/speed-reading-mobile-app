@@ -86,4 +86,41 @@ describe('ProgressChart optimistic current result', () => {
       );
     });
   });
+
+  it('does not compare moving and stable Schulte grids', async () => {
+    const moving: AttemptResult = {
+      ...CURRENT,
+      id: 'moving-grid',
+      sampleId: 'SchulteNumbers',
+      sampleTitle: 'Schulte Numbers',
+      score: 24,
+      accuracy: 1,
+      details: {
+        difficulty: 'easy',
+        gridMode: 'reshuffle',
+      },
+    };
+    await saveResult({
+      ...moving,
+      id: 'stable-grid',
+      score: 42,
+      details: {
+        difficulty: 'easy',
+        gridMode: 'stable',
+      },
+    });
+
+    const { getByText } = render(
+      <ProgressChart gameId="SchulteNumbers" currentResult={moving} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('Attempt')).toBeTruthy();
+      expect(
+        getByText(
+          'Last 1 comparable attempts · Score · Easy · Shuffle after each tap'
+        )
+      ).toBeTruthy();
+    });
+  });
 });

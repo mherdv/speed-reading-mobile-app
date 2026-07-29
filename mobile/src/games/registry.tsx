@@ -62,6 +62,7 @@ export type GameReportPayload = {
 export type GameComponentProps = {
   autoStart?: boolean;
   difficulty?: 'easy' | 'medium' | 'hard';
+  defaultGridMode?: 'stable' | 'reshuffle';
   onReportResult?: (payload: GameReportPayload) => void;
 };
 

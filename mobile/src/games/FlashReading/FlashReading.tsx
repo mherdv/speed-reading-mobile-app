@@ -397,7 +397,6 @@ export default function FlashReading({
                 <Text style={styles.wrongText}>Review this word</Text>
                 <Text style={styles.answerLabel}>Correct word</Text>
                 <Text
-                  selectable
                   testID="flash-correct-answer"
                   style={styles.correctAnswer}
                 >
@@ -544,6 +543,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    userSelect: 'text',
   },
   correctText: {
     color: colors.successForeground,

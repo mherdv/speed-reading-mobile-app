@@ -527,7 +527,6 @@ export default function VisualSpanExpansion({
             </Text>
             <Text style={styles.reviewLabel}>Correct word</Text>
             <Text
-              selectable
               testID="visual-span-correct-answer"
               style={styles.reviewWord}
             >

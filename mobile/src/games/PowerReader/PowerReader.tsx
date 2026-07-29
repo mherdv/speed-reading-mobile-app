@@ -2072,6 +2072,7 @@ const styles = StyleSheet.create({
     color: '#111827',
     backgroundColor: '#FFFFFF',
     marginBottom: 12,
+    userSelect: 'text',
   },
   customTextInput: {
     minHeight: 112,
@@ -2084,6 +2085,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#111827',
     backgroundColor: '#FFFFFF',
+    userSelect: 'text',
   },
   customTitleInput: {
     minHeight: 48,
@@ -2095,6 +2097,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111827',
     backgroundColor: '#FFFFFF',
+    userSelect: 'text',
   },
   useCustomButton: {
     alignSelf: 'flex-start',

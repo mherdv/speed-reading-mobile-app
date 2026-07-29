@@ -242,24 +242,26 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 
 ### 6. Schulte Numbers
 
-- Keep the whole grid comfortably visible.
+- Choose a stable grid or a harder moving grid that reshuffles after every correct non-final tap.
 - Tap numbers in ascending order from 1.
-- Incorrect taps add mistakes but do not advance the sequence.
-- Result: completion time, accuracy, mistakes, and accuracy-adjusted items per minute.
+- Incorrect taps add mistakes but do not advance the sequence or add a synthetic time penalty. Completed cells remain uncolored in moving-grid mode.
+- Result: monotonic completion time, accuracy, mistakes, grid mode, and accuracy-adjusted items per minute.
 - Manual difficulty: 3×3, 4×4, or 5×5.
 
 ### 7. Schulte Letters
 
+- Choose a stable grid or a harder moving grid that reshuffles after every correct non-final tap.
 - Tap letters alphabetically from A to the final visible letter.
-- Incorrect taps add mistakes.
-- Result: completion time, accuracy, mistakes, and accuracy-adjusted items per minute.
+- Incorrect taps add mistakes without a synthetic time penalty. Completed cells remain uncolored in moving-grid mode.
+- Result: monotonic completion time, accuracy, mistakes, grid mode, and accuracy-adjusted items per minute.
 - Manual difficulty: 3×3, 4×4, or 5×5.
 
 ### 8. Schulte Mix
 
+- Choose a stable grid or a harder moving grid that reshuffles after every correct non-final tap.
 - Follow the displayed sequence by alternating numbers and letters.
-- Tap the next requested item; incorrect taps add mistakes.
-- Result: completion speed and accuracy.
+- Tap the next requested item; incorrect taps add mistakes without a synthetic time penalty. Completed cells remain uncolored in moving-grid mode.
+- Result: monotonic completion time, accuracy, mistakes, grid mode, and accuracy-adjusted items per minute.
 - Manual difficulty: 3×3, 4×4, or 5×5. A 7×7 alternating grid is too dense for reliable small-screen interaction and is removed from the recommended configuration.
 
 ### 9. Eye Reset
@@ -838,3 +840,47 @@ and skipped rounds are reported as omissions.
   suites, all 18 Expo Doctor checks, production PWA export/offline
   verification, and a 390 × 844 browser interaction check with no horizontal
   overflow or runtime errors.
+
+## V14 Schulte moving-grid variation and timing integrity
+
+- Schulte Numbers, Letters, and Mix now offer a separately controlled
+  “Shuffle after each tap” variation while retaining the conventional stable
+  table as the default. Every correct non-final tap guarantees a different
+  arrangement; completed targets remain disabled but receive no completion
+  color, so position and color cannot act as memory aids.
+- Grid size remains the Easy/Medium/Hard difficulty control. The moving-grid
+  variation is an independent challenge setting and is recorded with its exact
+  reshuffle count in the session result.
+- Final completion duration now uses a monotonic clock rather than civil wall
+  time. System-clock corrections cannot change the score, display-interval
+  throttling cannot accumulate timing drift, and wrong taps add no synthetic
+  seconds. Real time spent searching, pausing, scrolling, or waiting still
+  counts as part of the attempt.
+- Schulte Mix now uses the same accuracy-adjusted items-per-minute result as
+  Numbers and Letters instead of reporting the grid size as its score.
+- Final validation passed strict TypeScript, all 488 Jest tests across 72
+  suites, all 18 Expo Doctor checks, production PWA export/offline
+  verification, and a complete 390 × 844 moving-grid session with no
+  horizontal overflow or browser errors.
+
+## V15 Selection protection and Schulte comparison integrity
+
+- Game, measured-reading, and result surfaces now prevent browser text
+  highlighting and copy selection. This keeps accidental long-presses or drags
+  from interfering with timed interaction. Editable typing and custom-text
+  fields explicitly retain normal text selection for correction, replacement,
+  and paste.
+- The review found that conventional stable-grid Schulte scores and the new
+  moving-grid scores were entering the same “like-for-like” chart despite
+  representing materially different search tasks. Comparison keys and chart
+  labels now include the grid variation. Historical Schulte attempts without a
+  stored variation are treated as stable-grid attempts.
+- Schulte result screens now display “Stable grid” or “Shuffle after each tap.”
+  “Train again” preserves that exact variation along with difficulty, so a
+  moving-grid repetition cannot silently fall back to the easier layout.
+- Final validation passed strict TypeScript, all 497 Jest tests across 73
+  suites, all 18 Expo Doctor checks, production PWA export/offline
+  verification, and 390 × 844 browser QA. Live computed styles confirmed
+  `user-select: none` for game and result text and `user-select: text` for the
+  custom-text editor; a completed moving-grid result replayed directly into the
+  same mode with no overflow or browser errors.

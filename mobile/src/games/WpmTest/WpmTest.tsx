@@ -244,7 +244,6 @@ export default function WpmTest({
               </Text>
               <Text
                 testID="wpm-passage"
-                selectable
                 style={[styles.passageText, readingDisplay.text]}
               >
                 {activeSample.text}

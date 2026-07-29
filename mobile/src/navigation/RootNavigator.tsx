@@ -49,6 +49,7 @@ function GameRoute({
         sessionKey={route.params.sessionKey}
         autoStart={route.params.autoStart}
         difficulty={route.params.difficulty}
+        schulteGridMode={route.params.schulteGridMode}
         onBack={() => {
           onResultsChanged();
           navigation.goBack();
@@ -180,6 +181,13 @@ export function RootNavigator() {
                   storedDifficulty === 'hard'
                     ? storedDifficulty
                     : undefined;
+                const storedGridMode =
+                  route.params.result.details?.gridMode;
+                const schulteGridMode =
+                  storedGridMode === 'stable' ||
+                  storedGridMode === 'reshuffle'
+                    ? storedGridMode
+                    : undefined;
                 navigation.reset({
                   index: 1,
                   routes: [
@@ -191,6 +199,7 @@ export function RootNavigator() {
                         autoStart: true,
                         sessionKey: newSessionKey,
                         difficulty,
+                        schulteGridMode,
                       },
                       key: `game-${newSessionKey}`,
                     },
