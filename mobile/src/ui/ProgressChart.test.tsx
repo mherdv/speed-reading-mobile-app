@@ -98,6 +98,7 @@ describe('ProgressChart optimistic current result', () => {
       details: {
         difficulty: 'easy',
         gridMode: 'reshuffle',
+        itemsPerMinute: 24,
       },
     };
     await saveResult({
@@ -107,6 +108,7 @@ describe('ProgressChart optimistic current result', () => {
       details: {
         difficulty: 'easy',
         gridMode: 'stable',
+        itemsPerMinute: 42,
       },
     });
 
@@ -118,7 +120,7 @@ describe('ProgressChart optimistic current result', () => {
       expect(getByText('Attempt')).toBeTruthy();
       expect(
         getByText(
-          'Last 1 comparable attempts · Score · Easy · Shuffle after each tap'
+          'Last 1 comparable attempts · Items/min · Easy · Shuffle after each tap'
         )
       ).toBeTruthy();
     });

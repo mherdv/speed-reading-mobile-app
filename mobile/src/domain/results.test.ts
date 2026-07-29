@@ -208,6 +208,38 @@ describe('result helpers', () => {
     );
   });
 
+  it('labels modern Schulte rates and separates them from legacy scores', () => {
+    const modern = makeResult({
+      sampleId: 'SchulteNumbers',
+      wordCount: 0,
+      wpm: 0,
+      score: 38,
+      details: {
+        difficulty: 'easy',
+        gridMode: 'stable',
+        itemsPerMinute: 38,
+      },
+    });
+    const legacy = makeResult({
+      ...modern,
+      id: 'legacy',
+      details: {
+        difficulty: 'easy',
+        gridMode: 'stable',
+      },
+    });
+
+    expect(getResultMetric(modern)).toEqual({
+      value: 38,
+      label: 'Items/min',
+    });
+    expect(getResultMetric(legacy)).toEqual({
+      value: 38,
+      label: 'Score',
+    });
+    expect(areResultsComparable(modern, legacy)).toBe(false);
+  });
+
   it('labels configured pacing separately from measured WPM', () => {
     expect(
       getResultMetric(

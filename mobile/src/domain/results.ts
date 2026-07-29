@@ -8,6 +8,7 @@ export type ResultMetric = {
   label:
     | 'WPM'
     | 'Guided pace'
+    | 'Items/min'
     | 'Score'
     | 'Accuracy'
     | 'Sec break'
@@ -110,6 +111,10 @@ export function getResultMetric(result: AttemptResult): ResultMetric {
       return { value: Math.round(value * 100), label: 'Accuracy' };
     }
   }
+  const schulteItemsPerMinute = getSchulteItemsPerMinute(result);
+  if (schulteItemsPerMinute !== undefined) {
+    return { value: schulteItemsPerMinute, label: 'Items/min' };
+  }
   if (
     result.details?.activityType === 'eye-comfort' &&
     typeof result.details.breakSeconds === 'number'
@@ -180,24 +185,35 @@ function optionalDetailString(
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+function isSchulteResult(result: AttemptResult): boolean {
+  const normalizedGameId = normalizeGameId(result.sampleId);
+  return (
+    normalizedGameId === 'SchulteNumbers' ||
+    normalizedGameId === 'SchulteLetters' ||
+    normalizedGameId === 'SchulteMix'
+  );
+}
+
+export function getSchulteItemsPerMinute(
+  result: AttemptResult
+): number | undefined {
+  if (!isSchulteResult(result)) return undefined;
+  const value = result.details?.itemsPerMinute;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : undefined;
+}
+
 export function getSchulteGridMode(
   result: AttemptResult
 ): 'stable' | 'reshuffle' | undefined {
+  if (!isSchulteResult(result)) return undefined;
   const explicitMode = optionalDetailString(result.details, 'gridMode');
   if (explicitMode === 'stable' || explicitMode === 'reshuffle') {
     return explicitMode;
   }
 
-  const normalizedGameId = normalizeGameId(result.sampleId);
-  if (
-    normalizedGameId === 'SchulteNumbers' ||
-    normalizedGameId === 'SchulteLetters' ||
-    normalizedGameId === 'SchulteMix'
-  ) {
-    return 'stable';
-  }
-
-  return undefined;
+  return 'stable';
 }
 
 export function getSchulteGridModeLabel(

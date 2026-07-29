@@ -130,4 +130,39 @@ describe('HistoryScreen reading quality', () => {
     expect(view.getByText('Number Search')).toBeTruthy();
     expect(view.queryByText('Evidence Hunt')).toBeNull();
   });
+
+  it('shows interpretable Schulte rate, mode, and mistake details', async () => {
+    await saveResult({
+      ...reading('schulte', 0, true),
+      sampleId: 'SchulteNumbers',
+      sampleTitle: 'Schulte Numbers',
+      elapsedMs: 13_390,
+      wordCount: 0,
+      wpm: 0,
+      score: 42,
+      accuracy: 1,
+      details: {
+        difficulty: 'easy',
+        gridMode: 'reshuffle',
+        itemsPerMinute: 42,
+        mistakes: 1,
+      },
+    });
+
+    const view = render(
+      <HistoryScreen refreshToken={0} onBack={jest.fn()} />
+    );
+    await waitFor(() => {
+      expect(view.getByText('Not enough readings')).toBeTruthy();
+    });
+    fireEvent.press(view.getByText('Sessions'));
+    fireEvent.press(view.getByTestId('history-filter-labs'));
+
+    expect(view.getByText('42 Items/min')).toBeTruthy();
+    expect(
+      view.getByText(
+        '13.39s · 100% · Shuffle after each tap · 1 mistake'
+      )
+    ).toBeTruthy();
+  });
 });

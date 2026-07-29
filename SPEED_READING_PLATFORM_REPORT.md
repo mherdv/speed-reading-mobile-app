@@ -884,3 +884,21 @@ and skipped rounds are reported as omissions.
   `user-select: none` for game and result text and `user-select: text` for the
   custom-text editor; a completed moving-grid result replayed directly into the
   same mode with no overflow or browser errors.
+
+## V16 Schulte result clarity
+
+- The review found that Schulte’s accuracy-adjusted search rate was stored
+  correctly but displayed as the opaque label “Score.” Numbers, Letters, and
+  Mix now present that primary measure as Items/min on results, trends, and
+  history.
+- Modern Items/min attempts and historical Schulte records that stored a
+  different score meaning receive different comparison keys. This prevents an
+  old grid-size or generic score from silently entering a search-rate trend.
+- Result cards now show mistakes separately from task accuracy and session
+  time. History rows include the stable/moving grid variation and mistake count,
+  making prior attempts understandable without reopening their result screen.
+- Final validation passed strict TypeScript, all 499 Jest tests across 73
+  suites, all 18 Expo Doctor checks, production PWA export/offline
+  verification, and a complete 390 × 844 moving-grid session with one
+  intentional mistake. The result and Labs history displayed Items/min, mode,
+  and mistake details with no overflow or browser errors.

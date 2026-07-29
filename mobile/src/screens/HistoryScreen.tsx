@@ -14,6 +14,7 @@ import type { AttemptResult } from '../domain/types';
 import {
   formatDuration,
   getResultMetric,
+  getSchulteGridModeLabel,
   isMeasuredReadingResult,
   isReadingResult,
   isValidProgressMeasurement,
@@ -460,6 +461,16 @@ function formatHistoryMeta(item: AttemptResult): string {
     return parts.join(' · ');
   }
   if (typeof item.accuracy === 'number') parts.push(`${Math.round(item.accuracy * 100)}%`);
+  const schulteGridMode = getSchulteGridModeLabel(item);
+  if (schulteGridMode) parts.push(schulteGridMode);
+  const mistakes = item.details?.mistakes;
+  if (
+    schulteGridMode &&
+    typeof mistakes === 'number' &&
+    Number.isFinite(mistakes)
+  ) {
+    parts.push(`${mistakes} ${mistakes === 1 ? 'mistake' : 'mistakes'}`);
+  }
   return parts.join(' · ');
 }
 

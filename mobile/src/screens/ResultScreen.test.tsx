@@ -138,6 +138,8 @@ describe('ResultScreen truthful metric cards', () => {
           details: {
             difficulty: 'easy',
             gridMode: 'reshuffle',
+            itemsPerMinute: 42,
+            mistakes: 1,
           },
         })}
       />
@@ -146,5 +148,7 @@ describe('ResultScreen truthful metric cards', () => {
     expect(view.getByTestId('schulte-grid-mode')).toHaveTextContent(
       'Shuffle after each tap'
     );
+    expect(view.getByText('Items/min')).toBeTruthy();
+    expect(view.getByText('Mistake')).toBeTruthy();
   });
 });

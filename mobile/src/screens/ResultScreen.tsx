@@ -236,6 +236,13 @@ export function ResultScreen({
         label: 'Task accuracy',
       });
     }
+    const mistakes = numberDetail('mistakes');
+    if (schulteGridModeLabel && mistakes !== undefined) {
+      resultMetrics.push({
+        value: `${mistakes}`,
+        label: mistakes === 1 ? 'Mistake' : 'Mistakes',
+      });
+    }
   }
   resultMetrics.push({
     value: formatDuration(result.elapsedMs),
