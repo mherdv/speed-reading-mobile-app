@@ -63,6 +63,8 @@ export type GameComponentProps = {
   autoStart?: boolean;
   difficulty?: 'easy' | 'medium' | 'hard';
   defaultGridMode?: 'stable' | 'reshuffle';
+  excludedContentId?: string;
+  suggestedWpm?: number;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 

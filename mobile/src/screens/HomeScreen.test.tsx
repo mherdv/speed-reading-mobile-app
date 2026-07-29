@@ -24,11 +24,12 @@ describe('Home Today plan', () => {
 
   it('shows an honest optional baseline plus one explained skill and supports swap/skip', async () => {
     const onStart = jest.fn();
+    const onOpenGame = jest.fn();
     const view = render(
       <HomeScreen
         onStart={onStart}
         onOpenHistory={jest.fn()}
-        onOpenGame={jest.fn()}
+        onOpenGame={onOpenGame}
         refreshToken={0}
       />
     );
@@ -46,6 +47,16 @@ describe('Home Today plan', () => {
     expect(
       within(view.getByTestId('today-card-skill')).getByText('Context Builder')
     ).toBeTruthy();
+    fireEvent.press(view.getByTestId('start-today-skill'));
+    expect(onOpenGame).toHaveBeenCalledWith(
+      'ContextBuilder',
+      expect.objectContaining({
+        itemId: 'skill',
+        snapshot: expect.objectContaining({
+          skill: expect.objectContaining({ gameId: 'ContextBuilder' }),
+        }),
+      })
+    );
     fireEvent.press(view.getByTestId('swap-today-skill'));
     expect(
       within(view.getByTestId('today-card-skill')).getByText('Evidence Hunt')
@@ -250,7 +261,13 @@ describe('Home Today plan', () => {
     });
     fireEvent.press(view.getByTestId('start-reading-exercise'));
     expect(onStart).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sample-1' })
+      expect.objectContaining({ id: 'sample-1' }),
+      expect.objectContaining({
+        itemId: 'reading',
+        snapshot: expect.objectContaining({
+          reading: expect.objectContaining({ sampleId: 'sample-1' }),
+        }),
+      })
     );
 
     const repairedSnapshot = JSON.parse(

@@ -39,6 +39,22 @@ describe('ExerciseScreen', () => {
     expect(queryByText(sample.text)).toBeNull();
   });
 
+  it('shows a suggested next pace without enforcing or starting it', () => {
+    const sample = TEXT_SAMPLES[0];
+    const view = render(
+      <ExerciseScreen
+        sample={sample}
+        suggestedWpm={215}
+        onCancel={jest.fn()}
+        onFinish={jest.fn()}
+      />
+    );
+
+    expect(view.getByTestId('suggested-wpm')).toBeTruthy();
+    expect(view.getByText('Suggested pace · about 215 WPM')).toBeTruthy();
+    expect(view.queryByText(sample.text)).toBeNull();
+  });
+
   it('leaves an active measured read immediately when Back is pressed', () => {
     const sample = TEXT_SAMPLES[0];
     const onCancel = jest.fn();
@@ -74,6 +90,7 @@ describe('ExerciseScreen', () => {
     });
     answerAll(getByTestId, sample);
     fireEvent.press(getByTestId('submit-answer'));
+    fireEvent.press(getByTestId('submit-answer'));
 
     expect(onFinish).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -87,6 +104,44 @@ describe('ExerciseScreen', () => {
               correct: true,
             }),
           ]),
+        }),
+      })
+    );
+    expect(onFinish).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses monotonic reading time when the civil clock changes', () => {
+    const sample = TEXT_SAMPLES[0];
+    const onFinish = jest.fn();
+    let monotonicTime = 1_000;
+    let civilTime = Date.parse('2026-07-26T08:00:00.000Z');
+    const { getByTestId } = render(
+      <ExerciseScreen
+        sample={sample}
+        clock={() => monotonicTime}
+        civilClock={() => civilTime}
+        onCancel={jest.fn()}
+        onFinish={onFinish}
+      />
+    );
+
+    fireEvent.press(getByTestId('start-reading'));
+    monotonicTime += 60_000;
+    civilTime -= 3_600_000;
+    fireEvent.press(getByTestId('finish-reading'));
+
+    monotonicTime += 120_000;
+    civilTime += 5 * 3_600_000;
+    answerAll(getByTestId, sample);
+    fireEvent.press(getByTestId('submit-answer'));
+
+    expect(onFinish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startedAtIso: '2026-07-26T08:00:00.000Z',
+        finishedAtIso: '2026-07-26T08:01:00.000Z',
+        elapsedMs: 60_000,
+        details: expect.objectContaining({
+          timingMethod: 'monotonic-elapsed',
         }),
       })
     );

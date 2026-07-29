@@ -9,6 +9,12 @@ import {
 } from '../../data/wpmTestContent';
 import { assessReadingMeasurement, formatDuration } from '../../domain/results';
 import { createQuestionOutcomes } from '../../domain/comprehensionDiagnostics';
+import {
+  epochNowMs,
+  measuredElapsedMs,
+  monotonicNowMs,
+  type MillisecondClock,
+} from '../../domain/timing';
 import type { TextSample } from '../../domain/types';
 import { computeWpm, countWords } from '../../domain/wpm';
 import { colors } from '../../theme/colors';
@@ -24,6 +30,10 @@ const GAME_ID = 'WpmTest';
 type Props = {
   sample?: TextSample;
   questions?: readonly WpmQuestion[];
+  excludedContentId?: string;
+  suggestedWpm?: number;
+  clock?: MillisecondClock;
+  civilClock?: MillisecondClock;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
@@ -55,6 +65,10 @@ function questionsFromSample(
 export default function WpmTest({
   sample: sampleProp,
   questions: questionsProp,
+  excludedContentId,
+  suggestedWpm,
+  clock = monotonicNowMs,
+  civilClock = epochNowMs,
   difficulty = 'medium',
   autoStart = false,
   onReportResult,
@@ -86,6 +100,9 @@ export default function WpmTest({
 
   const startedAtRef = useRef(0);
   const readingFinishedAtRef = useRef(0);
+  const startedAtEpochRef = useRef(0);
+  const startedAtIsoRef = useRef('');
+  const readingFinishedAtIsoRef = useRef('');
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
   const previousSampleIdRef = useRef('');
@@ -93,10 +110,10 @@ export default function WpmTest({
   useEffect(() => {
     if (phase !== 'reading') return;
     const interval = setInterval(() => {
-      setElapsedMs(Date.now() - startedAtRef.current);
+      setElapsedMs(measuredElapsedMs(startedAtRef.current, clock));
     }, 50);
     return () => clearInterval(interval);
-  }, [phase]);
+  }, [clock, phase]);
 
   useEffect(
     () => () => {
@@ -115,10 +132,22 @@ export default function WpmTest({
             : questionsFromSample(sampleProp, difficulty),
       };
     }
-    const eligible = pool.filter(
-      (item) => item.sample.id !== previousSampleIdRef.current
+    const permitted = pool.filter(
+      (item) => item.sample.id !== excludedContentId
     );
-    return eligible[Math.floor(Math.random() * eligible.length)] ?? initialItem;
+    const eligible = permitted.filter(
+      (item) =>
+        item.sample.id !== previousSampleIdRef.current
+    );
+    const available = eligible.length > 0 ? eligible : permitted;
+    return (
+      available[
+        Math.min(
+          available.length - 1,
+          Math.floor(Math.random() * available.length)
+        )
+      ] ?? initialItem
+    );
   }
 
   function start() {
@@ -132,8 +161,13 @@ export default function WpmTest({
     setElapsedMs(0);
     reportedRef.current = false;
     cancelledRef.current = false;
-    startedAtRef.current = Date.now();
+    startedAtRef.current = clock();
     readingFinishedAtRef.current = 0;
+    startedAtEpochRef.current = civilClock();
+    startedAtIsoRef.current = new Date(
+      startedAtEpochRef.current
+    ).toISOString();
+    readingFinishedAtIsoRef.current = '';
     setPhase('reading');
   }
 
@@ -141,10 +175,18 @@ export default function WpmTest({
 
   function finishReading() {
     if (phase !== 'reading') return;
-    readingFinishedAtRef.current = Date.now();
-    setElapsedMs(
-      Math.max(1, readingFinishedAtRef.current - startedAtRef.current)
+    readingFinishedAtRef.current = clock();
+    const readingElapsedMs = Math.max(
+      1,
+      measuredElapsedMs(
+        startedAtRef.current,
+        () => readingFinishedAtRef.current
+      )
     );
+    readingFinishedAtIsoRef.current = new Date(
+      startedAtEpochRef.current + readingElapsedMs
+    ).toISOString();
+    setElapsedMs(readingElapsedMs);
     setPhase('questions');
   }
 
@@ -160,7 +202,10 @@ export default function WpmTest({
     reportedRef.current = true;
     const readingElapsedMs = Math.max(
       1,
-      readingFinishedAtRef.current - startedAtRef.current
+      measuredElapsedMs(
+        startedAtRef.current,
+        () => readingFinishedAtRef.current
+      )
     );
     const wordCount = countWords(activeSample.text);
     const wpm = computeWpm(wordCount, readingElapsedMs);
@@ -180,15 +225,17 @@ export default function WpmTest({
       qualityFlag: quality.reason,
     });
     setPhase('ended');
-    void updateProgress(
-      GAME_ID,
-      accuracy >= 0.8 && quality.valid,
-      wpm,
-      difficulty
-    ).catch(() => undefined);
+    if (quality.valid) {
+      void updateProgress(
+        GAME_ID,
+        accuracy >= 0.8,
+        wpm,
+        difficulty
+      ).catch(() => undefined);
+    }
     onReportResult?.({
-      startedAtIso: new Date(startedAtRef.current).toISOString(),
-      finishedAtIso: new Date(readingFinishedAtRef.current).toISOString(),
+      startedAtIso: startedAtIsoRef.current,
+      finishedAtIso: readingFinishedAtIsoRef.current,
       elapsedMs: readingElapsedMs,
       score: correct,
       accuracy,
@@ -206,6 +253,7 @@ export default function WpmTest({
         questionOutcomes,
         measurementValid: quality.valid,
         qualityFlag: quality.reason,
+        timingMethod: 'monotonic-elapsed',
         difficulty,
         source: 'TEXT_SAMPLES',
       },
@@ -226,7 +274,20 @@ export default function WpmTest({
           containerStyle={styles.idle}
           buttonStyle={styles.primaryButton}
           buttonTextStyle={styles.primaryButtonText}
-        />
+        >
+          {suggestedWpm !== undefined && (
+            <View testID="suggested-wpm" style={styles.paceGuidance}>
+              <Text style={styles.paceGuidanceLabel}>SUGGESTED PACE</Text>
+              <Text style={styles.paceGuidanceValue}>
+                About {suggestedWpm} WPM
+              </Text>
+              <Text style={styles.paceGuidanceText}>
+                Use this as guidance, not a limit. Keep enough attention for
+                the questions.
+              </Text>
+            </View>
+          )}
+        </SimpleIdlePanel>
       )}
 
       {phase === 'reading' && (
@@ -350,6 +411,33 @@ const styles = StyleSheet.create({
   title: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
   subtitle: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 2 },
   idle: { flex: 1 },
+  paceGuidance: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.infoSurface,
+  },
+  paceGuidanceLabel: {
+    color: colors.infoForeground,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  paceGuidanceValue: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  paceGuidanceText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+    textAlign: 'center',
+  },
   scrollContent: { gap: 14, paddingBottom: 20, paddingTop: 14 },
   timerRow: { flexDirection: 'row', justifyContent: 'space-between' },
   timerText: { color: colors.interactivePrimary, fontSize: 18, fontWeight: '800' },

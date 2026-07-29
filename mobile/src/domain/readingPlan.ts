@@ -792,7 +792,8 @@ function isSnapshotItemCompleted(
       (result) =>
         resultStartedAfter(result, snapshot.reading.assignedAtIso) &&
         result.details?.activityType === 'measured-reading' &&
-        result.details?.contentId === snapshot.reading.sampleId
+        result.details?.contentId === snapshot.reading.sampleId &&
+        isValidProgressMeasurement(result)
     );
   }
   if (itemId === 'skill') {

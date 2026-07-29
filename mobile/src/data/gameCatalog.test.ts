@@ -22,6 +22,37 @@ describe('game catalog', () => {
     ).toBe(true);
   });
 
+  it('describes the actual Number and Symbol Hunt challenge bands', () => {
+    expect(GAME_CATALOG.NumberRecognition.difficulty).toEqual({
+      easy: {
+        label: 'Easy',
+        helper: '1 digit · 30-item deck · 1.6s response window',
+      },
+      medium: {
+        label: 'Medium',
+        helper: '2 digits · 50-item deck · 1.1s response window',
+      },
+      hard: {
+        label: 'Hard',
+        helper: '3 similar digits · 70-item deck · 0.7s response window',
+      },
+    });
+    expect(GAME_CATALOG.SymbolRecognition.difficulty).toEqual({
+      easy: {
+        label: 'Easy',
+        helper: '4 distinct symbols · 30-item deck · 1.6s response window',
+      },
+      medium: {
+        label: 'Medium',
+        helper: '10 symbols · 50-item deck · 1.1s response window',
+      },
+      hard: {
+        label: 'Hard',
+        helper: '6 similar symbols · 70-item deck · 0.7s response window',
+      },
+    });
+  });
+
   it('contains complete rules and difficulty metadata for every registered game', () => {
     expect(Object.keys(GAME_CATALOG)).toEqual([...GAME_IDS]);
 

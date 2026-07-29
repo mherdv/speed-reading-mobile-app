@@ -34,6 +34,20 @@ const DEFAULT_PROGRESS: GameProgress = {
 const MAX_LEVEL = 15;
 export const LEVEL_DOWN_THRESHOLD = 2;
 export const LEVEL_UP_THRESHOLD = 2;
+export const PROGRESS_WAIT_TIMEOUT_MS = 2_000;
+let progressUpdateQueue: Promise<void> = Promise.resolve();
+const nonCalibratingSessionCounts = new Map<string, number>();
+
+function enqueueProgressMutation<T>(mutation: () => Promise<T>): Promise<T> {
+  const operation = progressUpdateQueue
+    .catch(() => undefined)
+    .then(mutation);
+  progressUpdateQueue = operation.then(
+    () => undefined,
+    () => undefined
+  );
+  return operation;
+}
 
 export function describeAdaptiveProgress(progress: GameProgress): string {
   if (progress.streak > 0) {
@@ -88,11 +102,12 @@ export async function saveGameProgress(
  * Record a completed attempt and update the next-session adaptive suggestion.
  * Manual sessions update play count and best score only.
  */
-export async function updateProgress(
+async function performProgressUpdate(
   gameId: string,
   correct: boolean,
   score?: number,
-  playedDifficulty?: Difficulty
+  playedDifficulty?: Difficulty,
+  calibrateAdaptive = true
 ): Promise<{ progress: GameProgress; levelChanged: boolean; levelDelta: number }> {
   const normalizedId = normalizeGameId(gameId);
   const [current, preference] = await Promise.all([
@@ -101,7 +116,9 @@ export async function updateProgress(
   ]);
   let levelDelta = 0;
   const adaptive =
-    preference.mode === 'adaptive' && allowsAdaptiveDifficulty(normalizedId);
+    calibrateAdaptive &&
+    preference.mode === 'adaptive' &&
+    allowsAdaptiveDifficulty(normalizedId);
 
   if (adaptive) {
     const activeDifficulty =
@@ -170,6 +187,73 @@ export async function updateProgress(
   };
 }
 
+export function updateProgress(
+  gameId: string,
+  correct: boolean,
+  score?: number,
+  playedDifficulty?: Difficulty
+): Promise<{
+  progress: GameProgress;
+  levelChanged: boolean;
+  levelDelta: number;
+}> {
+  const normalizedId = normalizeGameId(gameId);
+  const calibrateAdaptive =
+    (nonCalibratingSessionCounts.get(normalizedId) ?? 0) === 0;
+  return enqueueProgressMutation(() =>
+    performProgressUpdate(
+      normalizedId,
+      correct,
+      score,
+      playedDifficulty,
+      calibrateAdaptive
+    )
+  );
+}
+
+/**
+ * Marks a mounted one-off session as history-only. Its play count and best
+ * score remain useful, but it cannot change a separately saved Adaptive run.
+ */
+export function beginNonCalibratingProgressSession(
+  gameId: string
+): () => void {
+  const normalizedId = normalizeGameId(gameId);
+  nonCalibratingSessionCounts.set(
+    normalizedId,
+    (nonCalibratingSessionCounts.get(normalizedId) ?? 0) + 1
+  );
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    const remaining =
+      (nonCalibratingSessionCounts.get(normalizedId) ?? 1) - 1;
+    if (remaining <= 0) {
+      nonCalibratingSessionCounts.delete(normalizedId);
+    } else {
+      nonCalibratingSessionCounts.set(normalizedId, remaining);
+    }
+  };
+}
+
+/**
+ * Lets navigation wait for a just-finished game's adaptive update before
+ * loading the next session. Failed or stalled writes do not trap the learner.
+ */
+export async function waitForProgressUpdates(
+  timeoutMs = PROGRESS_WAIT_TIMEOUT_MS
+): Promise<void> {
+  const pendingAtCall = progressUpdateQueue.catch(() => undefined);
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, Math.max(0, timeoutMs));
+    void pendingAtCall.finally(() => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
+
 /**
  * Reading-skill activities use a transparent, between-session suggestion:
  * two complete sessions at or above the task threshold suggest the next
@@ -193,8 +277,8 @@ export async function updateTwoSessionDifficultySuggestion(
   };
 }
 
-export async function clearProgress(): Promise<void> {
-  await AsyncStorage.removeItem(STORAGE_KEY);
+export function clearProgress(): Promise<void> {
+  return enqueueProgressMutation(() => AsyncStorage.removeItem(STORAGE_KEY));
 }
 
 /**

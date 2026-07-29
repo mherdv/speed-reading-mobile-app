@@ -192,7 +192,8 @@ export default function ComprehensionTest({
       accuracy,
       details: {
         activityType: 'paced-comprehension',
-        contentId: passageProp ? 'custom' : challenge.id,
+        contentId: passageProp ? 'custom' : challenge.sampleId,
+        pacedChallengeId: passageProp ? 'custom' : challenge.id,
         challenge: passageProp ? 'custom' : challenge.challenge,
         questionsTotal: questions.length,
         correctCount,

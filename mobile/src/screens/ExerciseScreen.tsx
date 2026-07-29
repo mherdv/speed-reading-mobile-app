@@ -18,6 +18,12 @@ import {
   createQuestionOutcomes,
   type StoredQuestionOutcome,
 } from '../domain/comprehensionDiagnostics';
+import {
+  epochNowMs,
+  measuredElapsedMs,
+  monotonicNowMs,
+  type MillisecondClock,
+} from '../domain/timing';
 import { BackButton } from '../ui/BackButton';
 import { Button } from '../ui/Button';
 import { ReadingColumn, ResponsiveShell } from '../ui/ResponsiveShell';
@@ -32,6 +38,9 @@ import {
 
 type Props = {
   sample: TextSample;
+  suggestedWpm?: number;
+  clock?: MillisecondClock;
+  civilClock?: MillisecondClock;
   onFinish: (payload: {
     startedAtIso: string;
     finishedAtIso: string;
@@ -50,6 +59,7 @@ type Props = {
       comprehensionCorrectCount: number;
       comprehensionQuestionCount: number;
       questionOutcomes: StoredQuestionOutcome[];
+      timingMethod: 'monotonic-elapsed';
     };
   }) => void;
   onCancel: () => void;
@@ -57,7 +67,14 @@ type Props = {
 
 type Phase = 'idle' | 'reading' | 'question';
 
-export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
+export function ExerciseScreen({
+  sample,
+  suggestedWpm,
+  clock = monotonicNowMs,
+  civilClock = epochNowMs,
+  onFinish,
+  onCancel,
+}: Props) {
   const { tokens: readingDisplay } = useReadingDisplay();
   const [phase, setPhase] = useState<Phase>('idle');
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -66,6 +83,10 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
   >({});
   const startedAtRef = useRef<number | null>(null);
   const readingFinishedAtRef = useRef<number | null>(null);
+  const startedAtEpochRef = useRef<number | null>(null);
+  const startedAtIsoRef = useRef<string | null>(null);
+  const readingFinishedAtIsoRef = useRef<string | null>(null);
+  const reportedRef = useRef(false);
 
   const wordCount = useMemo(() => countWords(sample.text), [sample.text]);
   const questions = useMemo(
@@ -83,40 +104,68 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
     if (phase !== 'reading' || startedAtRef.current === null) return;
 
     const timer = setInterval(() => {
-      setElapsedMs(Date.now() - (startedAtRef.current ?? Date.now()));
+      const startedAt = startedAtRef.current;
+      if (startedAt !== null) {
+        setElapsedMs(measuredElapsedMs(startedAt, clock));
+      }
     }, 50);
     return () => clearInterval(timer);
-  }, [phase]);
+  }, [clock, phase]);
 
   function start() {
-    const now = Date.now();
-    startedAtRef.current = now;
+    startedAtRef.current = clock();
     readingFinishedAtRef.current = null;
+    startedAtEpochRef.current = civilClock();
+    startedAtIsoRef.current = new Date(
+      startedAtEpochRef.current
+    ).toISOString();
+    readingFinishedAtIsoRef.current = null;
+    reportedRef.current = false;
     setElapsedMs(0);
     setSelectedAnswers({});
     setPhase('reading');
   }
 
   function finishReading() {
-    if (startedAtRef.current === null) return;
-    const finishedAt = Date.now();
+    if (
+      startedAtRef.current === null ||
+      startedAtEpochRef.current === null
+    ) {
+      return;
+    }
+    const finishedAt = clock();
     readingFinishedAtRef.current = finishedAt;
-    setElapsedMs(finishedAt - startedAtRef.current);
+    const readingElapsedMs = Math.max(
+      1,
+      measuredElapsedMs(startedAtRef.current, () => finishedAt)
+    );
+    readingFinishedAtIsoRef.current = new Date(
+      startedAtEpochRef.current + readingElapsedMs
+    ).toISOString();
+    setElapsedMs(readingElapsedMs);
     setPhase('question');
   }
 
   function submitAnswer() {
     const startedAt = startedAtRef.current;
     const finishedAt = readingFinishedAtRef.current;
+    const startedAtIso = startedAtIsoRef.current;
+    const finishedAtIso = readingFinishedAtIsoRef.current;
     if (
       startedAt === null ||
       finishedAt === null ||
+      startedAtIso === null ||
+      finishedAtIso === null ||
+      reportedRef.current ||
       Object.keys(selectedAnswers).length !== questions.length
     ) {
       return;
     }
 
-    const readingElapsedMs = Math.max(1, finishedAt - startedAt);
+    const readingElapsedMs = Math.max(
+      1,
+      measuredElapsedMs(startedAt, () => finishedAt)
+    );
     const quality = assessReadingMeasurement(wordCount, readingElapsedMs);
     const correctCount = questions.reduce(
       (total, question, index) =>
@@ -127,9 +176,10 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
       questions,
       selectedAnswers
     );
+    reportedRef.current = true;
     onFinish({
-      startedAtIso: new Date(startedAt).toISOString(),
-      finishedAtIso: new Date(finishedAt).toISOString(),
+      startedAtIso,
+      finishedAtIso,
       elapsedMs: readingElapsedMs,
       wordCount,
       wpm: computeWpm(wordCount, readingElapsedMs),
@@ -145,6 +195,7 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
         comprehensionCorrectCount: correctCount,
         comprehensionQuestionCount: questions.length,
         questionOutcomes,
+        timingMethod: 'monotonic-elapsed',
       },
     });
   }
@@ -206,10 +257,25 @@ export function ExerciseScreen({ sample, onFinish, onCancel }: Props) {
           <View style={styles.tipCard}>
             <Text style={styles.tipIcon}>◎</Text>
             <View style={styles.tipCopy}>
-              <Text style={styles.tipTitle}>Train useful speed</Text>
-              <Text style={styles.tipText}>
-                Faster is only better when you can still explain the main idea.
-              </Text>
+              {suggestedWpm !== undefined ? (
+                <View testID="suggested-wpm">
+                  <Text style={styles.tipTitle}>
+                    Suggested pace · about {suggestedWpm} WPM
+                  </Text>
+                  <Text style={styles.tipText}>
+                    Use it as guidance, not a limit. Meaning still decides
+                    whether the pace is useful.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.tipTitle}>Train useful speed</Text>
+                  <Text style={styles.tipText}>
+                    Faster is only better when you can still explain the main
+                    idea.
+                  </Text>
+                </>
+              )}
             </View>
           </View>
 

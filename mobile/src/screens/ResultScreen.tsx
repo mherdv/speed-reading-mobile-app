@@ -1,7 +1,16 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import type { AttemptResult } from '../domain/types';
+import type { TodayPlanLaunchContext } from '../data/todayPlanStore';
 import {
   formatDuration,
   getResultMetric,
@@ -12,6 +21,7 @@ import {
 } from '../domain/results';
 import { getComprehensionCounts } from '../domain/readingPlan';
 import { getComprehensionDiagnostic } from '../domain/comprehensionDiagnostics';
+import { getNextSessionAction } from '../domain/nextSession';
 import { TEXT_SAMPLES } from '../data/textSamples';
 import { BackButton } from '../ui/BackButton';
 import { ProgressChart } from '../ui/ProgressChart';
@@ -26,9 +36,11 @@ import {
 
 type Props = {
   result: AttemptResult;
-  onDone: () => void;
+  onDone: () => void | Promise<void>;
   onOpenHistory: () => void;
-  onPlayAgain: () => void;
+  onNextSession?: () => void | Promise<void>;
+  onPlayAgain: () => void | Promise<void>;
+  todayPlanContext?: TodayPlanLaunchContext;
 };
 
 function encouragement(
@@ -48,6 +60,13 @@ function encouragement(
   }
 
   if (isMeasuredReading) {
+    if (!isValidProgressMeasurement(result)) {
+      return {
+        title: 'Clean retake needed',
+        body:
+          'This attempt is saved for review, but its timing is not reliable enough to praise or calibrate.',
+      };
+    }
     return result.comprehensionCorrect
       ? {
           title: 'Strong pace, meaning intact',
@@ -55,7 +74,7 @@ function encouragement(
         }
       : {
           title: 'Speed found—now protect meaning',
-          body: 'Repeat the passage a little slower and focus on its main claim.',
+          body: 'Read the next passage a little slower and focus on its main claim.',
         };
   }
 
@@ -85,84 +104,70 @@ function encouragement(
     };
 }
 
-function nextSessionRecommendation(
-  result: AttemptResult,
-  measuredReading: boolean
-): { title: string; body: string } {
-  const comprehension = getComprehensionCounts(result);
-  const comprehensionPercent =
-    comprehension.total > 0
-      ? Math.round((comprehension.correct / comprehension.total) * 100)
-      : undefined;
-  const difficultyMode = result.details?.difficultyMode;
-  const modeSuffix =
-    difficultyMode === 'manual'
-      ? ' Your manual difficulty will stay unchanged.'
-      : difficultyMode === 'adaptive'
-        ? ' Adaptive difficulty changes only after two consecutive at-target or below-target sessions.'
-        : '';
-
-  if (measuredReading && comprehensionPercent !== undefined) {
-    if (comprehensionPercent < 80) {
-      const nextWpm = Math.max(60, Math.round((result.wpm * 0.9) / 5) * 5);
-      return {
-        title: 'Protect meaning next',
-        body: `Try about ${nextWpm} WPM on a fresh passage. Increase pace only after comprehension returns to at least 80%.`,
-      };
-    }
-    if (comprehensionPercent >= 90) {
-      return {
-        title: 'Confirm before increasing',
-        body: `Repeat near ${result.wpm} WPM on a comparable fresh passage. Two strong readings are a better signal than one peak.`,
-      };
-    }
-    return {
-      title: 'Hold this pace',
-      body: `Stay near ${result.wpm} WPM until comprehension is consistently above 80%, then make a small increase.`,
-    };
-  }
-
-  const accuracy =
-    typeof result.accuracy === 'number'
-      ? result.accuracy <= 1
-        ? result.accuracy
-        : result.accuracy / 100
-      : undefined;
-  if (accuracy !== undefined && accuracy >= 0.85) {
-    return {
-      title: 'Repeat once at this challenge',
-      body: `Accuracy is stable enough to confirm this level once more before increasing it.${modeSuffix}`,
-    };
-  }
-  if (accuracy !== undefined && accuracy < 0.7) {
-    return {
-      title: 'Reduce one source of difficulty',
-      body: `Slow the pace or choose an easier setting, then repeat with accuracy as the priority.${modeSuffix}`,
-    };
-  }
-  return {
-    title: 'Build consistency',
-    body: `Repeat this task at the same setting and aim for at least 85% accuracy.${modeSuffix}`,
-  };
-}
-
 export function ResultScreen({
   result,
   onDone,
   onOpenHistory,
+  onNextSession,
   onPlayAgain,
+  todayPlanContext,
 }: Props) {
+  const [navigationBusy, setNavigationBusy] = useState(false);
+  const navigationBusyRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    []
+  );
+
+  const runNavigationAction = async (
+    action: () => void | Promise<void>
+  ) => {
+    if (navigationBusyRef.current) return;
+    navigationBusyRef.current = true;
+    setNavigationBusy(true);
+    try {
+      await action();
+    } finally {
+      navigationBusyRef.current = false;
+      if (mountedRef.current) setNavigationBusy(false);
+    }
+  };
+
   const metric = getResultMetric(result);
   const measuredReading = isMeasuredReadingResult(result);
+  const isDirectReadingSample = TEXT_SAMPLES.some(
+    (sample) => sample.id === result.sampleId
+  );
   const isReadingExercise =
     measuredReading ||
-    TEXT_SAMPLES.some((sample) => sample.id === result.sampleId);
+    isDirectReadingSample;
   const hasAccuracy = typeof result.accuracy === 'number';
   const message = encouragement(result, measuredReading);
   const schulteGridModeLabel = getSchulteGridModeLabel(result);
-  const nextSession = nextSessionRecommendation(result, measuredReading);
-  const comprehensionDiagnostic = getComprehensionDiagnostic(result);
   const validProgressMeasurement = isValidProgressMeasurement(result);
+  const baseNextSession = getNextSessionAction(result);
+  const shouldContinueTodayPlan =
+    todayPlanContext !== undefined &&
+    baseNextSession.kind !== 'finish' &&
+    !(measuredReading && !validProgressMeasurement);
+  const nextSession = shouldContinueTodayPlan
+    ? {
+        kind: 'continue-plan' as const,
+        title: 'Continue today’s plan',
+        body: 'Move to the next pending item in the reading-first plan, or finish if every assigned item is complete.',
+        label: 'Continue today’s plan',
+      }
+    : baseNextSession;
+  const recommendedActionDiffersFromReplay =
+    nextSession.kind !== 'finish' &&
+    (nextSession.kind !== 'replay' || !nextSession.autoStart);
+  const adaptiveExactReplay =
+    result.details?.difficultyMode === 'adaptive';
+  const comprehensionDiagnostic = getComprehensionDiagnostic(result);
   const activityType =
     typeof result.details?.activityType === 'string'
       ? result.details.activityType
@@ -262,7 +267,13 @@ export function ResultScreen({
     >
       <ResponsiveShell>
       <View style={styles.header}>
-        <BackButton onPress={onDone} />
+        <BackButton
+          busy={navigationBusy}
+          disabled={navigationBusy}
+          onPress={() => {
+            void runNavigationAction(onDone);
+          }}
+        />
         <Text style={styles.headerTitle}>Session complete</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -318,6 +329,42 @@ export function ResultScreen({
             {comprehensionDiagnostic.nextAction}
           </Text>
         )}
+        <Pressable
+          testID="recommended-next-action"
+          accessibilityRole="button"
+          accessibilityLabel={nextSession.label}
+          accessibilityState={{
+            busy: navigationBusy,
+            disabled: navigationBusy,
+          }}
+          disabled={navigationBusy}
+          style={({ pressed }) => [
+            styles.coachingButton,
+            pressed && styles.pressed,
+            navigationBusy && styles.navigationDisabled,
+          ]}
+          onPress={() => {
+            void runNavigationAction(onNextSession ?? onPlayAgain);
+          }}
+        >
+          <LinearGradient
+            colors={gradients.button.colors}
+            start={gradients.button.start}
+            end={gradients.button.end}
+            style={styles.coachingButtonGradient}
+          >
+            {navigationBusy && (
+              <ActivityIndicator
+                testID="next-action-spinner"
+                color={colors.white}
+                size="small"
+              />
+            )}
+            <Text style={styles.coachingButtonText}>
+              {navigationBusy ? 'Opening…' : nextSession.label}
+            </Text>
+          </LinearGradient>
+        </Pressable>
       </View>
 
       {comprehensionDiagnostic.wrongAnswers.length > 0 && (
@@ -352,8 +399,16 @@ export function ResultScreen({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="View full history"
-            onPress={onOpenHistory}
+            accessibilityState={{ disabled: navigationBusy }}
+            disabled={navigationBusy}
+            onPress={() => {
+              void runNavigationAction(onOpenHistory);
+            }}
             hitSlop={8}
+            style={({ pressed }) => [
+              pressed && styles.pressed,
+              navigationBusy && styles.navigationDisabled,
+            ]}
           >
             <Text style={styles.historyLink}>View all</Text>
           </Pressable>
@@ -361,38 +416,58 @@ export function ResultScreen({
         <ProgressChart gameId={result.sampleId} currentResult={result} />
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={isReadingExercise ? 'Read this passage again' : 'Play this game again'}
-        style={({ pressed }) => [
-          styles.primaryButton,
-          pressed && styles.pressed,
-        ]}
-        onPress={onPlayAgain}
-      >
-        <LinearGradient
-          colors={gradients.button.colors}
-          start={gradients.button.start}
-          end={gradients.button.end}
-          style={styles.primaryButtonGradient}
+      {recommendedActionDiffersFromReplay && (
+        <Pressable
+          testID="repeat-same-setup"
+          accessibilityRole="button"
+          accessibilityLabel={
+            adaptiveExactReplay
+              ? 'Repeat the completed level once'
+              : isDirectReadingSample
+              ? 'Read this passage again'
+              : isReadingExercise
+                ? 'Repeat the same reading setup'
+                : 'Repeat the same game setup'
+          }
+          accessibilityState={{ disabled: navigationBusy }}
+          disabled={navigationBusy}
+          style={({ pressed }) => [
+            styles.repeatButton,
+            pressed && styles.pressed,
+            navigationBusy && styles.navigationDisabled,
+          ]}
+          onPress={() => {
+            void runNavigationAction(onPlayAgain);
+          }}
         >
-          <Text style={styles.primaryButtonText}>
-            {isReadingExercise ? 'Read again' : 'Train again'}
+          <Text style={styles.repeatButtonText}>
+            {adaptiveExactReplay
+              ? 'Repeat completed level once'
+              : isDirectReadingSample
+              ? 'Read this passage again'
+              : 'Repeat same setup'}
           </Text>
-        </LinearGradient>
-      </Pressable>
+        </Pressable>
+      )}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Return home"
-        style={({ pressed }) => [
-          styles.homeButton,
-          pressed && styles.pressed,
-        ]}
-        onPress={onDone}
-      >
-        <Text style={styles.homeButtonText}>Back to home</Text>
-      </Pressable>
+      {nextSession.kind !== 'finish' && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Return home"
+          accessibilityState={{ disabled: navigationBusy }}
+          disabled={navigationBusy}
+          style={({ pressed }) => [
+            styles.homeButton,
+            pressed && styles.pressed,
+            navigationBusy && styles.navigationDisabled,
+          ]}
+          onPress={() => {
+            void runNavigationAction(onDone);
+          }}
+        >
+          <Text style={styles.homeButtonText}>Back to home</Text>
+        </Pressable>
+      )}
       </ResponsiveShell>
     </ScrollView>
   );
@@ -440,6 +515,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 19,
+  },
+  coachingButton: {
+    overflow: 'hidden',
+    marginTop: spacing.md,
+    borderRadius: 15,
+    ...shadows.small,
+  },
+  coachingButtonGradient: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  coachingButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   reviewCard: {
     marginTop: spacing.md,
@@ -643,21 +738,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  primaryButton: {
-    overflow: 'hidden',
-    marginTop: spacing.md,
-    borderRadius: 17,
-    ...shadows.medium,
-  },
-  primaryButtonGradient: {
-    minHeight: 54,
+  repeatButton: {
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 17,
+    backgroundColor: colors.cardBackground,
   },
-  primaryButtonText: {
-    color: colors.white,
-    fontSize: 16,
+  repeatButtonText: {
+    color: colors.primaryDark,
+    fontSize: 15,
     fontWeight: '800',
+    textAlign: 'center',
   },
   homeButton: {
     minHeight: 52,
@@ -677,5 +773,8 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.78,
     transform: [{ scale: 0.99 }],
+  },
+  navigationDisabled: {
+    opacity: 0.72,
   },
 });

@@ -29,6 +29,19 @@ describe('RepeatedReading', () => {
     jest.useRealTimers();
   });
 
+  it('shows a recommended pace as optional guidance on the intro', async () => {
+    const view = render(
+      <RepeatedReading sample={SAMPLE} suggestedWpm={210} />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(view.getByTestId('suggested-wpm')).toBeTruthy();
+    expect(view.getByText('About 210 WPM')).toBeTruthy();
+    expect(view.queryByTestId('repeated-passage')).toBeNull();
+  });
+
   it('offers several non-baseline passages in every difficulty band', () => {
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
       const pool = getRepeatedReadingPool(difficulty);
@@ -43,6 +56,19 @@ describe('RepeatedReading', () => {
     const pool = getRepeatedReadingPool('easy');
     expect(
       chooseNextRepeatedReadingSample('easy', pool[0]!.id, () => 0).id
+    ).toBe(pool[1]!.id);
+  });
+
+  it('excludes a prior result passage from generated practice', () => {
+    const pool = getRepeatedReadingPool('easy');
+
+    expect(
+      chooseNextRepeatedReadingSample(
+        'easy',
+        '',
+        () => 0,
+        pool[0]!.id
+      ).id
     ).toBe(pool[1]!.id);
   });
 
@@ -88,6 +114,54 @@ describe('RepeatedReading', () => {
           firstWpm: 6,
           lastWpm: 12,
           comprehensionCorrect: true,
+        }),
+      })
+    );
+  });
+
+  it('keeps both reading passes stable across civil clock changes', async () => {
+    const onReportResult = jest.fn();
+    let monotonicTime = 1_000;
+    let civilTime = Date.parse('2020-01-01T08:00:00.000Z');
+    const { getByTestId } = render(
+      <RepeatedReading
+        sample={SAMPLE}
+        clock={() => monotonicTime}
+        civilClock={() => civilTime}
+        onReportResult={onReportResult}
+      />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(getByTestId('start-button'));
+    monotonicTime += 60_000;
+    civilTime -= 2 * 3_600_000;
+    fireEvent.press(getByTestId('finish-round'));
+
+    monotonicTime += 45_000;
+    fireEvent.press(getByTestId('start-next-round'));
+    monotonicTime += 30_000;
+    civilTime += 3_600_000;
+    fireEvent.press(getByTestId('finish-round'));
+
+    monotonicTime += 120_000;
+    civilTime += 5 * 3_600_000;
+    fireEvent.press(getByTestId('repeated-choice-2'));
+    await act(async () => {
+      fireEvent.press(getByTestId('submit-repeated-answer'));
+      await Promise.resolve();
+    });
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startedAtIso: '2020-01-01T08:00:00.000Z',
+        finishedAtIso: '2020-01-01T08:02:15.000Z',
+        elapsedMs: 90_000,
+        details: expect.objectContaining({
+          roundWpms: [6, 12],
+          timingMethod: 'monotonic-elapsed',
         }),
       })
     );

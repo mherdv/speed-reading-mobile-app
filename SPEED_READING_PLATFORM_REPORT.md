@@ -992,3 +992,36 @@ and skipped rounds are reported as omissions.
   Hard Visual Span trial with five equal-length choices. Back remained
   nonblocking, all tested pages stayed at 390 px without horizontal overflow,
   and the browser reported no runtime errors.
+
+## V20 session coaching and progression integrity
+
+- Results now lead with a useful next action instead of making the learner
+  interpret a score alone. Measured-reading recommendations choose a fresh
+  comparable passage, can carry an appropriate WPM target, and keep exact replay
+  as a secondary option. Timing-invalid attempts use neutral clean-retake copy
+  and never present contradictory speed praise.
+- The Today plan is now a continuous session flow. Its launch context survives
+  reading, games, results, and exact replay; completing one item can open the
+  next pending item directly. Optimistically completed IDs prevent a slow local
+  save or a backward wall-clock change from repeating an item.
+- Invalid measured readings cannot complete a Today item or alter adaptive
+  calibration. Exact replay of an Adaptive level is isolated as one-off Manual
+  practice: it can retain play/best information without changing the learner's
+  saved level or qualification streak. Eye-comfort safety exits always override
+  plan continuation.
+- Number and Symbol Recognition now deliver independently oriented balanced
+  pairs, keeping every generated prefix within one target/non-target trial.
+  Calibration requires at least four answers with two trials of each kind, so
+  an always-Match or always-No strategy cannot qualify. Result details report
+  the actual trial mix rather than the requested deck size.
+- Measured reading, Baseline Reading, and Repeated Reading use monotonic elapsed
+  time so device-clock adjustments do not corrupt WPM. Comprehension time stays
+  outside reading time, passage identities remain stable across paced variants,
+  and unrelated legacy game results no longer enter the same comparison chart.
+- Result navigation is single-flight: the primary action, exact replay, Back,
+  and History share a visible busy lock. Progress writes are serialized, clear
+  operations cannot race them, and a bounded wait prevents damaged or stalled
+  local storage from trapping the learner.
+- Final validation passed strict TypeScript, all 573 Jest tests across 79
+  suites, all 18 Expo Doctor checks, production PWA export, and offline-cache
+  verification.

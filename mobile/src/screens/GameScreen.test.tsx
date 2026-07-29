@@ -70,6 +70,33 @@ describe('GameScreen difficulty control', () => {
       checked: true,
     });
     expect(getByText('Manual setting: Medium')).toBeTruthy();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  });
+
+  it('replays a completed adaptive level once without loading the newer band', async () => {
+    const { getByTestId, getByText } = render(
+      <GameScreen
+        gameId="RepeatedReading"
+        difficulty="hard"
+        forceManualDifficulty
+        onBack={jest.fn()}
+        onFinish={jest.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(getByTestId('difficulty-choice-hard')).toHaveAccessibilityState({
+        checked: true,
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(getByText('Manual setting: Hard')).toBeTruthy();
   });
 
   it('auto-starts a Schulte replay with its previous grid mode', async () => {

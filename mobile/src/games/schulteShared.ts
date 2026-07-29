@@ -1,16 +1,10 @@
 export type SchulteGridMode = 'stable' | 'reshuffle';
 
-export type SchulteClock = () => number;
-
-export function monotonicNowMs(): number {
-  if (
-    typeof globalThis.performance !== 'undefined' &&
-    typeof globalThis.performance.now === 'function'
-  ) {
-    return globalThis.performance.now();
-  }
-  return Date.now();
-}
+export {
+  measuredElapsedMs,
+  monotonicNowMs,
+  type MillisecondClock as SchulteClock,
+} from '../domain/timing';
 
 export function shuffleSchulteGrid<T>(
   values: readonly T[],
@@ -41,11 +35,4 @@ export function reshuffleSchulteGrid<T>(
   }
 
   return [...reshuffled.slice(1), reshuffled[0]];
-}
-
-export function measuredElapsedMs(
-  startedAt: number,
-  clock: SchulteClock
-): number {
-  return Math.max(0, Math.round(clock() - startedAt));
 }

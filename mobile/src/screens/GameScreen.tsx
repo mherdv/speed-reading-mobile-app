@@ -26,6 +26,7 @@ import {
   type DifficultyPreference,
 } from '../data/difficultyPreferences';
 import {
+  beginNonCalibratingProgressSession,
   describeAdaptiveProgress,
   levelToDifficulty,
   loadGameProgress,
@@ -45,6 +46,9 @@ type Props = {
   autoStart?: boolean;
   difficulty?: Difficulty;
   schulteGridMode?: 'stable' | 'reshuffle';
+  excludedContentId?: string;
+  suggestedWpm?: number;
+  forceManualDifficulty?: boolean;
   onBack: () => void;
   onFinish: (result: AttemptResult) => void;
 };
@@ -59,6 +63,9 @@ export function GameScreen({
   autoStart,
   difficulty,
   schulteGridMode,
+  excludedContentId,
+  suggestedWpm,
+  forceManualDifficulty = false,
   onBack,
   onFinish,
 }: Props) {
@@ -82,6 +89,11 @@ export function GameScreen({
   }, [normalizedGameId]);
 
   useEffect(() => {
+    if (!forceManualDifficulty) return undefined;
+    return beginNonCalibratingProgressSession(normalizedGameId);
+  }, [forceManualDifficulty, normalizedGameId]);
+
+  useEffect(() => {
     let active = true;
     setControlLoaded(false);
     setAdaptiveHelper(
@@ -98,9 +110,9 @@ export function GameScreen({
         setAdaptiveDifficulty(nextAdaptiveDifficulty);
         setAdaptiveHelper(describeAdaptiveProgress(progress));
         setPreference({
-          mode: savedPreference.mode,
+          mode: forceManualDifficulty ? 'manual' : savedPreference.mode,
           difficulty:
-            savedPreference.mode === 'adaptive'
+            !forceManualDifficulty && savedPreference.mode === 'adaptive'
               ? nextAdaptiveDifficulty
               : difficulty ?? savedPreference.difficulty,
         });
@@ -108,7 +120,9 @@ export function GameScreen({
       .catch(() => {
         if (!active) return;
         setPreference({
-          mode: getDefaultDifficultyPreference(normalizedGameId).mode,
+          mode: forceManualDifficulty
+            ? 'manual'
+            : getDefaultDifficultyPreference(normalizedGameId).mode,
           difficulty: difficulty ?? 'easy',
         });
       })
@@ -119,7 +133,7 @@ export function GameScreen({
     return () => {
       active = false;
     };
-  }, [difficulty, normalizedGameId]);
+  }, [difficulty, forceManualDifficulty, normalizedGameId]);
 
   useEffect(() => {
     return () => {
@@ -258,6 +272,8 @@ export function GameScreen({
               autoStart={autoStart}
               difficulty={difficultyControl.difficulty}
               defaultGridMode={schulteGridMode}
+              excludedContentId={excludedContentId}
+              suggestedWpm={suggestedWpm}
               onReportResult={(p: GameReportPayload) =>
                 void handleGameReport({
                   ...p,

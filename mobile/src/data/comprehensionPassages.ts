@@ -10,6 +10,9 @@ export type ComprehensionQuestion = {
 };
 
 export type ComprehensionPassage = {
+  /** Stable ID of the underlying TextSample shared with baseline reading. */
+  sampleId: string;
+  /** Difficulty-specific paced variant ID used only inside this exercise. */
   id: string;
   difficulty: Difficulty;
   challenge: 'explicit-detail' | 'idea-linking' | 'inference';
@@ -40,6 +43,7 @@ const CHUNK_SIZE = {
 
 function buildPool(difficulty: Difficulty): ComprehensionPassage[] {
   return getWpmTestPool(difficulty).map(({ sample, questions }) => ({
+    sampleId: sample.id,
     id: `comprehension-${difficulty}-${sample.id}`,
     difficulty,
     challenge: CHALLENGE_BY_DIFFICULTY[difficulty],
@@ -83,6 +87,9 @@ export function validateComprehensionPassages(): string[] {
       errors.push(`${difficulty}: at least three distinct passages required`);
     }
     for (const item of pool) {
+      if (!item.sampleId || !item.id.endsWith(item.sampleId)) {
+        errors.push(`${item.id}: missing underlying sample identity`);
+      }
       if (item.questions.length !== expectedQuestions) {
         errors.push(`${item.id}: expected ${expectedQuestions} questions`);
       }

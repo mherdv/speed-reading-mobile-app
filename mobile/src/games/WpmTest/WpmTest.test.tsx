@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
+import * as progressStore from '../../data/progressStore';
 import {
   getBaselineReadingPool,
   validateBaselineReadingPool,
@@ -61,6 +62,20 @@ describe('WpmTest', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('shows a recommended pace as guidance without starting the timer', () => {
+    const view = render(
+      <WpmTest
+        sample={SAMPLE}
+        questions={QUESTIONS}
+        suggestedWpm={215}
+      />
+    );
+
+    expect(view.getByTestId('suggested-wpm')).toBeTruthy();
+    expect(view.getByText('About 215 WPM')).toBeTruthy();
+    expect(view.queryByTestId('wpm-passage')).toBeNull();
   });
 
   it('keeps the passage hidden until timing starts and stops time before questions', () => {
@@ -124,8 +139,46 @@ describe('WpmTest', () => {
     });
   });
 
+  it('keeps elapsed reading time stable across civil clock changes', () => {
+    const onReportResult = jest.fn();
+    let monotonicTime = 1_000;
+    let civilTime = Date.parse('2026-07-27T08:00:00.000Z');
+    const view = render(
+      <WpmTest
+        sample={SAMPLE}
+        questions={[QUESTIONS[0]]}
+        clock={() => monotonicTime}
+        civilClock={() => civilTime}
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+    monotonicTime += 60_000;
+    civilTime -= 3_600_000;
+    fireEvent.press(view.getByTestId('finish-wpm-reading'));
+
+    monotonicTime += 120_000;
+    civilTime += 5 * 3_600_000;
+    fireEvent.press(view.getByTestId('wpm-question-0-option-1'));
+    fireEvent.press(view.getByTestId('submit-wpm-questions'));
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startedAtIso: '2026-07-27T08:00:00.000Z',
+        finishedAtIso: '2026-07-27T08:01:00.000Z',
+        elapsedMs: 60_000,
+        details: expect.objectContaining({
+          wpm: 6,
+          timingMethod: 'monotonic-elapsed',
+        }),
+      })
+    );
+  });
+
   it('flags an attempt that is too brief and can replay without duplicate reports', () => {
     const report = jest.fn();
+    const updateProgress = jest.spyOn(progressStore, 'updateProgress');
     const view = render(
       <WpmTest
         sample={SAMPLE}
@@ -144,9 +197,11 @@ describe('WpmTest', () => {
       measurementValid: false,
       qualityFlag: 'too-short',
     });
+    expect(updateProgress).not.toHaveBeenCalled();
     fireEvent.press(view.getByTestId('play-again'));
     expect(view.getByTestId('wpm-reading')).toBeTruthy();
     expect(report).toHaveBeenCalledTimes(1);
+    updateProgress.mockRestore();
   });
 
   it('provides multiple reviewed passages with 1, 2, and 3 questions by difficulty', () => {
@@ -178,6 +233,24 @@ describe('WpmTest', () => {
         });
       }
     }
+  });
+
+  it('excludes the prior result passage from a generated session', () => {
+    const pool = getBaselineReadingPool('easy');
+    const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+    const view = render(
+      <WpmTest
+        difficulty="easy"
+        excludedContentId={pool[0]!.sample.id}
+      />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+
+    expect(view.getByTestId('wpm-passage')).toHaveTextContent(
+      pool[1]!.sample.text
+    );
+    random.mockRestore();
   });
 
   it('falls back to the sample question when an empty override is supplied', () => {

@@ -1,7 +1,10 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import ComprehensionTest from './ComprehensionTest';
-import { validateComprehensionPassages } from '../../data/comprehensionPassages';
+import {
+  COMPREHENSION_PASSAGE_POOLS,
+  validateComprehensionPassages,
+} from '../../data/comprehensionPassages';
 
 describe('ComprehensionTest', () => {
   beforeEach(() => {
@@ -97,6 +100,8 @@ describe('ComprehensionTest', () => {
         accuracy: 1,
         details: expect.objectContaining({
           activityType: 'paced-comprehension',
+          contentId: 'custom',
+          pacedChallengeId: 'custom',
           questionsTotal: 1,
           correctCount: 1,
           targetWpm: 260,
@@ -106,5 +111,37 @@ describe('ComprehensionTest', () => {
         }),
       })
     );
+  });
+
+  it('reports the underlying sample ID so the next baseline can exclude it', () => {
+    const selected = COMPREHENSION_PASSAGE_POOLS.easy[0]!;
+    const onReportResult = jest.fn();
+    const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+    const { getByTestId } = render(
+      <ComprehensionTest
+        difficulty="easy"
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    fireEvent.press(getByTestId('done-reading'));
+    fireEvent.press(
+      getByTestId(`option-${selected.questions[0]!.correctIndex}`)
+    );
+    act(() => {
+      jest.advanceTimersByTime(1_100);
+    });
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          activityType: 'paced-comprehension',
+          contentId: selected.sampleId,
+          pacedChallengeId: selected.id,
+        }),
+      })
+    );
+    random.mockRestore();
   });
 });

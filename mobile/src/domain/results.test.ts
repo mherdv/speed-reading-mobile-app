@@ -9,6 +9,7 @@ import {
   areResultsComparable,
   areResultsSameContent,
   getResultComparison,
+  getResultComparisonKeyForMetric,
 } from './results';
 
 function makeResult(overrides: Partial<AttemptResult> = {}): AttemptResult {
@@ -206,6 +207,55 @@ describe('result helpers', () => {
     expect(getResultComparison(moving).label).toBe(
       'Score · Medium · Shuffle after each tap'
     );
+  });
+
+  it('isolates legacy non-reading comparison keys by normalized game ID', () => {
+    const wordFlash = makeResult({
+      sampleId: 'TimedWordRecognition',
+      sampleTitle: 'Word Flash',
+      wordCount: 0,
+      wpm: 0,
+      score: 8,
+      details: { difficulty: 'medium' },
+    });
+    const wordFlashAgain = makeResult({
+      ...wordFlash,
+      id: 'word-flash-again',
+      score: 9,
+    });
+    const legacyWordFlash = makeResult({
+      ...wordFlash,
+      id: 'legacy-word-flash',
+      sampleId: 'timed-word-recognition',
+    });
+    const phraseFlash = makeResult({
+      ...wordFlash,
+      id: 'phrase-flash',
+      sampleId: 'TimedPhraseRecognition',
+      sampleTitle: 'Phrase Flash',
+    });
+
+    const wordMetric = getResultMetric(wordFlash);
+    expect(getResultComparison(wordFlashAgain).key).toBe(
+      getResultComparison(wordFlash).key
+    );
+    expect(getResultComparison(legacyWordFlash).key).toBe(
+      getResultComparison(wordFlash).key
+    );
+    expect(
+      getResultComparisonKeyForMetric(wordFlashAgain, wordMetric)
+    ).toBe(getResultComparisonKeyForMetric(wordFlash, wordMetric));
+    expect(getResultComparison(phraseFlash).key).not.toBe(
+      getResultComparison(wordFlash).key
+    );
+    expect(
+      getResultComparisonKeyForMetric(
+        phraseFlash,
+        getResultMetric(phraseFlash)
+      )
+    ).not.toBe(getResultComparisonKeyForMetric(wordFlash, wordMetric));
+    expect(areResultsComparable(wordFlash, wordFlashAgain)).toBe(true);
+    expect(areResultsComparable(legacyWordFlash, wordFlash)).toBe(true);
   });
 
   it('labels modern Schulte rates and separates them from legacy scores', () => {

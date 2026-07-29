@@ -3,12 +3,14 @@ import {
   loadGameProgress,
   saveGameProgress,
   updateProgress,
+  waitForProgressUpdates,
   updateTwoSessionDifficultySuggestion,
   clearProgress,
   levelToDifficulty,
   difficultyToLevel,
   levelToStars,
   MAX_LEVEL,
+  beginNonCalibratingProgressSession,
   describeAdaptiveProgress,
   type GameProgress,
 } from '../progressStore';
@@ -27,6 +29,7 @@ describe('progressStore', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -86,6 +89,103 @@ describe('progressStore', () => {
       const { progress } = await updateProgress('TestGame', true);
       expect(progress.streak).toBe(1);
       expect(progress.totalPlays).toBe(1);
+    });
+
+    it('serializes concurrent completions so neither progress update is lost', async () => {
+      await enableAdaptive('TestGame');
+
+      await Promise.all([
+        updateProgress('TestGame', true, 40, 'easy'),
+        updateProgress('TestGame', true, 60, 'easy'),
+      ]);
+      await waitForProgressUpdates();
+
+      await expect(loadGameProgress('TestGame')).resolves.toEqual(
+        expect.objectContaining({
+          level: 6,
+          streak: 0,
+          totalPlays: 2,
+          bestScore: 60,
+        })
+      );
+    });
+
+    it('keeps one-off exact replay out of the saved Adaptive run', async () => {
+      await enableAdaptive('TestGame');
+      await saveGameProgress('TestGame', {
+        level: 6,
+        streak: 1,
+        totalPlays: 4,
+        bestScore: 40,
+        adaptiveQualificationDifficulty: 'medium',
+      });
+
+      const endSession = beginNonCalibratingProgressSession('TestGame');
+      const { progress, levelChanged } = await updateProgress(
+        'TestGame',
+        true,
+        90,
+        'medium'
+      );
+      endSession();
+
+      expect(progress).toMatchObject({
+        level: 6,
+        streak: 1,
+        totalPlays: 5,
+        bestScore: 90,
+        adaptiveQualificationDifficulty: 'medium',
+      });
+      expect(levelChanged).toBe(false);
+
+      const nextAdaptive = await updateProgress(
+        'TestGame',
+        true,
+        95,
+        'medium'
+      );
+      expect(nextAdaptive.progress).toMatchObject({
+        level: 11,
+        streak: 0,
+        totalPlays: 6,
+        bestScore: 95,
+      });
+    });
+
+    it('bounds navigation waits when a progress write stalls', async () => {
+      jest.useFakeTimers();
+      const originalSetItem = (
+        AsyncStorage.setItem as jest.MockedFunction<typeof AsyncStorage.setItem>
+      ).getMockImplementation();
+      if (!originalSetItem) {
+        throw new Error('AsyncStorage test mock must provide setItem');
+      }
+      let signalWrite: (() => void) | undefined;
+      let releaseWrite: (() => void) | undefined;
+      const writeStarted = new Promise<void>((resolve) => {
+        signalWrite = resolve;
+      });
+      jest.spyOn(AsyncStorage, 'setItem').mockImplementation(
+        async (key, value) => {
+          if (key === 'speed-reading:progress:v1' && !releaseWrite) {
+            signalWrite?.();
+            await new Promise<void>((resolve) => {
+              releaseWrite = resolve;
+            });
+          }
+          await originalSetItem(key, value);
+        }
+      );
+
+      const update = updateProgress('TestGame', true, 20);
+      await writeStarted;
+      const wait = waitForProgressUpdates(25);
+      jest.advanceTimersByTime(25);
+      await expect(wait).resolves.toBeUndefined();
+
+      releaseWrite?.();
+      await update;
+      jest.useRealTimers();
     });
 
     it('raises the difficulty band after two consecutive at-target sessions', async () => {
@@ -385,6 +485,53 @@ describe('progressStore', () => {
 
       expect(progress1.totalPlays).toBe(0);
       expect(progress2.totalPlays).toBe(0);
+    });
+
+    it('orders racing updates around clearProgress by invocation', async () => {
+      const originalSetItem = (
+        AsyncStorage.setItem as jest.MockedFunction<typeof AsyncStorage.setItem>
+      ).getMockImplementation();
+      if (!originalSetItem) {
+        throw new Error('AsyncStorage test mock must provide setItem');
+      }
+      let releaseFirstWrite: (() => void) | undefined;
+      let signalFirstWrite: (() => void) | undefined;
+      const firstWriteStarted = new Promise<void>((resolve) => {
+        signalFirstWrite = resolve;
+      });
+      let shouldBlockFirstProgressWrite = true;
+
+      jest.spyOn(AsyncStorage, 'setItem').mockImplementation(
+        async (key, value) => {
+          if (
+            key === 'speed-reading:progress:v1' &&
+            shouldBlockFirstProgressWrite
+          ) {
+            shouldBlockFirstProgressWrite = false;
+            signalFirstWrite?.();
+            await new Promise<void>((resolve) => {
+              releaseFirstWrite = resolve;
+            });
+          }
+          await originalSetItem(key, value);
+        }
+      );
+
+      const beforeClear = updateProgress('TestGame', true, 10);
+      await firstWriteStarted;
+      const clear = clearProgress();
+      const afterClear = updateProgress('TestGame', true, 20);
+
+      releaseFirstWrite?.();
+      await Promise.all([beforeClear, clear, afterClear]);
+      await waitForProgressUpdates();
+
+      await expect(loadGameProgress('TestGame')).resolves.toEqual(
+        expect.objectContaining({
+          totalPlays: 1,
+          bestScore: 20,
+        })
+      );
     });
   });
 });

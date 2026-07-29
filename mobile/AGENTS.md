@@ -35,6 +35,15 @@
 - Store truthful score/accuracy values; do not derive placeholder percentages.
 - Curated exercises should practice a reading behavior directly. Describe visual or reaction drills as task-specific warm-ups, not proven reading-transfer methods.
 
+## Result transition and calibration contract
+
+- An invalid measured reading may be retained as a raw attempt, but it must not complete a Today-plan reading or change adaptive level/streak.
+- Carry Today-plan origin and optimistically completed item IDs through result actions and exact replay so pending storage or civil-clock changes cannot repeat a completed item.
+- Exact replay of an Adaptive session is a one-off Manual practice attempt. It may update play count/best score, but must not change the saved Adaptive level or qualification streak.
+- Result actions that await storage must share one busy lock, including Back and History. Bound the wait so a stalled local write cannot trap the user on the result screen.
+- Safety-oriented finish actions, such as an uncomfortable Eye Reset, take precedence over Today-plan continuation and replay.
+- A recognition game may calibrate only after a representative sample containing both target and non-target trials; balance generated prefixes so constant-answer guessing cannot qualify.
+
 ## Authored content contract
 
 - Use original, licensed, or public-domain material. Do not copy a competitor's proprietary passages, questions, word lists, or answer sets.

@@ -5,18 +5,28 @@ import Svg, { Path } from 'react-native-svg';
 type Props = {
   onPress: () => void;
   testID?: string;
+  disabled?: boolean;
+  busy?: boolean;
 };
 
-export function BackButton({ onPress, testID }: Props) {
+export function BackButton({
+  onPress,
+  testID,
+  disabled = false,
+  busy = false,
+}: Props) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Go back"
+      accessibilityState={{ busy, disabled }}
+      disabled={disabled}
       testID={testID}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         pressed && styles.pressed,
+        disabled && styles.disabled,
       ]}
     >
       <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
@@ -49,5 +59,8 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7,
     transform: [{ scale: 0.95 }],
+  },
+  disabled: {
+    opacity: 0.5,
   },
 });

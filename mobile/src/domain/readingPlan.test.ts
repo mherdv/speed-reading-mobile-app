@@ -434,9 +434,15 @@ describe('reading-first Today and baseline model', () => {
       finishedAtIso: '2026-07-26T10:01:00.000Z',
       details: { activityType: 'evidence-hunt' },
     };
+    const invalidReading: AttemptResult = {
+      ...reading('invalid-reading', 'sample-1', 900, 3, 3, false),
+      startedAtIso: '2026-07-26T10:00:00.000Z',
+      finishedAtIso: '2026-07-26T10:00:01.000Z',
+      elapsedMs: 1_000,
+    };
     const pending = resolveTodayPlanSnapshot({
       snapshot,
-      results: [beforeAssignment, wrongSkill],
+      results: [beforeAssignment, invalidReading, wrongSkill],
       samples: TEXT_SAMPLES,
       now: new Date('2026-07-26T12:00:00.000Z'),
     });

@@ -52,13 +52,36 @@ describe('adaptive-eligible game progress integration', () => {
   });
 
   it.each([
-    ['NumberRecognition', <NumberRecognition durationMs={100} />],
+    [
+      'NumberRecognition',
+      <NumberRecognition
+        target={7}
+        stream={[7, 2, 7, 3]}
+        durationMs={100}
+      />,
+    ],
     ['NumberSearch', <NumberSearch durationMs={100} previewMs={1} />],
-    ['SymbolRecognition', <SymbolRecognition durationMs={100} />],
+    [
+      'SymbolRecognition',
+      <SymbolRecognition
+        target="@"
+        stream={['@', '#', '@', '$']}
+        durationMs={100}
+      />,
+    ],
     ['WordPairs', <WordPairs durationMs={100} />],
   ])('persists %s progress after a timed attempt', async (gameId, component) => {
     const { getByTestId } = render(component);
     fireEvent.press(getByTestId('start-button'));
+    if (
+      gameId === 'NumberRecognition' ||
+      gameId === 'SymbolRecognition'
+    ) {
+      fireEvent.press(getByTestId('match'));
+      fireEvent.press(getByTestId('no'));
+      fireEvent.press(getByTestId('match'));
+      fireEvent.press(getByTestId('no'));
+    }
     if (gameId === 'NumberSearch') {
       act(() => {
         jest.advanceTimersByTime(1);

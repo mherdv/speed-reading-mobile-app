@@ -32,3 +32,36 @@ export function shuffleItems<T>(
   }
   return result;
 }
+
+/**
+ * Produces a randomized recognition deck made of independently oriented
+ * target/non-target pairs. Every even prefix is exactly 50/50 and every odd
+ * prefix differs by only one trial, so neither repeated response can reach the
+ * progression threshold once both trial types have appeared.
+ */
+export function interleaveBalancedTrials<T>(
+  targets: readonly T[],
+  nonTargets: readonly T[],
+  random: RandomSource = Math.random
+): T[] {
+  if (targets.length !== nonTargets.length) {
+    throw new RangeError(
+      'interleaveBalancedTrials requires equal target and non-target counts'
+    );
+  }
+
+  const shuffledTargets = shuffleItems(targets, random);
+  const shuffledNonTargets = shuffleItems(nonTargets, random);
+  const result: T[] = [];
+
+  shuffledTargets.forEach((target, index) => {
+    const nonTarget = shuffledNonTargets[index]!;
+    if (randomIndex(2, random) === 0) {
+      result.push(target, nonTarget);
+    } else {
+      result.push(nonTarget, target);
+    }
+  });
+
+  return result;
+}

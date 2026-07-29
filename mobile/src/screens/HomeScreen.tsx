@@ -43,6 +43,7 @@ import {
   setTodayPlanItemSkipped,
   type TodayPlanSnapshot,
   type TodayPlanItemId,
+  type TodayPlanLaunchContext,
 } from '../data/todayPlanStore';
 import type { AttemptResult, TextSample } from '../domain/types';
 import {
@@ -85,10 +86,16 @@ export function getHomeGameIconColumns(availableWidth: number): 3 | 4 {
 }
 
 type Props = {
-  onStart: (sample: TextSample) => void;
+  onStart: (
+    sample: TextSample,
+    todayPlanContext?: TodayPlanLaunchContext
+  ) => void;
   onOpenHistory: () => void;
   refreshToken: number;
-  onOpenGame: (gameId: string) => void;
+  onOpenGame: (
+    gameId: string,
+    todayPlanContext?: TodayPlanLaunchContext
+  ) => void;
 };
 
 function progressLabel(
@@ -555,11 +562,18 @@ export function HomeScreen({
                       styles.todayStart,
                       pressed && styles.pressed,
                     ]}
-                    onPress={() =>
-                      item.kind === 'reading'
-                        ? onStart(item.sample)
-                        : handleOpenGame(item.gameId)
-                    }
+                    onPress={() => {
+                      if (!todayPlanSnapshot) return;
+                      const todayPlanContext: TodayPlanLaunchContext = {
+                        snapshot: todayPlanSnapshot,
+                        itemId: item.id,
+                      };
+                      if (item.kind === 'reading') {
+                        onStart(item.sample, todayPlanContext);
+                      } else {
+                        onOpenGame(item.gameId, todayPlanContext);
+                      }
+                    }}
                   >
                     <Text style={styles.todayStartText}>Start</Text>
                   </Pressable>

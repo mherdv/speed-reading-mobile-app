@@ -29,6 +29,16 @@ export type TodayPlanSnapshot = {
   skipped: TodayPlanItemId[];
 };
 
+export type TodayPlanLaunchContext = {
+  snapshot: TodayPlanSnapshot;
+  itemId: TodayPlanItemId;
+  /**
+   * Completed route-origin items carried until their background result writes
+   * become visible to storage-backed plan resolution.
+   */
+  optimisticallyCompletedItemIds?: readonly TodayPlanItemId[];
+};
+
 export type TodayPlanSnapshotDefaults = {
   readingSampleId: string;
   eligibleReadingSampleIds: readonly string[];

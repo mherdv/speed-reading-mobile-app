@@ -55,10 +55,10 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Recall short number sequences on a phone-style keypad. A miss pauses on your entry and the correct sequence before difficulty drops or the session ends. Its accuracy describes this task only; it is not a reading-retention score.',
 
   NumberRecognition:
-    'Identify target numbers in a brief visual task. This optional challenge measures number-recognition accuracy rather than reading skill.',
+    'Identify target numbers in a balanced, unpredictably shuffled Match/No Match stream, so repeating one response cannot pass. This optional challenge measures number-recognition accuracy rather than reading skill.',
 
   SymbolRecognition:
-    'Identify target symbols among distractors in an optional visual-search challenge. The score is specific to this task.',
+    'Identify target symbols in a balanced, unpredictably shuffled Match/No Match stream, so repeating one response cannot pass. This optional visual challenge reports a task-specific score.',
 
   PatternScanning:
     'Locate matching patterns in a grid and compare speed with accuracy. Use it as an optional visual-search warm-up rather than a reading measure.',

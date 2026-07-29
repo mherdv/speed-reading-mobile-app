@@ -6,6 +6,11 @@ import { updateProgress } from '../../data/progressStore';
 import { formatDuration } from '../../domain/results';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
+import {
+  interleaveBalancedTrials,
+  randomIndex,
+  type RandomSource,
+} from '../../data/randomization';
 
 const GAME_ID = 'SymbolRecognition';
 
@@ -74,15 +79,33 @@ export function getSymbolRecognitionChallenge(
   return SYMBOL_RECOGNITION_CHALLENGES[difficulty];
 }
 
-function generateStream(
+export function generateSymbolRecognitionStream(
   target: string,
-  challenge: SymbolRecognitionChallenge
+  challenge: SymbolRecognitionChallenge,
+  random: RandomSource = Math.random
 ): string[] {
+  if (challenge.stimulusCount % 2 !== 0) {
+    throw new RangeError(
+      'Symbol Recognition requires an even stimulus count for a balanced stream'
+    );
+  }
+
   const distractors = challenge.symbols.filter((symbol) => symbol !== target);
-  return Array.from({ length: challenge.stimulusCount }, (_, index) => {
-    if (index % 5 === 1) return target;
-    return distractors[Math.floor(Math.random() * distractors.length)] ?? target;
-  });
+  if (distractors.length === 0) {
+    throw new RangeError(
+      'Symbol Recognition requires at least one non-target symbol'
+    );
+  }
+
+  const trialCount = challenge.stimulusCount / 2;
+  return interleaveBalancedTrials(
+    Array.from({ length: trialCount }, () => target),
+    Array.from(
+      { length: trialCount },
+      () => distractors[randomIndex(distractors.length, random)]
+    ),
+    random
+  );
 }
 
 export default function SymbolRecognition({
@@ -98,7 +121,7 @@ export default function SymbolRecognition({
   const durationMs = durationMsProp ?? challenge.durationMs;
   const [phase, setPhase] = useState<Phase>('idle');
   const [seq, setSeq] = useState<string[]>(() =>
-    stream ?? generateStream(target, challenge)
+    stream ?? generateSymbolRecognitionStream(target, challenge)
   );
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -113,6 +136,8 @@ export default function SymbolRecognition({
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
   const timedOutRef = useRef(0);
+  const targetTrialsRef = useRef(0);
+  const nonTargetTrialsRef = useRef(0);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cadenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -153,8 +178,10 @@ export default function SymbolRecognition({
     scoreRef.current = 0;
     attemptsRef.current = 0;
     timedOutRef.current = 0;
+    targetTrialsRef.current = 0;
+    nonTargetTrialsRef.current = 0;
     // Generate fresh stream
-    setSeq(stream ?? generateStream(target, challenge));
+    setSeq(stream ?? generateSymbolRecognitionStream(target, challenge));
     setPhase('running');
     setScore(0);
     setIndex(0);
@@ -183,11 +210,17 @@ export default function SymbolRecognition({
     const now = Date.now();
     const elapsedMs = now - startRef.current;
     const accuracy = attemptsRef.current > 0 ? Math.min(1, scoreRef.current / (10 * attemptsRef.current)) : 0;
+    const calibrationEligible =
+      attemptsRef.current >= 4 &&
+      targetTrialsRef.current >= 2 &&
+      nonTargetTrialsRef.current >= 2;
 
     setPhase('ended');
-    void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
-      () => undefined
-    );
+    if (calibrationEligible) {
+      void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
+        () => undefined
+      );
+    }
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
@@ -197,6 +230,9 @@ export default function SymbolRecognition({
       details: {
         target,
         total: seq.length,
+        targetTrials: targetTrialsRef.current,
+        nonTargetTrials: nonTargetTrialsRef.current,
+        calibrationEligible,
         attempts: attemptsRef.current,
         timedOut: timedOutRef.current,
         difficulty,
@@ -213,6 +249,8 @@ export default function SymbolRecognition({
     const correct = isMatchPressed ? isMatch : !isMatch;
 
     attemptsRef.current += 1;
+    if (isMatch) targetTrialsRef.current += 1;
+    else nonTargetTrialsRef.current += 1;
     setAttempts(attemptsRef.current);
 
     if (correct) {
@@ -230,8 +268,11 @@ export default function SymbolRecognition({
 
   function handleStimulusTimeout() {
     if (phase !== 'running') return;
+    const isMatch = current === target;
     attemptsRef.current += 1;
     timedOutRef.current += 1;
+    if (isMatch) targetTrialsRef.current += 1;
+    else nonTargetTrialsRef.current += 1;
     setAttempts(attemptsRef.current);
     setFeedback('wrong');
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);

@@ -8,9 +8,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { RootStackParamList } from './types';
 import type { AttemptResult, TextSample } from '../domain/types';
-import { saveResult } from '../data/resultsStore';
+import { loadResults, saveResult } from '../data/resultsStore';
 import { normalizeGameId } from '../data/gameIds';
-import { TEXT_SAMPLES } from '../data/textSamples';
+import {
+  BASELINE_TEXT_SAMPLES,
+  TEXT_SAMPLES,
+} from '../data/textSamples';
+import {
+  getNextSessionAction,
+  selectFreshComparableSample,
+} from '../domain/nextSession';
+import { waitForProgressUpdates } from '../data/progressStore';
+import type { TodayPlanLaunchContext } from '../data/todayPlanStore';
+import {
+  getOptimisticTodayPlanCompletionIds,
+  resolveNextTodayPlanItem,
+} from './todayPlanFlow';
 
 import { HomeScreen } from '../screens/HomeScreen';
 import { ExerciseScreen } from '../screens/ExerciseScreen';
@@ -50,6 +63,9 @@ function GameRoute({
         autoStart={route.params.autoStart}
         difficulty={route.params.difficulty}
         schulteGridMode={route.params.schulteGridMode}
+        excludedContentId={route.params.excludedContentId}
+        suggestedWpm={route.params.suggestedWpm}
+        forceManualDifficulty={route.params.forceManualDifficulty}
         onBack={() => {
           onResultsChanged();
           navigation.goBack();
@@ -62,7 +78,10 @@ function GameRoute({
               { name: 'Home' },
               {
                 name: 'Result',
-                params: { result },
+                params: {
+                  result,
+                  todayPlanContext: route.params.todayPlanContext,
+                },
                 key: `result-${result.id}`,
               },
             ],
@@ -98,13 +117,27 @@ export function RootNavigator() {
           <SafeAreaView style={styles.safeArea} edges={['top']}>
             <HomeScreen
               refreshToken={refreshToken}
-              onStart={(sample: TextSample) => navigation.navigate('Exercise', { sample })}
+              onStart={(
+                sample: TextSample,
+                todayPlanContext?: TodayPlanLaunchContext
+              ) =>
+                navigation.navigate('Exercise', {
+                  sample,
+                  ...(todayPlanContext ? { todayPlanContext } : {}),
+                })
+              }
               onOpenHistory={() => navigation.navigate('History', undefined)}
-              onOpenGame={(gameId: string) => navigation.navigate('Game', {
-                gameId: normalizeGameId(gameId),
-                autoStart: false,
-                sessionKey: getNextGameSessionKey(),
-              })}
+              onOpenGame={(
+                gameId: string,
+                todayPlanContext?: TodayPlanLaunchContext
+              ) =>
+                navigation.navigate('Game', {
+                  gameId: normalizeGameId(gameId),
+                  autoStart: false,
+                  sessionKey: getNextGameSessionKey(),
+                  ...(todayPlanContext ? { todayPlanContext } : {}),
+                })
+              }
             />
           </SafeAreaView>
         )}
@@ -115,6 +148,7 @@ export function RootNavigator() {
           <SafeAreaView style={styles.safeArea} edges={['top']}>
             <ExerciseScreen
               sample={route.params.sample}
+              suggestedWpm={route.params.suggestedWpm}
               onCancel={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
               onFinish={async (payload) => {
                 const sample = route.params.sample;
@@ -130,7 +164,14 @@ export function RootNavigator() {
                   index: 1,
                   routes: [
                     { name: 'Home' },
-                    { name: 'Result', params: { result }, key: `result-${result.id}` },
+                    {
+                      name: 'Result',
+                      params: {
+                        result,
+                        todayPlanContext: route.params.todayPlanContext,
+                      },
+                      key: `result-${result.id}`,
+                    },
                   ],
                 });
               }}
@@ -147,65 +188,237 @@ export function RootNavigator() {
 
       <Stack.Screen name="Result">
         {({ navigation, route }) => {
-          return (
-          <SafeAreaView style={styles.safeArea} edges={['top']}>
-            <ResultScreen
-              key={route.params.result.id}
-              result={route.params.result}
-              onDone={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
-              onOpenHistory={() =>
-                navigation.navigate('History', {
-                  optimisticResult: route.params.result,
-                })
+          const result = route.params.result;
+          const todayPlanContext = route.params.todayPlanContext;
+          const nextSessionAction = getNextSessionAction(result);
+          const contentId =
+            typeof result.details?.contentId === 'string'
+              ? result.details.contentId
+              : result.sampleId;
+          const storedDifficulty = result.details?.difficulty;
+          const difficulty =
+            storedDifficulty === 'easy' ||
+            storedDifficulty === 'medium' ||
+            storedDifficulty === 'hard'
+              ? storedDifficulty
+              : undefined;
+          const storedGridMode = result.details?.gridMode;
+          const schulteGridMode =
+            storedGridMode === 'stable' ||
+            storedGridMode === 'reshuffle'
+              ? storedGridMode
+              : undefined;
+          const resetToGame = ({
+            gameId,
+            autoStart,
+            nextDifficulty,
+            excludedContentId,
+            suggestedWpm,
+            forceManualDifficulty,
+            nextTodayPlanContext,
+          }: {
+            gameId: string;
+            autoStart: boolean;
+            nextDifficulty?: 'easy' | 'medium' | 'hard';
+            excludedContentId?: string;
+            suggestedWpm?: number;
+            forceManualDifficulty?: boolean;
+            nextTodayPlanContext?: TodayPlanLaunchContext;
+          }) => {
+            const newSessionKey = getNextGameSessionKey();
+            navigation.reset({
+              index: 1,
+              routes: [
+                { name: 'Home' },
+                {
+                  name: 'Game',
+                  params: {
+                    gameId: normalizeGameId(gameId),
+                    autoStart,
+                    sessionKey: newSessionKey,
+                    difficulty: nextDifficulty,
+                    schulteGridMode,
+                    excludedContentId,
+                    suggestedWpm,
+                    forceManualDifficulty,
+                    ...(nextTodayPlanContext
+                      ? { todayPlanContext: nextTodayPlanContext }
+                      : {}),
+                  },
+                  key: `game-${newSessionKey}`,
+                },
+              ],
+            });
+          };
+          const launchRecommendedSession = async () => {
+            await waitForProgressUpdates();
+            refreshResults();
+            if (nextSessionAction.kind === 'finish') {
+              navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+              return;
+            }
+            if (todayPlanContext) {
+              const storedResults = await loadResults().catch(() => []);
+              const nextItem = resolveNextTodayPlanItem({
+                context: todayPlanContext,
+                result,
+                storedResults,
+                samples: TEXT_SAMPLES,
+              });
+              if (!nextItem) {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Home' }],
+                });
+                return;
               }
-              onPlayAgain={() => {
-                const readingSample = TEXT_SAMPLES.find(
-                  (sample) => sample.id === route.params.result.sampleId
-                );
-                if (readingSample) {
-                  navigation.reset({
-                    index: 1,
-                    routes: [
-                      { name: 'Home' },
-                      { name: 'Exercise', params: { sample: readingSample } },
-                    ],
-                  });
-                  return;
-                }
-
-                const newSessionKey = getNextGameSessionKey();
-                const storedDifficulty = route.params.result.details?.difficulty;
-                const difficulty =
-                  storedDifficulty === 'easy' ||
-                  storedDifficulty === 'medium' ||
-                  storedDifficulty === 'hard'
-                    ? storedDifficulty
-                    : undefined;
-                const storedGridMode =
-                  route.params.result.details?.gridMode;
-                const schulteGridMode =
-                  storedGridMode === 'stable' ||
-                  storedGridMode === 'reshuffle'
-                    ? storedGridMode
-                    : undefined;
+              const nextTodayPlanContext: TodayPlanLaunchContext = {
+                snapshot: todayPlanContext.snapshot,
+                itemId: nextItem.id,
+                optimisticallyCompletedItemIds:
+                  getOptimisticTodayPlanCompletionIds(
+                    todayPlanContext,
+                    result
+                  ),
+              };
+              if (nextItem.kind === 'reading') {
                 navigation.reset({
                   index: 1,
                   routes: [
                     { name: 'Home' },
                     {
-                      name: 'Game',
+                      name: 'Exercise',
                       params: {
-                        gameId: normalizeGameId(route.params.result.sampleId),
-                        autoStart: true,
-                        sessionKey: newSessionKey,
-                        difficulty,
-                        schulteGridMode,
+                        sample: nextItem.sample,
+                        todayPlanContext: nextTodayPlanContext,
                       },
-                      key: `game-${newSessionKey}`,
                     },
                   ],
                 });
-              }}
+                return;
+              }
+              resetToGame({
+                gameId: nextItem.gameId,
+                autoStart: false,
+                nextTodayPlanContext,
+              });
+              return;
+            }
+            if (nextSessionAction.kind === 'measured-reading') {
+              resetToGame({
+                gameId: 'WpmTest',
+                autoStart: false,
+                excludedContentId: contentId,
+              });
+              return;
+            }
+            if (nextSessionAction.kind === 'fresh-reading') {
+              const directReadingSample = TEXT_SAMPLES.some(
+                (sample) => sample.id === result.sampleId
+              );
+              if (directReadingSample) {
+                const recentResults = await loadResults().catch(() => []);
+                const sample = selectFreshComparableSample(
+                  result,
+                  BASELINE_TEXT_SAMPLES,
+                  [
+                    result,
+                    ...recentResults.filter(
+                      (stored) => stored.id !== result.id
+                    ),
+                  ]
+                );
+                if (sample) {
+                  navigation.reset({
+                    index: 1,
+                    routes: [
+                      { name: 'Home' },
+                      {
+                        name: 'Exercise',
+                        params: {
+                          sample,
+                          suggestedWpm: nextSessionAction.targetWpm,
+                        },
+                      },
+                    ],
+                  });
+                  return;
+                }
+                resetToGame({
+                  gameId: 'WpmTest',
+                  autoStart: false,
+                  excludedContentId: contentId,
+                  suggestedWpm: nextSessionAction.targetWpm,
+                });
+                return;
+              }
+              resetToGame({
+                gameId: result.sampleId,
+                autoStart: false,
+                nextDifficulty: difficulty,
+                excludedContentId: contentId,
+                suggestedWpm: nextSessionAction.targetWpm,
+              });
+              return;
+            }
+            resetToGame({
+              gameId: result.sampleId,
+              autoStart: nextSessionAction.autoStart,
+              nextDifficulty:
+                nextSessionAction.difficulty ?? difficulty,
+            });
+          };
+          const returnHome = async () => {
+            await waitForProgressUpdates();
+            refreshResults();
+            navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+          };
+          const replayCompletedSetup = async () => {
+            await waitForProgressUpdates();
+            const readingSample = TEXT_SAMPLES.find(
+              (sample) => sample.id === result.sampleId
+            );
+            if (readingSample) {
+              navigation.reset({
+                index: 1,
+                routes: [
+                  { name: 'Home' },
+                  {
+                    name: 'Exercise',
+                    params: {
+                      sample: readingSample,
+                      ...(todayPlanContext ? { todayPlanContext } : {}),
+                    },
+                  },
+                ],
+              });
+              return;
+            }
+
+            resetToGame({
+              gameId: result.sampleId,
+              autoStart: true,
+              nextDifficulty: difficulty,
+              forceManualDifficulty:
+                result.details?.difficultyMode === 'adaptive',
+              nextTodayPlanContext: todayPlanContext,
+            });
+          };
+
+          return (
+          <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <ResultScreen
+              key={result.id}
+              result={result}
+              todayPlanContext={todayPlanContext}
+              onDone={returnHome}
+              onOpenHistory={() =>
+                navigation.navigate('History', {
+                  optimisticResult: result,
+                })
+              }
+              onNextSession={launchRecommendedSession}
+              onPlayAgain={replayCompletedSetup}
             />
           </SafeAreaView>
         );}}

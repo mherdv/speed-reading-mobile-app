@@ -111,7 +111,7 @@ describe('real app navigation flows', () => {
     }
   );
 
-  it('leaves an auto-started Result → Play Again session immediately', async () => {
+  it('leaves an auto-started exact-replay session immediately', async () => {
     const { getByLabelText, getByTestId, getByText } = render(<App />);
     await waitFor(() => {
       expect(getByTestId('open-game-StructureScan')).toBeTruthy();
@@ -131,7 +131,7 @@ describe('real app navigation flows', () => {
       expect(getByText('Recent progress')).toBeTruthy();
     });
 
-    fireEvent.press(getByLabelText('Play this game again'));
+    fireEvent.press(getByTestId('repeat-same-setup'));
     await waitFor(() => {
       expect(getByTestId('structure-scan-article')).toBeTruthy();
     });
@@ -165,11 +165,57 @@ describe('real app navigation flows', () => {
       );
     });
 
-    fireEvent.press(getByLabelText('Play this game again'));
+    fireEvent.press(getByTestId('recommended-next-action'));
     await waitFor(() => {
       expect(
         getByText('Moving grid · completed cells stay uncolored')
       ).toBeTruthy();
+    });
+  });
+
+  it('continues an assigned Today plan and retains its origin on exact replay', async () => {
+    const view = render(<App />);
+    await waitFor(() => {
+      expect(view.getByTestId('start-reading-exercise')).toBeTruthy();
+    });
+
+    const completeReading = () => {
+      let measuredNow = 1_000;
+      const clockSpy = jest
+        .spyOn(globalThis.performance, 'now')
+        .mockImplementation(() => measuredNow);
+      fireEvent.press(view.getByTestId('start-reading'));
+      measuredNow += 60_000;
+      fireEvent.press(view.getByTestId('finish-reading'));
+      clockSpy.mockRestore();
+      fireEvent.press(view.getByTestId('choice-0'));
+      fireEvent.press(view.getByTestId('choice-1-0'));
+      fireEvent.press(view.getByTestId('choice-2-0'));
+      fireEvent.press(view.getByTestId('submit-answer'));
+    };
+
+    fireEvent.press(view.getByTestId('start-reading-exercise'));
+    await waitFor(() => {
+      expect(view.getByTestId('start-reading')).toBeTruthy();
+    });
+    completeReading();
+    await waitFor(() => {
+      expect(view.getByLabelText('Continue today’s plan')).toBeTruthy();
+    });
+
+    fireEvent.press(view.getByTestId('repeat-same-setup'));
+    await waitFor(() => {
+      expect(view.getByTestId('start-reading')).toBeTruthy();
+    });
+    completeReading();
+    await waitFor(() => {
+      expect(view.getByLabelText('Continue today’s plan')).toBeTruthy();
+    });
+
+    fireEvent.press(view.getByTestId('recommended-next-action'));
+    await waitFor(() => {
+      expect(view.getByText('Context Builder')).toBeTruthy();
+      expect(view.getByTestId('start-button')).toBeTruthy();
     });
   });
 });

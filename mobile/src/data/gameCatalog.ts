@@ -523,12 +523,12 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     rules: [
       'Compare the current digit with the target.',
       'Choose Match or No Match.',
-      'The stream advances after every decision.',
+      'Targets and non-targets are balanced and reshuffled every session.',
     ],
     difficulty: {
-      easy: option('Easy', '30-second session'),
-      medium: option('Medium', '20-second session'),
-      hard: option('Hard', '12-second session'),
+      easy: option('Easy', '1 digit · 30-item deck · 1.6s response window'),
+      medium: option('Medium', '2 digits · 50-item deck · 1.1s response window'),
+      hard: option('Hard', '3 similar digits · 70-item deck · 0.7s response window'),
     },
     keywords: ['number', 'match', 'stream', 'reaction'],
   },
@@ -541,12 +541,12 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     rules: [
       'Compare the current symbol with the target.',
       'Choose Match or No Match.',
-      'The stream advances after every decision.',
+      'Targets and non-targets are balanced and reshuffled every session.',
     ],
     difficulty: {
-      easy: option('Easy', '30-second session'),
-      medium: option('Medium', '20-second session'),
-      hard: option('Hard', '12-second session'),
+      easy: option('Easy', '4 distinct symbols · 30-item deck · 1.6s response window'),
+      medium: option('Medium', '10 symbols · 50-item deck · 1.1s response window'),
+      hard: option('Hard', '6 similar symbols · 70-item deck · 0.7s response window'),
     },
     keywords: ['symbol', 'match', 'stream', 'reaction'],
   },

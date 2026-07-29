@@ -7,6 +7,11 @@ import { useAutoStart, type Difficulty } from '../gameHooks';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { colors } from '../../theme/colors';
+import {
+  interleaveBalancedTrials,
+  randomIndex,
+  type RandomSource,
+} from '../../data/randomization';
 
 const GAME_ID = 'NumberRecognition';
 
@@ -75,35 +80,69 @@ export function getNumberRecognitionChallenge(
   return NUMBER_RECOGNITION_CHALLENGES[difficulty];
 }
 
-function randomNumberWithDigits(digitCount: number): number {
-  if (digitCount === 1) return Math.floor(Math.random() * 10);
+function randomNumberWithDigits(
+  digitCount: number,
+  random: RandomSource
+): number {
+  if (digitCount === 1) return randomIndex(10, random);
   const minimum = 10 ** (digitCount - 1);
-  return minimum + Math.floor(Math.random() * (9 * minimum));
+  return minimum + randomIndex(9 * minimum, random);
 }
 
-function similarNumber(target: number): number {
+function similarNumber(target: number, random: RandomSource): number {
   const digits = String(target).split('');
-  const index = Math.floor(Math.random() * digits.length);
+  const index = randomIndex(digits.length, random);
   const original = Number(digits[index]);
-  digits[index] = String((original + (Math.random() < 0.5 ? 1 : 9)) % 10);
-  const candidate = Number(digits.join(''));
-  return candidate === target ? target + 1 : candidate;
+  const direction = randomIndex(2, random) === 0 ? 1 : -1;
+  let replacement = (original + direction + 10) % 10;
+
+  // Keep multi-digit distractors at the configured length.
+  if (index === 0 && digits.length > 1 && replacement === 0) {
+    replacement = (original - direction + 10) % 10;
+  }
+
+  digits[index] = String(replacement);
+  return Number(digits.join(''));
 }
 
-function generateStream(
+function randomDistractor(
   target: number,
-  challenge: NumberRecognitionChallenge
-): number[] {
-  return Array.from({ length: challenge.stimulusCount }, (_, index) => {
-    if (index % 5 === 1) return target;
-    if (challenge.distractorSimilarity === 'high') return similarNumber(target);
+  challenge: NumberRecognitionChallenge,
+  random: RandomSource
+): number {
+  if (challenge.distractorSimilarity === 'high') {
+    return similarNumber(target, random);
+  }
 
-    let candidate = randomNumberWithDigits(challenge.digitCount);
-    while (candidate === target) {
-      candidate = randomNumberWithDigits(challenge.digitCount);
-    }
-    return candidate;
-  });
+  const candidate = randomNumberWithDigits(challenge.digitCount, random);
+  if (candidate !== target) return candidate;
+
+  const minimum = challenge.digitCount === 1
+    ? 0
+    : 10 ** (challenge.digitCount - 1);
+  const maximum = 10 ** challenge.digitCount - 1;
+  return candidate === maximum ? minimum : candidate + 1;
+}
+
+export function generateNumberRecognitionStream(
+  target: number,
+  challenge: NumberRecognitionChallenge,
+  random: RandomSource = Math.random
+): number[] {
+  if (challenge.stimulusCount % 2 !== 0) {
+    throw new RangeError(
+      'Number Recognition requires an even stimulus count for a balanced stream'
+    );
+  }
+
+  const trialCount = challenge.stimulusCount / 2;
+  return interleaveBalancedTrials(
+    Array.from({ length: trialCount }, () => target),
+    Array.from({ length: trialCount }, () =>
+      randomDistractor(target, challenge, random)
+    ),
+    random
+  );
 }
 
 export default function NumberRecognition({
@@ -119,7 +158,7 @@ export default function NumberRecognition({
   const durationMs = durationMsProp ?? challenge.durationMs;
   const [phase, setPhase] = useState<Phase>('idle');
   const [seq, setSeq] = useState<number[]>(() =>
-    stream ?? generateStream(currentTarget, challenge)
+    stream ?? generateNumberRecognitionStream(currentTarget, challenge)
   );
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -134,6 +173,8 @@ export default function NumberRecognition({
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
   const timedOutRef = useRef(0);
+  const targetTrialsRef = useRef(0);
+  const nonTargetTrialsRef = useRef(0);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cadenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,8 +215,12 @@ export default function NumberRecognition({
     scoreRef.current = 0;
     attemptsRef.current = 0;
     timedOutRef.current = 0;
+    targetTrialsRef.current = 0;
+    nonTargetTrialsRef.current = 0;
     // Generate fresh stream
-    setSeq(stream ?? generateStream(currentTarget, challenge));
+    setSeq(
+      stream ?? generateNumberRecognitionStream(currentTarget, challenge)
+    );
     setPhase('running');
     setScore(0);
     setIndex(0);
@@ -204,11 +249,17 @@ export default function NumberRecognition({
     const now = Date.now();
     const elapsedMs = now - startRef.current;
     const accuracy = attemptsRef.current > 0 ? Math.min(1, scoreRef.current / (10 * attemptsRef.current)) : 0;
+    const calibrationEligible =
+      attemptsRef.current >= 4 &&
+      targetTrialsRef.current >= 2 &&
+      nonTargetTrialsRef.current >= 2;
 
     setPhase('ended');
-    void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
-      () => undefined
-    );
+    if (calibrationEligible) {
+      void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
+        () => undefined
+      );
+    }
     onReportResult?.({
       startedAtIso: new Date(startRef.current).toISOString(),
       finishedAtIso: new Date(now).toISOString(),
@@ -218,6 +269,9 @@ export default function NumberRecognition({
       details: {
         target: currentTarget,
         total: seq.length,
+        targetTrials: targetTrialsRef.current,
+        nonTargetTrials: nonTargetTrialsRef.current,
+        calibrationEligible,
         attempts: attemptsRef.current,
         timedOut: timedOutRef.current,
         difficulty,
@@ -234,6 +288,8 @@ export default function NumberRecognition({
     const correct = isMatchPressed ? isMatch : !isMatch;
 
     attemptsRef.current += 1;
+    if (isMatch) targetTrialsRef.current += 1;
+    else nonTargetTrialsRef.current += 1;
     setAttempts(attemptsRef.current);
 
     if (correct) {
@@ -251,8 +307,11 @@ export default function NumberRecognition({
 
   function handleStimulusTimeout() {
     if (phase !== 'running') return;
+    const isMatch = current === currentTarget;
     attemptsRef.current += 1;
     timedOutRef.current += 1;
+    if (isMatch) targetTrialsRef.current += 1;
+    else nonTargetTrialsRef.current += 1;
     setAttempts(attemptsRef.current);
     setFeedback('wrong');
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);

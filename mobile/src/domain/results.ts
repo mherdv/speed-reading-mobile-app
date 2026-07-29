@@ -162,12 +162,14 @@ export function getResultComparisonKeyForMetric(
   metric: ResultMetric
 ): string {
   const activity = getInferredActivityType(result);
+  const gameScope = getLegacyGameComparisonScope(result, activity);
   const difficulty = optionalDetailString(result.details, 'difficulty');
   const comparisonBand =
     optionalDetailString(result.details, 'comparisonBand') ??
     (isMeasuredReadingResult(result) ? result.sampleId : undefined);
   const parts = [
     activity,
+    ...(gameScope ? [gameScope] : []),
     metric.label,
     difficulty ?? 'difficulty-unspecified',
     comparisonBand ?? 'comparison-band-unspecified',
@@ -183,6 +185,14 @@ function optionalDetailString(
 ): string | undefined {
   const value = details?.[key];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function getLegacyGameComparisonScope(
+  result: AttemptResult,
+  activity: string
+): string | undefined {
+  if (activity !== 'legacy' || isReadingResult(result)) return undefined;
+  return `game-${normalizeGameId(result.sampleId)}`;
 }
 
 function isSchulteResult(result: AttemptResult): boolean {
@@ -228,6 +238,7 @@ export function getSchulteGridModeLabel(
 export function getResultComparison(result: AttemptResult): ResultComparison {
   const metric = getResultMetric(result);
   const activity = getInferredActivityType(result);
+  const gameScope = getLegacyGameComparisonScope(result, activity);
   const difficulty = optionalDetailString(result.details, 'difficulty');
   const content =
     optionalDetailString(result.details, 'contentId') ??
@@ -237,6 +248,7 @@ export function getResultComparison(result: AttemptResult): ResultComparison {
   const gridMode = getSchulteGridMode(result);
   const parts = [
     activity,
+    ...(gameScope ? [gameScope] : []),
     metric.label,
     difficulty ?? 'difficulty-unspecified',
     comparisonBand ?? 'comparison-band-unspecified',

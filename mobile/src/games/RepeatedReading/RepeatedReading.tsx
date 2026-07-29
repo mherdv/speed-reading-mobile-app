@@ -10,6 +10,12 @@ import {
   assessReadingMeasurement,
   formatDuration,
 } from '../../domain/results';
+import {
+  epochNowMs,
+  measuredElapsedMs,
+  monotonicNowMs,
+  type MillisecondClock,
+} from '../../domain/timing';
 import { colors, shadows, spacing } from '../../theme/colors';
 import { Button } from '../../ui/Button';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
@@ -23,6 +29,10 @@ const TOTAL_ROUNDS = 2;
 
 type Props = {
   sample?: TextSample;
+  excludedContentId?: string;
+  suggestedWpm?: number;
+  clock?: MillisecondClock;
+  civilClock?: MillisecondClock;
   difficulty?: Difficulty;
   autoStart?: boolean;
   random?: () => number;
@@ -67,11 +77,13 @@ export function getRepeatedReadingPool(
 export function chooseNextRepeatedReadingSample(
   difficulty: Difficulty,
   previousId: string,
-  random: () => number
+  random: () => number,
+  excludedContentId?: string
 ): TextSample {
   const pool = getRepeatedReadingPool(difficulty);
-  const candidates = pool.filter((item) => item.id !== previousId);
-  const available = candidates.length > 0 ? candidates : pool;
+  const permitted = pool.filter((item) => item.id !== excludedContentId);
+  const candidates = permitted.filter((item) => item.id !== previousId);
+  const available = candidates.length > 0 ? candidates : permitted;
   return available[
     Math.min(
       available.length - 1,
@@ -82,6 +94,10 @@ export function chooseNextRepeatedReadingSample(
 
 export default function RepeatedReading({
   sample,
+  excludedContentId,
+  suggestedWpm,
+  clock = monotonicNowMs,
+  civilClock = epochNowMs,
   difficulty = 'easy',
   autoStart = false,
   random = Math.random,
@@ -111,6 +127,9 @@ export default function RepeatedReading({
   const [measurementValid, setMeasurementValid] = useState(true);
 
   const sessionStartedAtRef = useRef(0);
+  const sessionStartedAtEpochRef = useRef(0);
+  const sessionStartedAtIsoRef = useRef('');
+  const readingFinishedAtIsoRef = useRef('');
   const roundStartedAtRef = useRef(0);
   const roundDurationsRef = useRef<number[]>([]);
   const roundWpmsRef = useRef<number[]>([]);
@@ -137,15 +156,15 @@ export default function RepeatedReading({
   useEffect(() => {
     if (phase !== 'reading') return;
     const timer = setInterval(() => {
-      setLiveElapsedMs(Date.now() - roundStartedAtRef.current);
+      setLiveElapsedMs(measuredElapsedMs(roundStartedAtRef.current, clock));
     }, 50);
     return () => clearInterval(timer);
-  }, [phase, roundIndex]);
+  }, [clock, phase, roundIndex]);
 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
   function beginRound(index: number) {
-    roundStartedAtRef.current = Date.now();
+    roundStartedAtRef.current = clock();
     setRoundIndex(index);
     setLiveElapsedMs(0);
     setPhase('reading');
@@ -158,7 +177,8 @@ export default function RepeatedReading({
       const nextSample = chooseNextRepeatedReadingSample(
         selectedDifficulty,
         previousSampleIdRef.current,
-        random
+        random,
+        excludedContentId
       );
       previousSampleIdRef.current = nextSample.id;
       setActiveSample(nextSample);
@@ -169,13 +189,22 @@ export default function RepeatedReading({
     setRoundWpms([]);
     setSelectedAnswer(null);
     setMeasurementValid(true);
-    sessionStartedAtRef.current = Date.now();
+    sessionStartedAtRef.current = clock();
+    sessionStartedAtEpochRef.current = civilClock();
+    sessionStartedAtIsoRef.current = new Date(
+      sessionStartedAtEpochRef.current
+    ).toISOString();
+    readingFinishedAtIsoRef.current = '';
     beginRound(0);
   }
 
   function finishRound() {
     if (phase !== 'reading') return;
-    const duration = Math.max(1, Date.now() - roundStartedAtRef.current);
+    const roundFinishedAt = clock();
+    const duration = Math.max(
+      1,
+      measuredElapsedMs(roundStartedAtRef.current, () => roundFinishedAt)
+    );
     const wpm = computeWpm(wordCount, duration);
     roundDurationsRef.current.push(duration);
     roundWpmsRef.current.push(wpm);
@@ -185,6 +214,13 @@ export default function RepeatedReading({
     if (roundIndex + 1 < TOTAL_ROUNDS) {
       setPhase('between');
     } else {
+      const sessionElapsedMs = measuredElapsedMs(
+        sessionStartedAtRef.current,
+        () => roundFinishedAt
+      );
+      readingFinishedAtIsoRef.current = new Date(
+        sessionStartedAtEpochRef.current + sessionElapsedMs
+      ).toISOString();
       setPhase('question');
     }
   }
@@ -193,7 +229,6 @@ export default function RepeatedReading({
     if (selectedAnswer === null || reportedRef.current || cancelledRef.current) return;
     reportedRef.current = true;
 
-    const now = Date.now();
     const comprehensionCorrect =
       selectedAnswer === activeSample.question.correctIndex;
     const firstWpm = roundWpmsRef.current[0] ?? 0;
@@ -225,8 +260,8 @@ export default function RepeatedReading({
     }
 
     onReportResult?.({
-      startedAtIso: new Date(sessionStartedAtRef.current).toISOString(),
-      finishedAtIso: new Date(now).toISOString(),
+      startedAtIso: sessionStartedAtIsoRef.current,
+      finishedAtIso: readingFinishedAtIsoRef.current,
       elapsedMs,
       score: lastWpm,
       details: {
@@ -241,6 +276,7 @@ export default function RepeatedReading({
         comprehensionCorrect,
         measurementValid: validMeasurement,
         qualityFlag: qualityReason,
+        timingMethod: 'monotonic-elapsed',
         difficulty: selectedDifficulty,
       },
     });
@@ -268,6 +304,18 @@ export default function RepeatedReading({
           startLabel="Start first read"
           onStart={() => start()}
         >
+          {suggestedWpm !== undefined && (
+            <View testID="suggested-wpm" style={styles.paceGuidance}>
+              <Text style={styles.paceGuidanceLabel}>SUGGESTED PACE</Text>
+              <Text style={styles.paceGuidanceValue}>
+                About {suggestedWpm} WPM
+              </Text>
+              <Text style={styles.paceGuidanceText}>
+                Treat this as guidance. Meaning still decides whether the pace
+                is useful.
+              </Text>
+            </View>
+          )}
           <View style={styles.idleMeta}>
             <Text style={styles.idleMetaValue}>{wordCount} words</Text>
             <Text style={styles.idleMetaDot}>•</Text>
@@ -440,6 +488,33 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'center',
     marginBottom: spacing.md,
+  },
+  paceGuidance: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.infoSurface,
+  },
+  paceGuidanceLabel: {
+    color: colors.infoForeground,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  paceGuidanceValue: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  paceGuidanceText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+    textAlign: 'center',
   },
   idleMetaValue: {
     color: colors.textSecondary,
