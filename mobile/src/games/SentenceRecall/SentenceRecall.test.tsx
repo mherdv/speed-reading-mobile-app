@@ -20,6 +20,7 @@ describe('SentenceRecall', () => {
         prompts={['Careful readers compare the strongest evidence.']}
         displayMs={10}
         totalRounds={1}
+        difficulty="hard"
         onReportResult={onReportResult}
       />
     );
@@ -27,6 +28,8 @@ describe('SentenceRecall', () => {
     expect(view.getByTestId('recall-sentence')).toHaveTextContent(
       'Careful readers compare the strongest evidence.'
     );
+    expect(view.getByTestId('recall-sentence-mask')).toBeTruthy();
+    expect(view.getByTestId('recall-sentence')).toHaveProp('numberOfLines', 3);
     act(() => jest.advanceTimersByTime(20));
     fireEvent.changeText(
       view.getByTestId('recall-input'),
@@ -73,5 +76,43 @@ describe('SentenceRecall', () => {
     expect(view.queryByTestId('end')).toBeNull();
     act(() => jest.advanceTimersByTime(2));
     expect(view.getByTestId('end')).toBeTruthy();
+  });
+
+  it('continues the no-replacement sentence deck across replays', () => {
+    const prompts = [
+      'Amber notes mark the route.',
+      'Careful readers compare sources.',
+      'Quiet teams review the evidence.',
+    ];
+    const view = render(
+      <SentenceRecall
+        prompts={prompts}
+        displayMs={10}
+        totalRounds={1}
+        random={() => 0}
+      />
+    );
+    const shownPrompts: string[] = [];
+
+    for (let session = 0; session < 4; session += 1) {
+      fireEvent.press(
+        view.getByTestId(session === 0 ? 'start-button' : 'play-again')
+      );
+      const shown = view.getByTestId('recall-sentence').props
+        .children as string;
+      shownPrompts.push(shown);
+      act(() => jest.advanceTimersByTime(11));
+      fireEvent.changeText(view.getByTestId('recall-input'), shown);
+      fireEvent.press(view.getByTestId('submit-recall'));
+      act(() =>
+        jest.advanceTimersByTime(getRecallFeedbackDurationMs(shown, true) + 1)
+      );
+      expect(view.getByTestId('end')).toBeTruthy();
+    }
+
+    expect(new Set(shownPrompts.slice(0, prompts.length)).size).toBe(
+      prompts.length
+    );
+    expect(shownPrompts[3]).not.toBe(shownPrompts[2]);
   });
 });

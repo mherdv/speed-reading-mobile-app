@@ -29,24 +29,35 @@ export const SENTENCE_RECALL_CONFIG: Record<Difficulty, RecallConfig> = {
  */
 export function createWordsRecallPool(
   difficulty: Difficulty,
-  count = 120
+  requestedCount?: number
 ): string[] {
-  if (count <= 0) return [];
   const words = uniqueStrings(getFlashWordPool(difficulty)).filter(
     (word) => !/\s/u.test(word)
   );
+  const count = requestedCount ?? words.length;
+  if (count <= 0) return [];
+  if (words.length < 2 || count > words.length * (words.length - 1)) {
+    throw new RangeError(
+      `${difficulty}: cannot build ${count} unique two-word recall prompts`
+    );
+  }
+
   const pairs: string[] = [];
-  for (
-    let offset = 1;
-    offset < words.length && pairs.length < count;
-    offset += 1
-  ) {
-    for (
-      let firstIndex = 0;
-      firstIndex < words.length && pairs.length < count;
-      firstIndex += 1
-    ) {
-      const secondIndex = (firstIndex + offset) % words.length;
+  const cycles = Math.ceil(count / words.length);
+  for (let cycle = 0; cycle < cycles; cycle += 1) {
+    const itemsInCycle = Math.min(words.length, count - pairs.length);
+    for (let position = 0; position < itemsInCycle; position += 1) {
+      // A shortened requested pool samples first words evenly across the full
+      // source instead of exposing only an early vocabulary prefix.
+      const firstIndex =
+        itemsInCycle === words.length
+          ? position
+          : itemsInCycle === 1
+            ? 0
+            : Math.round(
+                (position * (words.length - 1)) / (itemsInCycle - 1)
+              );
+      const secondIndex = (firstIndex + cycle + 1) % words.length;
       pairs.push(`${words[firstIndex]} ${words[secondIndex]}`);
     }
   }
@@ -85,10 +96,17 @@ export function validateRecallPools(): string[] {
   const errors: string[] = [];
   for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     const wordPairs = createWordsRecallPool(difficulty);
-    if (wordPairs.length !== 120) {
-      errors.push(`${difficulty}: Words Recall requires exactly 120 prompts`);
+    const sourceWords = uniqueStrings(getFlashWordPool(difficulty)).filter(
+      (word) => !/\s/u.test(word)
+    );
+    if (wordPairs.length !== sourceWords.length) {
+      errors.push(
+        `${difficulty}: Words Recall requires one rotating prompt per source word`
+      );
     }
-    if (new Set(wordPairs.map(normalizeRecallAnswer)).size !== 120) {
+    if (
+      new Set(wordPairs.map(normalizeRecallAnswer)).size !== wordPairs.length
+    ) {
       errors.push(`${difficulty}: Words Recall prompts must be unique`);
     }
     if (
@@ -97,6 +115,18 @@ export function validateRecallPools(): string[] {
       )
     ) {
       errors.push(`${difficulty}: every Words Recall prompt must contain two words`);
+    }
+    const coveredWords = new Set(
+      wordPairs.flatMap((pair) => normalizeRecallAnswer(pair).split(' '))
+    );
+    if (
+      sourceWords.some(
+        (word) => !coveredWords.has(normalizeRecallAnswer(word))
+      )
+    ) {
+      errors.push(
+        `${difficulty}: Words Recall prompts must cover the full source vocabulary`
+      );
     }
 
     const sentences = createSentenceRecallPool(difficulty);

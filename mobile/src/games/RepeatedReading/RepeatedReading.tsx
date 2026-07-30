@@ -2,8 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
+import { getCuratedTrainingSamples } from '../../data/curatedComprehensionContent';
 import { TEXT_SAMPLES } from '../../data/textSamples';
 import { levelToStars, updateProgress } from '../../data/progressStore';
+import {
+  buildNoReplacementDeck,
+  randomIndex,
+  shuffleAnswerOptions,
+  type RandomSource,
+} from '../../data/randomization';
 import type { TextSample } from '../../domain/types';
 import { computeWpm, countWords } from '../../domain/wpm';
 import {
@@ -35,61 +42,69 @@ type Props = {
   civilClock?: MillisecondClock;
   difficulty?: Difficulty;
   autoStart?: boolean;
-  random?: () => number;
+  random?: RandomSource;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
 type Phase = 'idle' | 'reading' | 'between' | 'question' | 'ended';
 
-function passageComplexityScore(sample: TextSample): number {
-  const words = sample.text
-    .toLocaleLowerCase('en')
-    .match(/[a-z]+(?:'[a-z]+)?/g) ?? [];
-  const averageWordLength =
-    words.reduce((total, word) => total + word.length, 0) /
-    Math.max(words.length, 1);
-  return averageWordLength + words.length / 500;
-}
-
 /**
  * Repeated Reading uses its own training pool so measured baseline passages
- * stay unfamiliar. Lexical density divides the authored training texts into
- * meaningful, deterministic difficulty bands.
+ * stay unfamiliar. Difficulty membership is editorially reviewed because
+ * sentence structure, inference load, and domain density matter more than a
+ * mechanical word-length score.
  */
 export function getRepeatedReadingPool(
   difficulty: Difficulty
 ): readonly TextSample[] {
-  const trainingSamples = TEXT_SAMPLES
-    .filter((item) => item.complexityBand !== 'baseline-brief')
-    .sort(
-      (first, second) =>
-        passageComplexityScore(first) - passageComplexityScore(second) ||
-        first.id.localeCompare(second.id)
-    );
-  const bandSize = Math.ceil(trainingSamples.length / 3);
-  const bandIndex = difficulty === 'easy' ? 0 : difficulty === 'medium' ? 1 : 2;
-  const start = bandIndex * bandSize;
-  const end =
-    difficulty === 'hard' ? trainingSamples.length : start + bandSize;
-  return trainingSamples.slice(start, end);
+  return getCuratedTrainingSamples(difficulty);
 }
 
 export function chooseNextRepeatedReadingSample(
   difficulty: Difficulty,
   previousId: string,
-  random: () => number,
+  random: RandomSource,
   excludedContentId?: string
 ): TextSample {
   const pool = getRepeatedReadingPool(difficulty);
   const permitted = pool.filter((item) => item.id !== excludedContentId);
   const candidates = permitted.filter((item) => item.id !== previousId);
   const available = candidates.length > 0 ? candidates : permitted;
-  return available[
-    Math.min(
-      available.length - 1,
-      Math.floor(random() * available.length)
-    )
-  ] ?? TEXT_SAMPLES[0];
+  if (available.length === 0) return TEXT_SAMPLES[0]!;
+  return available[randomIndex(available.length, random)]!;
+}
+
+export function buildRepeatedReadingDeck(
+  samples: readonly TextSample[],
+  avoidFirstId = '',
+  random: RandomSource = Math.random,
+  excludedContentId?: string
+): TextSample[] {
+  return buildNoReplacementDeck(
+    samples.filter((item) => item.id !== excludedContentId),
+    (item) => item.id,
+    avoidFirstId,
+    random
+  );
+}
+
+export function prepareRepeatedReadingSample(
+  sample: TextSample,
+  random: RandomSource = Math.random
+): TextSample {
+  const shuffledAnswers = shuffleAnswerOptions(
+    sample.question.choices,
+    sample.question.correctIndex,
+    random
+  );
+  return {
+    ...sample,
+    question: {
+      ...sample.question,
+      choices: shuffledAnswers.options,
+      correctIndex: shuffledAnswers.correctIndex,
+    },
+  };
 }
 
 export default function RepeatedReading({
@@ -110,8 +125,11 @@ export default function RepeatedReading({
     selectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
+  const initialPool = getRepeatedReadingPool(selectedDifficulty);
   const initialSample =
-    sample ?? getRepeatedReadingPool(selectedDifficulty)[0] ?? TEXT_SAMPLES[0];
+    sample ??
+    initialPool.find((item) => item.id !== excludedContentId) ??
+    TEXT_SAMPLES[0];
   const [activeSample, setActiveSample] =
     useState<TextSample>(initialSample);
   const wordCount = useMemo(
@@ -135,7 +153,9 @@ export default function RepeatedReading({
   const roundWpmsRef = useRef<number[]>([]);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
-  const previousSampleIdRef = useRef(activeSample.id);
+  const previousSampleIdRef = useRef(sample?.id ?? '');
+  const contentDeckRef = useRef<TextSample[]>([]);
+  const contentDeckKeyRef = useRef('');
 
   useEffect(() => {
     return () => {
@@ -145,13 +165,16 @@ export default function RepeatedReading({
 
   useEffect(() => {
     if (phase !== 'idle') return;
+    const pool = getRepeatedReadingPool(selectedDifficulty);
     const next =
       sample ??
-      getRepeatedReadingPool(selectedDifficulty)[0] ??
+      pool.find((item) => item.id !== excludedContentId) ??
       TEXT_SAMPLES[0];
     setActiveSample(next);
-    previousSampleIdRef.current = next.id;
-  }, [phase, sample, selectedDifficulty]);
+    if (sample) {
+      previousSampleIdRef.current = next.id;
+    }
+  }, [excludedContentId, phase, sample, selectedDifficulty]);
 
   useEffect(() => {
     if (phase !== 'reading') return;
@@ -173,16 +196,34 @@ export default function RepeatedReading({
   function start(force = false) {
     cancelledRef.current = false;
     if (!force && phase !== 'idle' && phase !== 'ended') return;
-    if (!sample) {
-      const nextSample = chooseNextRepeatedReadingSample(
-        selectedDifficulty,
-        previousSampleIdRef.current,
-        random,
-        excludedContentId
-      );
-      previousSampleIdRef.current = nextSample.id;
-      setActiveSample(nextSample);
+    let nextSample = sample;
+    if (nextSample) {
+      contentDeckRef.current = [];
+      contentDeckKeyRef.current = '';
+    } else {
+      const pool = getRepeatedReadingPool(selectedDifficulty);
+      const deckKey = `${selectedDifficulty}:${excludedContentId ?? ''}`;
+      if (
+        contentDeckRef.current.length === 0 ||
+        contentDeckKeyRef.current !== deckKey
+      ) {
+        contentDeckRef.current = buildRepeatedReadingDeck(
+          pool,
+          previousSampleIdRef.current,
+          random,
+          excludedContentId
+        );
+        contentDeckKeyRef.current = deckKey;
+      }
+      nextSample =
+        contentDeckRef.current.shift() ??
+        pool.find((item) => item.id !== excludedContentId) ??
+        TEXT_SAMPLES[0];
     }
+    previousSampleIdRef.current = nextSample.id;
+    setActiveSample(
+      prepareRepeatedReadingSample(nextSample, random)
+    );
     reportedRef.current = false;
     roundDurationsRef.current = [];
     roundWpmsRef.current = [];

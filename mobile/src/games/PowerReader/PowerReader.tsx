@@ -71,10 +71,13 @@ export function getPowerReaderRsvpTypography(fontSize: ReadingFontSize) {
   return { fontSize: 28, lineHeight: 38 };
 }
 
-type StoredBookPosition = {
-  bookId: string;
+export type PowerReaderProgressPosition = {
   pageIndex: number;
   highlightIndex: number;
+};
+
+type StoredBookPosition = PowerReaderProgressPosition & {
+  bookId: string;
 };
 
 type ProgressStorage = {
@@ -160,9 +163,53 @@ type Phase = 'idle' | 'running' | 'ended';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
 const WORDS_PER_PAGE = 180;
+
+function toNonNegativeInteger(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.trunc(value));
+}
+
+/**
+ * Keeps persisted progress inside the current text. Stored positions are
+ * untrusted because a local book can be replaced or storage can be malformed.
+ */
+export function clampPowerReaderProgress(
+  progress: unknown,
+  totalWords: number,
+  wordsPerPage = WORDS_PER_PAGE
+): PowerReaderProgressPosition {
+  const safeTotalWords = toNonNegativeInteger(totalWords);
+  const safeWordsPerPage = Math.max(1, toNonNegativeInteger(wordsPerPage));
+  if (safeTotalWords === 0) {
+    return { pageIndex: 0, highlightIndex: 0 };
+  }
+
+  const stored =
+    progress !== null &&
+    typeof progress === 'object' &&
+    !Array.isArray(progress)
+      ? (progress as Record<string, unknown>)
+      : {};
+  const pageCount = Math.ceil(safeTotalWords / safeWordsPerPage);
+  const pageIndex = Math.min(
+    toNonNegativeInteger(stored.pageIndex),
+    pageCount - 1
+  );
+  const wordsOnPage = Math.min(
+    safeWordsPerPage,
+    safeTotalWords - pageIndex * safeWordsPerPage
+  );
+  const highlightIndex = Math.min(
+    toNonNegativeInteger(stored.highlightIndex),
+    Math.max(0, wordsOnPage - 1)
+  );
+
+  return { pageIndex, highlightIndex };
+}
+
 export const OFFLINE_POWER_READER_ARTICLES: readonly PowerReaderArticle[] =
   ARTICLES.map((article) => ({
-    id: `offline-${article.id}`,
+    id: `offline-${article.id}-v${article.version}`,
     title: article.title,
     author: 'SpeedRead library',
     description: `${article.category[0]?.toLocaleUpperCase()}${article.category.slice(1)} · available offline`,
@@ -445,11 +492,18 @@ export default function PowerReader({
     );
   }
 
-  async function loadBookProgress(bookId: string) {
-    const raw = await AsyncStorage.getItem(BOOK_PROGRESS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Record<string, { pageIndex: number; highlightIndex: number }>;
-    return parsed[bookId] ?? null;
+  async function loadBookProgress(bookId: string): Promise<unknown | null> {
+    try {
+      const raw = await AsyncStorage.getItem(BOOK_PROGRESS_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null;
+      }
+      return (parsed as Record<string, unknown>)[bookId] ?? null;
+    } catch {
+      return null;
+    }
   }
 
   function updateLatestBookProgress(
@@ -884,13 +938,17 @@ export default function PowerReader({
       const finalized = finalizeBookArticle(article, textContent);
       const saved = await loadBookProgress(finalized.id);
       if (!mountedRef.current) return;
-      if (saved) {
+      if (saved !== null) {
+        const restored = clampPowerReaderProgress(
+          saved,
+          finalized.wordCount
+        );
         setResumeFromSaved(true);
         resumeFromSavedRef.current = true;
-        setPageIndex(saved.pageIndex);
-        setHighlightIndex(saved.highlightIndex);
-        pageIndexRef.current = saved.pageIndex;
-        highlightIndexRef.current = saved.highlightIndex;
+        setPageIndex(restored.pageIndex);
+        setHighlightIndex(restored.highlightIndex);
+        pageIndexRef.current = restored.pageIndex;
+        highlightIndexRef.current = restored.highlightIndex;
       } else {
         setResumeFromSaved(false);
         resumeFromSavedRef.current = false;

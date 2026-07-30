@@ -27,6 +27,16 @@ describe('FlashReading', () => {
     expect(getByTestId('flash-word')).toBeTruthy();
   });
 
+  it('obscures the lower word area at Hard difficulty', () => {
+    const view = render(
+      <FlashReading words={['pattern']} displayMs={100} difficulty="hard" />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+    expect(view.getByTestId('flash-word-mask')).toBeTruthy();
+    expect(view.getByTestId('flash-word')).toHaveProp('numberOfLines', 1);
+  });
+
   it('transitions to recall phase after display timeout', () => {
     const { getByTestId } = render(
       <FlashReading words={['apple']} displayMs={50} />
@@ -125,5 +135,39 @@ describe('FlashReading', () => {
         }),
       })
     );
+  });
+
+  it('continues the no-replacement word deck across replays', () => {
+    const words = ['amber', 'cabin', 'delta'];
+    const view = render(
+      <FlashReading
+        words={words}
+        displayMs={10}
+        totalRounds={1}
+        random={() => 0}
+      />
+    );
+    const shownWords: string[] = [];
+
+    for (let session = 0; session < 4; session += 1) {
+      fireEvent.press(
+        view.getByTestId(session === 0 ? 'start-button' : 'play-again')
+      );
+      if (session > 0) {
+        act(() => jest.advanceTimersByTime(51));
+      }
+      const shown = view.getByTestId('flash-word').props.children as string;
+      shownWords.push(shown);
+      act(() => jest.advanceTimersByTime(11));
+      fireEvent.changeText(view.getByTestId('recall-input'), shown);
+      fireEvent.press(view.getByTestId('submit-btn'));
+      act(() =>
+        jest.advanceTimersByTime(getRecallFeedbackDurationMs(shown, true) + 1)
+      );
+      expect(view.getByTestId('end')).toBeTruthy();
+    }
+
+    expect(new Set(shownWords.slice(0, words.length)).size).toBe(words.length);
+    expect(shownWords[3]).not.toBe(shownWords[2]);
   });
 });

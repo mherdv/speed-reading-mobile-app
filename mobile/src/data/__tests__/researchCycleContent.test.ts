@@ -69,6 +69,27 @@ describe('research-cycle reviewed content', () => {
     }
   });
 
+  it('keys each Evidence Hunt role to its semantic source sentence', () => {
+    const expectedPrefix = {
+      'tested-change': 'The team ',
+      outcome: 'Records showed that ',
+      limitation: 'The report also notes that ',
+    } as const;
+
+    for (const round of EVIDENCE_HUNT_ROUNDS) {
+      for (const requirement of round.evidenceRequirements) {
+        const sentence = round.sentences.find(
+          (candidate) => candidate.id === requirement.sentenceId
+        );
+        expect(sentence?.text).toEqual(
+          expect.stringMatching(
+            new RegExp(`^${expectedPrefix[requirement.role]}`)
+          )
+        );
+      }
+    }
+  });
+
   it('ships twenty-four valid Context Builder rounds at every difficulty', () => {
     expect(validateContextBuilderContent()).toEqual([]);
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
@@ -127,32 +148,111 @@ describe('research-cycle reviewed content', () => {
     ).toEqual(new Set(['-c1', '-c2', '-c3', '-c4']));
   });
 
+  it('accepts both independently sufficient Medium clue routes', () => {
+    const mediumRounds = CONTEXT_BUILDER_ROUNDS.filter(
+      (round) => round.difficulty === 'medium'
+    );
+
+    for (const round of mediumRounds) {
+      const accepted = round.clueOptions.filter((option) =>
+        round.acceptedClueIds.includes(option.id)
+      );
+      expect(accepted).toHaveLength(2);
+      expect(new Set(accepted.map((option) => option.role))).toEqual(
+        new Set(['contrast', 'consequence'])
+      );
+    }
+
+    for (const targetWord of ['sporadic', 'obsolete']) {
+      const round = mediumRounds.find(
+        (candidate) => candidate.targetWord === targetWord
+      )!;
+      expect(round.acceptedClueIds).toHaveLength(2);
+    }
+  });
+
+  it('uses every Easy and Medium non-adjective in a natural target sentence', () => {
+    const expectedTargets: Readonly<Record<string, string>> = {
+      verify:
+        'The editor used the recording to verify each quotation—to check that it was accurate.',
+      retain:
+        'The bottle could retain heat, meaning to keep it instead of losing it quickly.',
+      adapt:
+        'The library had to adapt, or change its services in response to the repairs.',
+      contrast:
+        'The report revealed a contrast, a noticeable difference between the two districts.',
+      priority:
+        'Restoring the water line was the team’s priority, the task considered more important than the others.',
+      evidence:
+        'The photographs, measurements, and field notes were evidence—information that could support or challenge the claim.',
+      routine:
+        'Sam’s nightly backup became a routine, a regular way of doing the same important tasks.',
+      steadily:
+        'The reservoir rose steadily, at a consistent rate without sudden changes.',
+      mitigate:
+        'The team hoped the shade cloth would mitigate the problem.',
+      allocate:
+        'The council voted to allocate the grant that evening.',
+      synthesize:
+        'The reviewer had one afternoon to synthesize the material.',
+      infer:
+        'The students were asked to infer the answer.',
+      constraint:
+        'The bridge height became the central constraint in the route discussion.',
+      consensus:
+        'The chair recorded a consensus before closing the meeting.',
+      inference:
+        'The observers labeled the conclusion an inference.',
+      subsequently:
+        'The pipe was subsequently replaced.',
+      predominantly:
+        'The survey described the station’s riders as predominantly local.',
+    };
+    const nonAdjectiveRounds = CONTEXT_BUILDER_ROUNDS.filter(
+      (round) =>
+        round.difficulty !== 'hard' && round.partOfSpeech !== 'adjective'
+    );
+
+    expect(nonAdjectiveRounds).toHaveLength(
+      Object.keys(expectedTargets).length
+    );
+    for (const round of nonAdjectiveRounds) {
+      const targetSentence = round.sentences.find(
+        (sentence) => sentence.id === round.targetSentenceId
+      )!.text;
+      expect(targetSentence).toBe(expectedTargets[round.targetWord]);
+      expect(targetSentence).not.toMatch(
+        /calls this response|response is described as|labels the response/u
+      );
+    }
+  });
+
   it('keeps every reviewed Hard target sentence grammatical and integrated', () => {
     const expectedHardTargets = [
-      'Because one survey favored the change while another showed no difference, the evidence remained equivocal.',
-      'The recently formed workshop network was still nascent, with routines that had not settled.',
-      'Researchers called the two-factor model parsimonious because it explained the pattern without unsupported causes.',
-      'The lone winter-heat reading was anomalous beside the frost reported by every nearby sensor.',
-      'The table containing the safety threshold was the most salient part of the report for the decision.',
-      'Historians described the claimed connection as tenuous because it rested on one much-later memory.',
-      'Charging ports had become ubiquitous, appearing in homes, buses, cafés, and offices.',
-      'The negotiator remained intransigent, rejecting every revision before considering its details.',
-      'The review was nuanced: it recognized broad reach while distinguishing unequal local effects.',
-      'The rain-fed desert pool was ephemeral, disappearing only days after it formed.',
-      'The independent diary could corroborate the reported storm date because it described the same event from another village.',
-      'The new shade could ameliorate the platform heat, although it could not remove every hot-day discomfort.',
-      'The field survey remained contingent on river levels falling below the safety mark.',
-      'The archive’s color-based filing system was idiosyncratic, unlike the standard methods used elsewhere.',
-      'The dust problem was pervasive, reaching homes, schools, vehicles, and sealed storage rooms.',
-      'The building’s paint color was orthogonal to the water-quality question under review.',
-      'Adding the station name could disambiguate “bank” by identifying the intended riverbank sense.',
-      'Analysts used five years of measurements to extrapolate demand beyond the observed period.',
-      'Dated receipts and independent letters could substantiate the historian’s claim.',
-      'Correcting for the time-zone difference helped researchers reconcile the two apparently conflicting logs.',
-      'The convergence of independent model estimates increased confidence in the revised forecast.',
-      'Treating every proposal as total success or complete failure created a false dichotomy.',
-      'The rule was ostensibly about safety, although internal notes emphasized staffing costs.',
-      'The analyst inadvertently separated names from addresses while sorting the spreadsheet.',
+      'After reviewing both surveys, the panel classified the evidence as equivocal.',
+      'The workshop network was still nascent when the grant review began.',
+      'The reviewers selected the parsimonious model for the next analysis.',
+      'Technicians marked the winter-heat reading as anomalous.',
+      'During the decision meeting, the safety table became the most salient section.',
+      'Historians classified the proposed connection as tenuous.',
+      'Within a decade, the charging port had become ubiquitous.',
+      'The lead negotiator remained intransigent through the final session.',
+      'The committee described its final assessment as nuanced.',
+      'Ecologists classified the rain-fed pool as ephemeral.',
+      'The historian asked whether the second diary could corroborate the reported date.',
+      'Planners hoped the new shade would ameliorate conditions on the platform.',
+      'The field survey remained contingent when the provisional date was announced.',
+      'Researchers recorded the archive’s filing system as idiosyncratic.',
+      'The district review classified the dust problem as pervasive.',
+      'Reviewers judged the paint-color proposal orthogonal to the water-quality analysis.',
+      'The editor added a station name to disambiguate the disputed word.',
+      'Analysts were asked to extrapolate cautiously in the final forecast.',
+      'The historian needed to substantiate the claim before publication.',
+      'Researchers met to reconcile the two logs.',
+      'The final report noted a convergence in the revised estimates.',
+      'The moderator challenged the proposed dichotomy during the debate.',
+      'The rule was ostensibly introduced for safety.',
+      'The analyst inadvertently altered the address column during the sort.',
     ];
     const hardTargets = CONTEXT_BUILDER_ROUNDS.filter(
       (round) => round.difficulty === 'hard'
@@ -243,18 +343,28 @@ describe('research-cycle reviewed content', () => {
     );
   });
 
-  it('keeps a diverse twelve-passage baseline with three dependent items each', () => {
+  it('keeps a diverse eighteen-passage baseline with three dependent items each', () => {
     expect(validateBaselineTextSamples()).toEqual([]);
-    expect(BASELINE_TEXT_SAMPLES).toHaveLength(12);
+    expect(BASELINE_TEXT_SAMPLES).toHaveLength(18);
     expect(new Set(BASELINE_TEXT_SAMPLES.map((sample) => sample.id)).size).toBe(
-      12
+      18
     );
     expect(
       new Set(BASELINE_TEXT_SAMPLES.map((sample) => sample.genre)).size
     ).toBeGreaterThanOrEqual(5);
     expect(
       BASELINE_TEXT_SAMPLES.every(
-        (sample) => (sample.questions?.length ?? 0) >= 3
+        (sample) =>
+          sample.questions?.length === 3 &&
+          sample.questions.every(
+            (question) =>
+              question.choices.length === 4 &&
+              new Set(
+                question.choices.map((choice) =>
+                  choice.toLocaleLowerCase('en')
+                )
+              ).size === 4
+          )
       )
     ).toBe(true);
     const allPositionCounts = [0, 0, 0, 0];

@@ -60,11 +60,13 @@ describe('MemoryRecall', () => {
 
   it('shows sequence after pressing start', () => {
     const { getByTestId } = render(
-      <MemoryRecall startingLength={3} displayMs={500} />
+      <MemoryRecall startingLength={3} displayMs={500} difficulty="hard" />
     );
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('sequence-display')).toBeTruthy();
+    expect(getByTestId('sequence-mask')).toBeTruthy();
+    expect(getByTestId('sequence')).toHaveProp('numberOfLines', 1);
   });
 
   it('transitions to recall phase after display timeout', () => {

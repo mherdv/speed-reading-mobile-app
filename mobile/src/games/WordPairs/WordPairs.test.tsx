@@ -31,7 +31,7 @@ describe('WordPairs', () => {
 
   it('provides expanded, de-duplicated reviewed challenges', () => {
     expect(validateVocabularyPracticeContent()).toEqual([]);
-    const expectedCounts = { easy: 30, medium: 30, hard: 31 };
+    const expectedCounts = { easy: 46, medium: 46, hard: 47 };
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
       const challenge = getWordPairChallenge(difficulty);
       expect(challenge.items).toHaveLength(expectedCounts[difficulty]);

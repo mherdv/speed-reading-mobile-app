@@ -6,7 +6,9 @@ import {
   type MainIdeaPassage,
 } from '../../data/mainIdeaPassages';
 import * as progressStore from '../../data/progressStore';
-import MainIdeaSprint from './MainIdeaSprint';
+import MainIdeaSprint, {
+  prepareMainIdeaPassage,
+} from './MainIdeaSprint';
 
 const PASSAGE: MainIdeaPassage = {
   id: 'main-idea-test',
@@ -29,7 +31,18 @@ describe('MainIdeaSprint', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     jest.useRealTimers();
+  });
+
+  it('shuffles choices while preserving the authored correct answer', () => {
+    const prepared = prepareMainIdeaPassage(PASSAGE, () => 0);
+
+    expect(prepared.choices[prepared.correctIndex]).toBe(
+      PASSAGE.choices[PASSAGE.correctIndex]
+    );
+    expect(prepared.correctIndex).not.toBe(PASSAGE.correctIndex);
+    expect(PASSAGE.correctIndex).toBe(1);
   });
 
   it('has at least five authored scenarios at every difficulty', () => {
@@ -57,6 +70,7 @@ describe('MainIdeaSprint', () => {
         roundCount={1}
         retrievalBufferMs={1_000}
         difficulty="hard"
+        random={() => 0.999}
         onReportResult={onReportResult}
       />
     );
@@ -122,6 +136,7 @@ describe('MainIdeaSprint', () => {
         passages={[PASSAGE]}
         roundCount={1}
         retrievalBufferMs={0}
+        random={() => 0.999}
       />
     );
     await act(async () => {
@@ -177,6 +192,7 @@ describe('MainIdeaSprint', () => {
           passages={source}
           difficulty={config.difficulty}
           retrievalBufferMs={0}
+          random={() => 0.999}
           onReportResult={onReportResult}
         />
       );
@@ -222,5 +238,50 @@ describe('MainIdeaSprint', () => {
       );
       view.unmount();
     }
+  });
+
+  it('advances to a disjoint passage window before progress storage resolves', async () => {
+    jest
+      .spyOn(progressStore, 'updateProgress')
+      .mockImplementation(() => new Promise(() => undefined));
+    const passages = Array.from({ length: 4 }, (_, index) => ({
+      ...PASSAGE,
+      id: `rotating-passage-${index + 1}`,
+      title: `Rotating passage ${index + 1}`,
+      text: `Unique passage text ${index + 1}.`,
+    }));
+    const view = render(
+      <MainIdeaSprint
+        passages={passages}
+        roundCount={2}
+        retrievalBufferMs={0}
+        random={() => 0.999}
+      />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const finishRound = () => {
+      const renderedText =
+        view.getByTestId('main-idea-passage').props.children as string;
+      fireEvent.press(view.getByTestId('hide-passage'));
+      fireEvent.press(view.getByTestId('show-main-idea-choices'));
+      fireEvent.press(view.getByTestId('main-idea-choice-1'));
+      fireEvent.press(view.getByTestId('check-main-idea'));
+      fireEvent.press(view.getByTestId('continue-main-idea'));
+      return renderedText;
+    };
+
+    fireEvent.press(view.getByTestId('start-button'));
+    const firstSession = new Set([finishRound(), finishRound()]);
+    expect(view.getByTestId('end')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('play-again'));
+    const secondSession = new Set([finishRound(), finishRound()]);
+    expect(view.getByTestId('end')).toBeTruthy();
+    expect([...firstSession].filter((text) => secondSession.has(text))).toEqual(
+      []
+    );
   });
 });

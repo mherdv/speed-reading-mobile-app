@@ -17,6 +17,9 @@ Scope: mobile speed-reading practice, comprehension, scanning, recognition, and 
 | V8 | Complete | Re-reviewed the report against the implementation, added a current 31-exercise source-of-truth inventory, made guided versus measured WPM explicit, documented Power Reader’s three modes and offline boundary, and corrected obsolete rules for Comprehension, Number Search, Opposites, Letter Mixup, Word Pair Scan, and Even Numbers. |
 | V9 | Complete | Completed two reviewer–implementer correction cycles, closed result-integrity and double-tap exploits, replaced overlapping hit areas with real phone-size targets, verified all 31 game lifecycles, and reran the full release checks plus live 320 px browser QA. |
 | V19 | Complete | Expanded every undersized lexical pool, raised phrase-template variety to 5,832 combinations per level, and replaced biased or retry-based random selection with tested bounded Fisher–Yates decks. |
+| V20 | Complete | Added session coaching, continuous Today-plan navigation, replay-safe adaptive progression, balanced calibration trials, monotonic reading timers, and serialized result navigation. |
+| V21 | Complete | Expanded undersized connected-text and lexical banks, semantically audited the retained banks, repaired authored-content quality, and added full-cycle, non-overlapping, and answer-remapping safeguards. |
+| V22 | Complete | Standardized responsive brief stimuli, added opaque progressive lower-glyph markers by difficulty, removed unnecessary flash-card framing, and compacted Hard phrase generation for phone legibility. |
 
 ## Executive decision
 
@@ -195,7 +198,9 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Read the same passage a second time.
 - Answer the comprehension question.
 - Result: first and second WPM, comprehension, and change between passes.
-- Difficulty: chooses progressively denser passages.
+- Difficulty: selects from an explicitly reviewed bank of 10 Easy, 10 Medium,
+  or 10 Hard passages. A shuffled deck presents every passage in the selected
+  level before reuse.
 
 ### 2. Main Idea
 
@@ -228,7 +233,9 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 
 - A word flashes briefly.
 - Type the word from memory.
-- Continue through a rolling shuffled, de-duplicated difficulty-specific deck; finish voluntarily or after three consecutive misses.
+- Continue through a shuffled, de-duplicated difficulty-specific deck; finish
+  voluntarily or after three consecutive misses. In-screen replay resumes the
+  unused deck cursor, and refill occurs only after the full pool has appeared.
 - Set a starting WPM. The live pace rises by 25 WPM after four consecutive correct recalls. A miss resets the correct streak but does not reduce WPM.
 - Result: actual attempts, correct answers, recognition accuracy, ending failure streak, initial/final WPM, and pace-change count. This WPM is presentation pace, not measured connected-text reading.
 - Difficulty: common words at 120 WPM; academic words at 220 WPM; or advanced words at 320 WPM with the lower word area masked.
@@ -237,9 +244,12 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 
 - Follow the moving chunk highlight at the displayed target pace.
 - Pause, resume, or finish the reading phase safely when ready.
-- Choose an answer and review feedback.
+- Answer every passage-dependent question and review feedback.
 - Result: percentage correct, session time, and configured target pace; the target is not reported as measured WPM.
-- Difficulty: 180/260/340 WPM, 3/4/5-word chunks, and 1/2/3 questions.
+- Difficulty: 180/260/340 WPM, 3/4/5-word chunks, and 1/2/3 questions across
+  10 curated passages per level. The full selected-level deck is exhausted
+  before reuse, and its 30 training passages are disjoint from Baseline
+  Reading’s assessment forms.
 
 ### 6. Schulte Numbers
 
@@ -299,26 +309,37 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 
 - View a word briefly.
 - Choose the word from distractors after it disappears.
-- Continue through a rolling shuffled deck without immediate repeats; finish voluntarily or after three consecutive misses.
+- Continue through a shuffled difficulty-specific deck; finish voluntarily or
+  after three consecutive misses. In-screen replay resumes the unused deck
+  cursor, and refill occurs only after every word has appeared.
 - Set a starting WPM. The live pace rises by 25 WPM after eight consecutive correct choices. A miss resets the correct streak but does not reduce WPM.
 - Result: actual attempts, recognition accuracy, score, ending failure streak, initial/final WPM, and pace-change count.
 - Difficulty: common words at 120 WPM, academic words at 220 WPM, or advanced words at 320 WPM.
 
 ### 13. Phrase Flash
 
-- View one of 240 freshly generated grammatical phrase combinations at the selected WPM.
+- View a grammatical phrase from a 240-item working pool generated from the
+  selected level’s 13,824 compatible combinations.
 - Choose the exact phrase from four options.
-- Continue until voluntary finish or three consecutive misses. Eight consecutive correct choices raise the pace by 25 WPM; a miss resets that correct streak.
+- Continue until voluntary finish or three consecutive misses. In-screen replay
+  resumes the remaining shuffled pool instead of regenerating it; all 240
+  phrases appear before refill. Eight consecutive correct choices raise the
+  pace by 25 WPM; a miss resets that correct streak.
 - Result: actual attempts, correct choices, recognition accuracy, ending failure streak, initial/final WPM, and pace-change count.
-- Difficulty: 5-word templates starting at 180 WPM, longer templates at 260 WPM, or complex templates at 360 WPM.
+- Difficulty: shorter grammatical phrases start at 180 WPM, longer
+  sentence-like phrases at 260 WPM, and complex reasoning sentences at 360 WPM.
 
 ### 13a. Last Word
 
 - Watch a sequence of words shown one at a time.
 - After the stream ends, choose the final word from four options; earlier stream words are used as distractors when possible.
+- Every stream stops independently after a random 3–10 words. Its words consume
+  one continuous no-replacement difficulty deck across rounds and in-screen
+  replays; refill occurs only after the full vocabulary cycle.
 - Set a starting WPM. Four consecutive correct recalls raise it by 25 WPM; a miss resets that streak without reducing pace. Finish voluntarily or after three consecutive misses.
 - Result: actual attempts, final-word recall accuracy, ending failure streak, sequence length, initial/final WPM, and pace-change count.
-- Difficulty: 4 words at 180 WPM, 6 at 280 WPM, or 8 at 380 WPM.
+- Difficulty: Easy/Medium/Hard changes vocabulary and starts at 180/280/380 WPM;
+  it does not replace the independent random 3–10-word stopping rule.
 
 ### 14. Opposites
 
@@ -423,26 +444,36 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Result: routes found, accuracy, and average decision time.
 - Difficulty: 3 untimed sections/3 rounds; 4 sections with a 35-second preview/4 rounds; or 5 sections with a 25-second preview/5 rounds.
 
-### 26. WPM Test
+### 26. Baseline Reading (WPM Test)
 
 - Start the timer only when the connected passage appears.
 - Tap Done before answering; reading time stops before the comprehension phase.
+- Answer exactly three passage-dependent questions for every form.
 - Result: actual passage word count, measured WPM, comprehension correct/total, and measurement-quality flags.
-- Difficulty: 1, 2, or 3 passage-dependent questions using difficulty-specific passage pools.
+- Difficulty: every level uses the same 18 baseline forms and three questions.
+  Easy/Medium/Hard changes only distractor load, presenting 2/3/4 choices per
+  question. This assessment bank is separate from paced Comprehension’s
+  10-passage-per-level training bank.
 
 ### 27. Words Recall
 
 - View exactly two English words and type both back in the same order after they hide.
 - Case, punctuation, and repeated whitespace do not affect scoring.
 - Result: correct prompts, eight actual attempts, and accuracy.
-- Difficulty: common/intermediate/advanced vocabulary shown for 1.6/1.1/0.7 seconds. Each level has 120 prompt combinations and avoids replacement until its deck cycles.
+- Difficulty: common/intermediate/advanced vocabulary shown for 1.6/1.1/0.7
+  seconds. Easy/Medium/Hard provide 364/308/384 rotating prompts. Each play
+  presents eight, and in-screen replay resumes the remaining cursor so every
+  source word is covered before the selected deck refills.
 
 ### 28. Sentence Recall
 
 - Read one natural English sentence and reconstruct it after it hides.
 - Preserve word identity and order; case, punctuation, and repeated whitespace do not affect scoring.
 - Result: correct reconstructions, eight actual attempts, and accuracy.
-- Difficulty: short/simple, longer, or complex sentences shown for 2.2/1.6/1.1 seconds. The generator validates at least 100 combinations per level.
+- Difficulty: short/simple, longer, or compact analytical sentences shown for 2.2/1.6/1.1
+  seconds. Each level has 13,824 compatible combinations and generates a
+  240-item unique working pool. Each play presents eight prompts; in-screen
+  replay continues the pool cursor until the full 240-item cycle is complete.
 
 ### 29. Evidence Hunt
 
@@ -581,14 +612,14 @@ Practice deciding **where to read next** from text structure. The task does not 
 - Whether optional lab users later improve measured reading relative to their own baseline; no transfer is assumed.
 - Search success in the library and time from opening the library to starting a chosen drill.
 
-## V8 current implementation audit
+## Current implementation audit (updated through V22)
 
 This section is the authoritative snapshot for the current source. Earlier revision notes remain as history.
 
 ### Availability and offline boundary
 
 - The registry contains **31 exercises**, and all 31 are available in the searchable Home collection. There is no subscription, checkout, or paid-feature gate in the current source.
-- The exercise engines, authored passages, vocabulary pools, built-in Power Reader article, and pasted-text workflow are local and usable without requesting network content.
+- The exercise engines, authored passages, vocabulary pools, built-in Power Reader article library, and pasted-text workflow are local and usable without requesting network content.
 - Project Gutenberg discovery/book retrieval and Power Reader translation are optional network features. A recent Gutenberg title is metadata, not a falsely labeled offline copy.
 - Content in the implemented recall, vocabulary, and search pools is English-only; the interface must not imply multilingual exercise content.
 
@@ -596,26 +627,34 @@ This section is the authoritative snapshot for the current source. Earlier revis
 
 | Content set | Easy | Medium | Hard | Replay behavior |
 | --- | ---: | ---: | ---: | --- |
-| Shared flash words | 272 | 230 | 307 | Shuffled without replacement; cycle boundaries avoid an immediate repeat |
-| Phrase possibilities | 5,832 | 5,832 | 5,832 | Each session shuffles and draws 240 unique phrases |
-| Letter Mixup | 32 | 32 | 32 | Shuffled without replacement; cycle boundaries avoid an immediate repeat |
-| Opposites | 30 | 30 | 31 | Shuffled without replacement; cycle boundaries avoid an immediate repeat |
-| Text Search | 12 | 12 | 12 | Full shuffled passage deck; cycle boundaries avoid an immediate repeat |
-| Words Recall | 120 | 120 | 120 | Exact two-word prompts; shuffled without replacement |
-| Sentence Recall | 240 of 5,832 | 240 of 5,832 | 240 of 5,832 | Unique shuffled prompts sampled from the full template space |
-| Visual Span | 71 | 194 | 75 | Equal-length level-specific words; each trial is independently shuffled |
-| Word Search | 101 | 313 | 178 | Shuffled target deck without replacement; cycle boundaries avoid an immediate repeat |
+| Shared flash words | 364 | 308 | 384 | Full selected-level cursor persists across in-screen replays; refill follows a complete no-replacement cycle |
+| Phrase possibilities | 13,824 | 13,824 | 13,824 | A 240-item generated working deck persists across in-screen replays and refills only after its full cycle |
+| Letter Mixup | 48 | 48 | 48 | Shuffled without replacement; cycle boundaries avoid an immediate repeat |
+| Opposites | 46 | 46 | 47 | Shuffled without replacement; cycle boundaries avoid an immediate repeat |
+| Text Search | 18 | 18 | 18 | Full shuffled passage deck; cycle boundaries avoid an immediate repeat |
+| Words Recall | 364 | 308 | 384 | Eight-prompt plays continue one cursor across in-screen replays; one pair per source word appears before refill |
+| Sentence Recall | 240 of 13,824 | 240 of 13,824 | 240 of 13,824 | Eight-prompt plays continue through the 240-item working deck before refill |
+| Visual Span | 96 | 227 | 124 | Equal-length level-specific words; each trial is independently shuffled |
+| Word Search | 128 | 372 | 197 | Shuffled target deck without replacement; cycle boundaries avoid an immediate repeat |
 | Word Pair Scan | 100 pairs | 100 pairs | 100 pairs | Each round independently shuffles the reviewed confusable-pair bank |
-| Baseline Reading | 12 | 12 | 12 | Comparable authored forms; latest six distinct forms enter the 30-day benchmark |
-| Paced Comprehension | 9 | 12 | 12 | No immediate passage repeat; question depth increases by difficulty |
+| Baseline Reading | 18 | 18 | 18 | Full shuffled assessment-form deck; latest six distinct valid forms enter the 30-day benchmark |
+| Paced Comprehension | 10 | 10 | 10 | Curated non-baseline deck is exhausted before reuse; question depth is 1/2/3 by difficulty |
+| Repeated Reading | 10 | 10 | 10 | Same explicitly curated 30-passage training bank; both passes use the exact same passage |
+| Main Idea | 12 | 12 | 12 | Session-sized rotating windows and shuffled, correctly remapped choices |
+| Structure Scan | 24 shared | 24 shared | 24 shared | Session-sized rotating windows; answer section always remains available |
+| Evidence Hunt | 12 | 12 | 12 | Four-round rotating windows; answer options shuffle while evidence sentences remain in reading order |
+| Context Builder | 24 | 24 | 24 | Five-round rotating windows; meaning and clue options are shuffled |
+| Power Reader offline | 8 | 8 | 8 | User-selected original articles with computed word counts |
 
-These are honest limits, not “unlimited content” claims. The connected-text
-audit also retained 15 Main Idea passages, 15 Structure Scan rounds, 36
-Evidence Hunt rounds, 72 Context Builder rounds, 29 general reading samples,
-12 baseline forms, and 16 offline Power Reader articles. Those pools already
-have broader genre and scenario coverage than the formerly undersized lexical
-drills, so this revision concentrated new material where replay repetition was
-most visible.
+These are honest limits, not “unlimited content” claims. The current connected-
+text inventory contains 36 Main Idea passages, 24 Structure Scan scenarios, 36
+Evidence Hunt rounds, 72 Context Builder rounds, 48 general reading samples
+(18 assessment forms and a disjoint 30-passage training bank), 54 Text Search
+passages, and 24 offline Power Reader articles. Paced Comprehension and Repeated
+Reading deliberately share the training bank, with explicit 10/10/10
+difficulty curation rather than inferred difficulty. Executable validators
+enforce the published counts and the associated ID, difficulty, answer, option,
+question-depth, disjointness, and computed-word-count rules.
 
 ### Competitor parity and remaining delta
 
@@ -625,14 +664,14 @@ Implemented now:
 - comprehension beside speed and visible measurement-quality flags;
 - guided Flow, Focus line, and centered RSVP modes;
 - adjustable guide speed, difficulty, and chunk size by level;
-- local pasted text, a built-in offline article, and optional Project Gutenberg discovery;
+- local pasted text, a 24-article built-in offline library, and optional Project Gutenberg discovery;
 - repeated reading, purposeful search, evidence, structure, context, recall, Schulte number/letter/mix, number preview search, letter-grid search, row/column even-number scanning, and word-pair discrimination;
 - task-specific results that keep configured pacing separate from measured connected-text WPM.
 
 Highest-value gaps:
 
 1. Import EPUB/PDF/web articles only after parsing, licensing, privacy, and offline-storage rules are specified.
-2. Add typography controls (font family, width, size, line height, spacing, theme, and reduced motion) across every connected-reading surface.
+2. Add optional font-family presets; width, size, line spacing, reading theme, and reduced-motion preferences already cover the connected-reading surfaces.
 3. Expand equivalent passage/question banks and version their readability before using personal pace trends for stronger recommendations.
 4. Add a durable offline book cache with explicit storage controls; do not relabel recent online metadata as downloaded content.
 5. Add goal-specific connected-reading drills—Gist–Detail Switch, Pace Ladder, Summary Recall, and Inference Bridge—before adding more number/symbol reaction variants.
@@ -728,9 +767,11 @@ and skipped rounds are reported as omissions.
 - Shared exercise description and difficulty panels scroll independently on
   short phone screens, so every Start button remains reachable without
   compressing the rules or difficulty choices.
-- Flash-style games use de-duplicated Fisher–Yates decks. Word pools contain
-  more than 80/100/180 unique entries across Easy/Medium/Hard; Phrase Flash
-  generates 240 combinations per session.
+- Flash-style games use de-duplicated Fisher–Yates decks. Their component-owned
+  cursors survive in-screen Play again, exhaust the selected working pool before
+  refill, and prevent an immediate repeat at cycle boundaries. Phrase Flash
+  generates one 240-combination working pool per selected source level rather
+  than regenerating it for every replay.
 - Results use metric cards; History keeps Reading, Practice, and Labs separate.
 - Invalid and immediate replay-duplicate results remain visible but do not
   enter personal estimates or trends.
@@ -793,15 +834,17 @@ and skipped rounds are reported as omissions.
   verification. Existing non-failing React test `act(...)` warnings remain
   test-hygiene work rather than a product failure.
 
-## V11 content and mistake-review audit
+## V11 content and mistake-review audit (historical snapshot)
 
 - The vocabulary audit found more than 80 Easy, 100 Medium, and 180 Hard flash
   words, 120 unique two-word prompts per difficulty, and 240 sentence prompts
   per difficulty. Adding more generated fragments would increase volume without
   improving transfer, so the higher-value content work remains connected text.
-- Baseline Reading now includes 12 comparable original passages across science,
-  civic, history, narrative, and practical topics. Every form has separate
-  main-idea, detail/evidence, and inference/purpose questions with explanations.
+- At V11, Baseline Reading contained 12 comparable original passages across
+  science, civic, history, narrative, and practical topics. Every form had
+  separate main-idea, detail/evidence, and inference/purpose questions with
+  explanations. The authoritative V21 inventory above supersedes this
+  historical count.
 - Words Recall, Sentence Recall, Flash Recall, Visual Span, and keypad Memory
   Recall now preserve the learner’s submitted or selected response and reveal
   the correct response after a miss. Incorrect feedback remains visible for
@@ -846,8 +889,9 @@ and skipped rounds are reported as omissions.
   rather than a delayed-retention measure.
 - Main Idea results now report configured and completed rounds plus the active
   retrieval-buffer duration, while preserving task accuracy and avoiding WPM.
-- Baseline Reading difficulty copy now matches its validated inventory of 12
-  reviewed passages, with a catalog contract test guarding the count.
+- At V13, Baseline Reading difficulty copy matched its then-current validated
+  inventory of 12 reviewed passages. The authoritative V21 inventory and
+  catalog contract now require 18 forms per level.
 - Final validation passed strict TypeScript, all 482 Jest tests across 71
   suites, all 18 Expo Doctor checks, production PWA export/offline
   verification, and a 390 × 844 browser interaction check with no horizontal
@@ -960,22 +1004,25 @@ and skipped rounds are reported as omissions.
   a blocking Back prompt, and reported no runtime errors or horizontal
   overflow.
 
-## V19 vocabulary and randomization audit
+## V19 vocabulary and randomization audit (historical snapshot)
 
-- The lexical inventory now contains 272 Easy, 230 Medium, and 307 Hard unique
+The figures in this section describe V19 and are superseded by the
+authoritative V21 inventory above.
+
+- At V19, the lexical inventory contained 272 Easy, 230 Medium, and 307 Hard unique
   flash words. These banks feed Word Flash, Flash Recall, Last Word, Words
   Recall, Letter Mixup distractor matching, and difficulty-filtered Word Search
   targets instead of leaving each drill dependent on a small private list.
-- Phrase Flash and Sentence Recall now draw from 18 × 18 × 18 reviewed template
+- At V19, Phrase Flash and Sentence Recall drew from 18 × 18 × 18 reviewed template
   dimensions at every difficulty: 5,832 possible phrases per level. Generation
   enumerates the valid combinations before shuffling, so an unlucky or injected
   random source cannot return a short pool.
-- Letter Mixup now has 32 word/definition prompts per level; Opposites has
-  30/30/31 reviewed challenges; Text Search has 12 natural passages per level;
-  and Word Pair Scan has 100 confusable pairs. Text Search and Opposites use
+- At V19, Letter Mixup had 32 word/definition prompts per level; Opposites had
+  30/30/31 reviewed challenges; Text Search had 12 natural passages per level;
+  and Word Pair Scan had 100 confusable pairs. Text Search and Opposites used
   complete shuffled decks, with immediate-repeat protection at cycle
   boundaries.
-- Visual Span now preserves the anti-guessing constraint of equal-length
+- At V19, Visual Span preserved the anti-guessing constraint of equal-length
   options while drawing from 71/194/75 words instead of 24/28/30 private
   entries. Word Search consequently exposes 101/313/178 valid grid-sized
   targets at Easy/Medium/Hard.
@@ -1025,3 +1072,71 @@ and skipped rounds are reported as omissions.
 - Final validation passed strict TypeScript, all 573 Jest tests across 79
   suites, all 18 Expo Doctor checks, production PWA export, and offline-cache
   verification.
+
+## V21 content breadth, semantic quality, and replay integrity
+
+- The shared Easy/Medium/Hard word banks now contain 364/308/384 unique entries.
+  Words Recall exposes the same number of rotating prompts and covers every
+  source word; Letter Mixup contains 48 prompts per level, and Opposites
+  contains 46/46/47 reviewed challenges.
+- Phrase Flash and Sentence Recall now draw from 13,824 enumerated combinations
+  per level. The dimensions use compatible semantic frames—including the Hard
+  bank—so increased variety does not come from mechanically joining
+  incompatible subjects, actions, and contexts.
+- Connected-text coverage now includes 18 Text Search passages per level, 12
+  Main Idea passages per level, 24 Structure Scan scenarios, 12 Evidence Hunt
+  rounds per level, 24 Context Builder rounds per level, eight Power Reader
+  articles per level, and 24 offline Power Reader articles in total.
+- Baseline Reading retains 18 assessment forms per level. Paced Comprehension
+  and Repeated Reading use a separate 30-passage training bank curated as 10
+  Easy, 10 Medium, and 10 Hard passages; Comprehension supplies 1/2/3
+  passage-dependent questions by level.
+- Comprehension and Repeated Reading use full no-replacement decks, while
+  rotating-window games traverse fresh content before reuse. Answer choices are
+  shuffled with their answer keys remapped, and cycle-boundary safeguards
+  prevent an immediate repeat across deck refills.
+- Flash Recall, Word Flash, Phrase Flash, Last Word, Words Recall, and Sentence
+  Recall now preserve component-owned deck cursors across in-screen replay.
+  They consume every unique item in the active word or 240-item phrase/sentence
+  working pool before refilling; a changed source pool starts a new cycle.
+- Exact-count and structural validators now fail on accidental pool drift,
+  duplicate IDs/options, invalid answers, incorrect difficulty bands,
+  assessment/training overlap, question-depth mismatches, or inconsistent
+  computed word counts. Semantic review also repaired misleading context clues
+  and incompatible generated phrase frames.
+- Two final validation passes each cleared strict TypeScript, all 633 Jest
+  tests across 84 suites, all 18 Expo Doctor checks, and production PWA/offline
+  verification. Live 390 × 844 browser QA covered Home, Context Builder, Words
+  Recall, Phrase Flash, and the scrollable Power Reader exercise; Back remained
+  nonblocking, horizontal width stayed at 390 px, and the console remained
+  free of warnings and errors.
+
+## V22 responsive flash stimuli and progressive masking
+
+- Flash Recall, Word Flash, Phrase Flash, Last Word, Words Recall, Sentence
+  Recall, Visual Span, Memory Recall, Number Search, and Number Hunt now use
+  the same brief-stimulus presentation contract. A single word or number is
+  constrained to one fitted line; word pairs, phrases, and sentences may wrap
+  onto two or three readable lines.
+- Difficulty adds a consistent visual-recognition layer without changing
+  scoring: Easy leaves glyphs clear, Medium obscures the lower 18%, and Hard
+  obscures the lower 38%. The obstruction is a fully opaque near-black marker
+  rather than a transparent overlay or background-colored erasure.
+- Flash-only frames no longer spend phone width on decorative borders, large
+  horizontal padding, or rounded cards. Visual Span retains its positional
+  cells because their locations are part of the task, but their horizontal
+  padding is reduced and each single-word item still follows the no-wrap rule.
+- Hard Phrase Flash and Sentence Recall preserve 13,824 grammatical analytical
+  combinations while using compact actor–analysis–modifier constructions.
+  This avoids shrinking the former 21–37-word prompts to illegible sizes on a
+  phone.
+- Automated coverage checks the opaque marker color and depth, wrapped phrase
+  contract, single-word/number no-wrap contract, responsive font-size floor,
+  compact Hard prompt range, and the presence of the correct difficulty marker
+  in every affected exercise engine.
+- Final validation passed strict TypeScript, all 639 Jest tests across 85
+  suites, all 18 Expo Doctor checks, and a production web export. Live
+  390 × 844 browser checks confirmed that a Hard number remained `nowrap` with
+  no horizontal overflow and that a Hard analytical phrase wrapped to three
+  22 px lines; both used an opaque `rgb(17, 17, 17)` marker at the configured
+  38% line depth.

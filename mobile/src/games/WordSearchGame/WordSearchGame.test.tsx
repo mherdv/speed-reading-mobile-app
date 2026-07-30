@@ -22,9 +22,9 @@ describe('WordSearchGame', () => {
   });
 
   it('uses large difficulty-specific target pools instead of a short fixed list', () => {
-    expect(getWordSearchPool('easy')).toHaveLength(101);
-    expect(getWordSearchPool('medium')).toHaveLength(313);
-    expect(getWordSearchPool('hard')).toHaveLength(178);
+    expect(getWordSearchPool('easy')).toHaveLength(128);
+    expect(getWordSearchPool('medium')).toHaveLength(372);
+    expect(getWordSearchPool('hard')).toHaveLength(197);
     expect(
       getWordSearchPool('hard').every((word) => word.length <= 6)
     ).toBe(true);

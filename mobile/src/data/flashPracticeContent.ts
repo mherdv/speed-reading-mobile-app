@@ -73,6 +73,67 @@ export function createVariedSequence(
   return sequence;
 }
 
+export type PersistentVariedDeckState = {
+  source: readonly string[] | null;
+  pool: string[];
+  poolSignature: string;
+  deck: string[];
+  index: number;
+  previous: string;
+};
+
+export function createPersistentVariedDeckState(): PersistentVariedDeckState {
+  return {
+    source: null,
+    pool: [],
+    poolSignature: '',
+    deck: [],
+    index: 0,
+    previous: '',
+  };
+}
+
+/**
+ * Consumes one complete shuffled cycle before refilling. The mutable cursor is
+ * intentionally component-owned so ordinary game replays keep unused items,
+ * while a changed source pool starts a new cycle. Refill boundaries avoid an
+ * immediate repeat whenever the pool has more than one item.
+ */
+export function takeNextPersistentVariedItem(
+  state: PersistentVariedDeckState,
+  values: readonly string[],
+  random: RandomSource = Math.random
+): string | undefined {
+  if (state.source !== values) {
+    const pool = uniqueStrings(values);
+    const poolSignature = JSON.stringify(pool);
+    state.source = values;
+    state.pool = pool;
+
+    if (state.poolSignature !== poolSignature) {
+      state.poolSignature = poolSignature;
+      state.deck = [];
+      state.index = 0;
+    }
+  }
+
+  if (state.index >= state.deck.length) {
+    state.deck = createVariedSequence(
+      state.pool,
+      state.pool.length,
+      state.previous,
+      random
+    );
+    state.index = 0;
+  }
+
+  const next = state.deck[state.index];
+  if (next === undefined) return undefined;
+  state.index += 1;
+  state.previous = next;
+  return next;
+}
+
 function comparableText(value: string): string {
   return value.toLocaleLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -212,60 +273,78 @@ const EASY_SUBJECTS = [
   'Skilled writers',
   'Young explorers',
   'Careful thinkers',
-  'Kind neighbors',
-  'Quick foxes',
-  'Bright stars',
-  'Small rivers',
+  'Study partners',
+  'Quick readers',
+  'Bright students',
+  'Small groups',
   'Morning readers',
-  'Fresh ideas',
-  'Active minds',
-  'Calm hikers',
-  'Local artists',
-  'Busy gardeners',
+  'New classmates',
+  'Active learners',
+  'Calm reviewers',
+  'Local students',
+  'Busy researchers',
   'Helpful teachers',
-  'Playful dolphins',
+  'Focused learners',
+  'Reading partners',
+  'Alert learners',
+  'Museum guides',
+  'Park rangers',
+  'New volunteers',
+  'Young builders',
 ] as const;
 
-const EASY_VERBS = [
-  'notice',
-  'follow',
-  'remember',
-  'compare',
-  'discover',
-  'collect',
-  'describe',
-  'measure',
-  'organize',
-  'observe',
-  'question',
-  'share',
-  'connect',
-  'practice',
-  'review',
-  'trace',
-  'explain',
-  'predict',
+const EASY_ACTIONS = [
+  'notice small details',
+  'follow clear directions',
+  'remember key facts',
+  'compare two examples',
+  'discover useful clues',
+  'collect field notes',
+  'describe simple changes',
+  'measure short distances',
+  'organize written ideas',
+  'observe changing patterns',
+  'question weak claims',
+  'share helpful feedback',
+  'connect related facts',
+  'practice new skills',
+  'review short stories',
+  'trace safe routes',
+  'explain main ideas',
+  'predict likely outcomes',
+  'examine word shapes',
+  'sort matching symbols',
+  'locate nearby landmarks',
+  'repeat useful phrases',
+  'test simple rules',
+  'map new routes',
 ] as const;
 
-const EASY_OBJECTS = [
-  'small details',
-  'clear patterns',
-  'useful clues',
-  'new routes',
-  'simple changes',
-  'strong signals',
-  'daily habits',
-  'hidden shapes',
-  'bright colors',
-  'short stories',
-  'main ideas',
-  'key facts',
-  'word shapes',
-  'safe paths',
-  'early warnings',
-  'shared goals',
-  'quiet sounds',
-  'fresh evidence',
+const EASY_CONTEXTS = [
+  'with care',
+  'with focus',
+  'with patience',
+  'with curiosity',
+  'with a partner',
+  'with the group',
+  'during practice',
+  'during review',
+  'while learning',
+  'before answering',
+  'before deciding',
+  'after reading',
+  'after checking',
+  'step by step',
+  'without rushing',
+  'as instructed',
+  'whenever needed',
+  'each morning',
+  'each week',
+  'in their notes',
+  'for the lesson',
+  'for the project',
+  'at the library',
+  'throughout the session',
 ] as const;
 
 const MEDIUM_OPENERS = [
@@ -287,6 +366,12 @@ const MEDIUM_OPENERS = [
   'During the second experiment',
   'Beyond the familiar example',
   'After comparing both accounts',
+  'Before revising the schedule',
+  'During the archive visit',
+  'After mapping the route',
+  'While reviewing the transcript',
+  'At the weekly planning session',
+  'Following a second measurement',
 ] as const;
 
 const MEDIUM_SUBJECTS = [
@@ -308,6 +393,12 @@ const MEDIUM_SUBJECTS = [
   'an attentive librarian',
   'the field biologist',
   'a patient instructor',
+  'the transport planner',
+  'a careful translator',
+  'the volunteer coordinator',
+  'an observant technician',
+  'the debate moderator',
+  'a diligent fact checker',
 ] as const;
 
 const MEDIUM_ACTIONS = [
@@ -329,69 +420,98 @@ const MEDIUM_ACTIONS = [
   'checks the claim against the chart',
   'identifies the missing assumption',
   'explains why the pattern matters',
+  'locates the relevant paragraph',
+  'reorders the steps for clarity',
+  'checks the dates against the record',
+  'distinguishes the signal from noise',
+  'connects the outcome to its cause',
+  'rephrases the claim without changing its scope',
 ] as const;
 
-const HARD_OPENERS = [
-  'Although the first explanation seemed convincing',
-  'Because the available evidence remained incomplete',
-  'Whenever several interpretations appear equally plausible',
-  'After the preliminary findings changed unexpectedly',
-  'While the broader pattern was initially overlooked',
-  'Even when the familiar strategy stops working',
-  'Unless the hidden assumption survives closer testing',
-  'Before the apparent correlation is treated as causal',
-  'Where competing priorities cannot all be maximized',
-  'If the original sample excludes an important group',
-  'Once the short-term improvement begins to fade',
-  'Despite the precision suggested by a single estimate',
-  'Although the summary uses confident language',
-  'Because the comparison groups differ in several ways',
-  'Whenever a definition changes across disciplines',
-  'After the original forecast misses an important shift',
-  'While the strongest result receives most attention',
-  'Even if two sources repeat the same claim',
+/**
+ * Hard prompts keep advanced analytical vocabulary while remaining compact
+ * enough for a single-line flash on a phone. The actor and modifier slots
+ * broaden the pool without producing ungrammatical clause combinations.
+ */
+const HARD_ANALYSES = [
+  'tests an alternative against the record',
+  'maps the remaining evidence gaps',
+  'tries to disconfirm each interpretation',
+  'rechecks assumptions against new data',
+  'links individual results into a sequence',
+  'tests another method under matching conditions',
+  'treats the conclusion as provisional',
+  'checks plausible confounding factors',
+  'compares gains with delayed costs',
+  'limits the claim to the sample',
+  'measures whether the change persists',
+  'inspects the estimate and its distribution',
+  'verifies claims against primary sources',
+  'compares the groups’ starting conditions',
+  'defines terms before comparing arguments',
+  'updates the model with new data',
+  'inspects null and conflicting results',
+  'traces sources to independent evidence',
+  'separates outcomes by subgroup',
+  'tests conditions in another setting',
+  'estimates tolerable measurement error',
+  'infers meaning from nearby context',
+  'examines subgroup distributions separately',
+  'narrows the rule after counterevidence',
 ] as const;
 
-const HARD_CLAUSES = [
-  'the analyst compares competing claims before deciding',
-  'the researcher revises assumptions and records the uncertainty',
-  'the reader separates direct evidence from reasonable inference',
-  'the team tests an alternative explanation against the data',
-  'the editor preserves the main idea while removing repetition',
-  'the investigator checks whether each conclusion follows logically',
-  'the reviewer identifies which evidence would change the conclusion',
-  'the committee weighs immediate benefits against delayed costs',
-  'the historian distinguishes the surviving record from later interpretation',
-  'the designer tests whether the solution transfers to a different setting',
-  'the statistician examines the distribution behind the average',
-  'the reporter verifies the fluent summary against the primary source',
-  'the reader tests whether the conclusion survives a counterexample',
-  'the evaluator separates implementation failure from theory failure',
-  'the archivist compares the later account with the dated record',
-  'the engineer examines how the constraint changes under stress',
-  'the facilitator distinguishes broad agreement from complete unanimity',
-  'the researcher checks whether the measure captures the intended concept',
+const HARD_ANALYSIS_ACTORS = [
+  'the research team',
+  'the review team',
+  'the analysis group',
+  'the project evaluator',
+  'the lead investigator',
+  'the independent reviewer',
+  'the methods specialist',
+  'the editorial team',
+  'the evidence panel',
+  'the assessment group',
+  'the audit team',
+  'the study coordinator',
+  'the data analyst',
+  'the policy reviewer',
+  'the field researcher',
+  'the technical editor',
+  'the evaluation committee',
+  'the quality team',
+  'the inquiry team',
+  'the verification group',
+  'the methods panel',
+  'the research editor',
+  'the study reviewer',
+  'the decision team',
 ] as const;
 
-const HARD_ENDINGS = [
-  'before publishing the result',
-  'without hiding important uncertainty',
-  'and explains the decision clearly',
-  'before choosing the next step',
-  'while preserving the central meaning',
-  'and records what changed',
-  'before rejecting the competing account',
-  'while keeping the evidence visible',
-  'and names the limit of the available sample',
-  'before recommending a permanent change',
-  'while distinguishing confidence from certainty',
-  'and explains which tradeoff remains unresolved',
-  'before generalizing beyond the observed setting',
-  'while naming the strongest alternative explanation',
-  'and identifies which assumption carries the most risk',
-  'before combining results from incompatible measures',
-  'while preserving exceptions that affect the conclusion',
-  'and states what additional evidence would be decisive',
+const HARD_ANALYSIS_MODIFIERS = [
+  'carefully',
+  'independently',
+  'cautiously',
+  'transparently',
+  'systematically',
+  'explicitly',
+  'provisionally',
+  'skeptically',
+  'rigorously',
+  'consistently',
+  'deliberately',
+  'methodically',
+  'precisely',
+  'critically',
+  'objectively',
+  'jointly',
+  'separately',
+  'patiently',
+  'attentively',
+  'conservatively',
+  'responsibly',
+  'openly',
+  'thoroughly',
+  'repeatedly',
 ] as const;
 
 export function generatePhrasePool(
@@ -404,9 +524,9 @@ export function generatePhrasePool(
 
   if (difficulty === 'easy') {
     for (const subject of EASY_SUBJECTS) {
-      for (const verb of EASY_VERBS) {
-        for (const object of EASY_OBJECTS) {
-          phrases.push(`${subject} ${verb} ${object}`);
+      for (const action of EASY_ACTIONS) {
+        for (const context of EASY_CONTEXTS) {
+          phrases.push(`${subject} ${action} ${context}`);
         }
       }
     }
@@ -419,10 +539,10 @@ export function generatePhrasePool(
       }
     }
   } else {
-    for (const opener of HARD_OPENERS) {
-      for (const clause of HARD_CLAUSES) {
-        for (const ending of HARD_ENDINGS) {
-          phrases.push(`${opener}, ${clause} ${ending}`);
+    for (const analysis of HARD_ANALYSES) {
+      for (const actor of HARD_ANALYSIS_ACTORS) {
+        for (const modifier of HARD_ANALYSIS_MODIFIERS) {
+          phrases.push(`${actor} ${analysis} ${modifier}.`);
         }
       }
     }
@@ -433,12 +553,16 @@ export function generatePhrasePool(
 
 export function getPhraseCombinationCount(difficulty: Difficulty): number {
   if (difficulty === 'easy') {
-    return EASY_SUBJECTS.length * EASY_VERBS.length * EASY_OBJECTS.length;
+    return EASY_SUBJECTS.length * EASY_ACTIONS.length * EASY_CONTEXTS.length;
   }
   if (difficulty === 'medium') {
     return MEDIUM_OPENERS.length * MEDIUM_SUBJECTS.length * MEDIUM_ACTIONS.length;
   }
-  return HARD_OPENERS.length * HARD_CLAUSES.length * HARD_ENDINGS.length;
+  return (
+    HARD_ANALYSES.length *
+    HARD_ANALYSIS_ACTORS.length *
+    HARD_ANALYSIS_MODIFIERS.length
+  );
 }
 
 export function countWords(value: string): number {

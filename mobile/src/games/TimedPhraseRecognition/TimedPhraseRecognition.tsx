@@ -1,16 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   countWords,
+  createPersistentVariedDeckState,
   createRecognitionOptions,
-  createVariedSequence,
   generatePhrasePool,
+  takeNextPersistentVariedItem,
   uniqueStrings,
+  type RandomSource,
 } from '../../data/flashPracticeContent';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
+import { BriefStimulus } from '../../ui/BriefStimulus';
 import { ChoiceAnswerFeedback } from '../../ui/ChoiceAnswerFeedback';
 import { FlashPaceControl } from '../../ui/FlashPaceControl';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
@@ -50,6 +53,7 @@ type Props = {
   totalRounds?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
+  random?: RandomSource;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
@@ -76,23 +80,23 @@ export default function TimedPhraseRecognition({
   totalRounds: totalRoundsProp,
   difficulty = 'medium',
   autoStart = false,
+  random = Math.random,
   onReportResult,
 }: Props) {
   const config = getConfig(difficulty);
   const totalRounds = totalRoundsProp;
-  const generatedPoolRef = useRef<string[]>([]);
-  if (generatedPoolRef.current.length === 0) {
-    generatedPoolRef.current = generatePhrasePool(difficulty, 240);
-  }
-
-  const phrasePool =
-    phrasesProp && phrasesProp.length > 0
-      ? uniqueStrings(phrasesProp)
-      : generatedPoolRef.current;
-  const optionPool = uniqueStrings([
-    ...phrasePool,
-    ...generatedPoolRef.current,
-  ]);
+  const generatedPool = useMemo(
+    () => generatePhrasePool(difficulty, 240, random),
+    [difficulty, random]
+  );
+  const phrasePool = useMemo(() => {
+    const customPool = uniqueStrings(phrasesProp ?? []);
+    return customPool.length > 0 ? customPool : generatedPool;
+  }, [generatedPool, phrasesProp]);
+  const optionPool = useMemo(
+    () => uniqueStrings([...phrasePool, ...generatedPool]),
+    [generatedPool, phrasePool]
+  );
   const defaultWpm =
     displayMsProp == null
       ? config.baseWpm
@@ -117,9 +121,7 @@ export default function TimedPhraseRecognition({
   const correctRef = useRef(0);
   const roundRef = useRef(0);
   const phraseRef = useRef('');
-  const previousPhraseRef = useRef('');
-  const deckRef = useRef<string[]>([]);
-  const deckIndexRef = useRef(0);
+  const deckStateRef = useRef(createPersistentVariedDeckState());
   const paceRef = useRef<FlashPaceState>(
     createFlashPaceState(defaultWpm)
   );
@@ -127,7 +129,6 @@ export default function TimedPhraseRecognition({
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(() => {
-    generatedPoolRef.current = generatePhrasePool(difficulty, 240);
     const nextWpm =
       displayMsProp == null
         ? getConfig(difficulty).baseWpm
@@ -143,30 +144,24 @@ export default function TimedPhraseRecognition({
   }, []);
 
   function createOptions(answer: string): string[] {
-    return createRecognitionOptions(answer, optionPool);
+    return createRecognitionOptions(answer, optionPool, 4, random);
   }
 
   function takeNextPhrase() {
-    if (deckIndexRef.current >= deckRef.current.length) {
-      deckRef.current = createVariedSequence(
+    return (
+      takeNextPersistentVariedItem(
+        deckStateRef.current,
         phrasePool,
-        Math.max(32, phrasePool.length),
-        previousPhraseRef.current
-      );
-      deckIndexRef.current = 0;
-    }
-    const phrase =
-      deckRef.current[deckIndexRef.current] ??
+        random
+      ) ??
       phrasePool[0] ??
-      'Focused readers notice details';
-    deckIndexRef.current += 1;
-    return phrase;
+      'Focused readers notice details'
+    );
   }
 
   function showRound() {
     const phrase = takeNextPhrase();
     phraseRef.current = phrase;
-    previousPhraseRef.current = phrase;
     setCurrentPhrase(phrase);
     setOptions(createOptions(phrase));
     setAnswerReview(null);
@@ -190,12 +185,6 @@ export default function TimedPhraseRecognition({
     roundRef.current = 0;
     initialWpmRef.current = startingWpm;
     paceRef.current = createFlashPaceState(startingWpm);
-    deckRef.current = createVariedSequence(
-      phrasePool,
-      Math.max(32, phrasePool.length),
-      previousPhraseRef.current
-    );
-    deckIndexRef.current = 0;
     setRound(0);
     setScore(0);
     setCorrectStreak(0);
@@ -279,7 +268,7 @@ export default function TimedPhraseRecognition({
         initialWpm: initialWpmRef.current,
         finalWpm: paceRef.current.wpm,
         paceChanges: paceRef.current.changes,
-        phraseTemplates: generatedPoolRef.current.length,
+        phraseTemplates: generatedPool.length,
         adaptivePacing: displayMsProp == null,
       },
     });
@@ -340,7 +329,7 @@ export default function TimedPhraseRecognition({
           containerStyle={styles.idleContent}
         >
           <Text style={styles.varietyText}>
-            240 fresh phrase combinations · +25 WPM after{' '}
+            240-combination no-repeat cycle · +25 WPM after{' '}
             {CORRECT_ANSWERS_TO_INCREASE} correct · 3 misses end
           </Text>
           <FlashPaceControl
@@ -358,9 +347,18 @@ export default function TimedPhraseRecognition({
         <View style={styles.gameArea}>
           {stats}
           <View testID="phrase-flash" style={styles.phraseCard}>
-            <Text testID="phrase" style={styles.phrase}>
-              {currentPhrase}
-            </Text>
+            <BriefStimulus
+              value={currentPhrase}
+              difficulty={difficulty}
+              testID="phrase"
+              color={colors.infoForeground}
+              backgroundColor={colors.background}
+              maxFontSize={22}
+              minFontSize={12}
+              allowWrap
+              maxLines={3}
+              style={styles.phrase}
+            />
           </View>
           <Text style={styles.instruction}>Read the whole phrase once</Text>
         </View>
@@ -472,20 +470,15 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 10, color: colors.textSecondary },
   phraseCard: {
     minHeight: 190,
-    backgroundColor: colors.cardBackground,
-    borderRadius: 24,
-    padding: 24,
     alignItems: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 0,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    margin: 0,
+    padding: 0,
   },
   phrase: {
-    fontSize: 22,
-    lineHeight: 31,
     fontWeight: '700',
-    color: colors.infoForeground,
-    textAlign: 'center',
   },
   instruction: {
     textAlign: 'center',

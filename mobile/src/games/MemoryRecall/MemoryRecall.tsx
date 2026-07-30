@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import { useAutoStart, useTrackedTimeouts, type Difficulty } from '../gameHooks';
+import { BriefStimulus } from '../../ui/BriefStimulus';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { colors } from '../../theme/colors';
@@ -281,7 +282,16 @@ export default function MemoryRecall({
           />
 
           <View testID="sequence-display" style={styles.sequenceCard}>
-            <Text testID="sequence" style={styles.sequence}>{sequence.join(' ')}</Text>
+            <BriefStimulus
+              value={sequence.join(' ')}
+              difficulty={difficulty}
+              testID="sequence"
+              color="#0E4979"
+              backgroundColor={colors.background}
+              maxFontSize={40}
+              minFontSize={9}
+              letterSpacing={5}
+            />
           </View>
 
           <Text style={styles.instruction}>Memorize this sequence!</Text>
@@ -542,15 +552,12 @@ const styles = StyleSheet.create({
   strikeValue: { color: colors.warningForeground },
   strikeLabel: { color: colors.warningForeground },
   sequenceCard: {
-    backgroundColor: '#F3FAFD',
-    borderRadius: 12,
-    padding: 24,
     alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#0B628F',
+    backgroundColor: colors.background,
+    borderWidth: 0,
+    margin: 0,
+    padding: 0,
   },
-  sequence: { fontSize: 32, fontWeight: '800', color: '#0E4979', letterSpacing: 8 },
   instruction: { textAlign: 'center', color: '#6B7280', fontSize: 12 },
   inputCard: {
     backgroundColor: '#F3FAFD',

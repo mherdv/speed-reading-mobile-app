@@ -7,6 +7,7 @@ import {
   validateRecallPools,
   WORDS_RECALL_CONFIG,
 } from '../../data/recallContent';
+import { getFlashWordPool } from '../../data/flashPracticeContent';
 import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import WordsRecall from './WordsRecall';
 
@@ -27,12 +28,15 @@ describe('WordsRecall', () => {
         prompts={['harbor lantern']}
         displayMs={10}
         totalRounds={1}
+        difficulty="hard"
         onReportResult={onReportResult}
       />
     );
     fireEvent.press(view.getByTestId('start-button'));
     expect(view.getByTestId('recall-word-0')).toHaveTextContent('harbor');
     expect(view.getByTestId('recall-word-1')).toHaveTextContent('lantern');
+    expect(view.getByTestId('recall-prompt-mask')).toBeTruthy();
+    expect(view.getByTestId('recall-prompt')).toHaveProp('numberOfLines', 2);
     act(() => {
       jest.advanceTimersByTime(20);
     });
@@ -62,11 +66,26 @@ describe('WordsRecall', () => {
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
       const first = createWordsRecallPool(difficulty);
       const second = createWordsRecallPool(difficulty);
-      expect(first).toHaveLength(120);
-      expect(new Set(first).size).toBe(120);
+      const vocabulary = getFlashWordPool(difficulty);
+      expect(first).toHaveLength(vocabulary.length);
+      expect(new Set(first).size).toBe(vocabulary.length);
       expect(first).toEqual(second);
       expect(first.every((prompt) => prompt.split(' ').length === 2)).toBe(true);
+      expect(
+        new Set(first.flatMap((prompt) => prompt.split(' ')))
+      ).toEqual(new Set(vocabulary));
     }
+  });
+
+  it('spreads a shortened prompt request across the source vocabulary', () => {
+    const vocabulary = getFlashWordPool('easy');
+    const shortened = createWordsRecallPool('easy', 120);
+    const covered = new Set(shortened.flatMap((prompt) => prompt.split(' ')));
+
+    expect(shortened).toHaveLength(120);
+    expect(covered.has(vocabulary[0]!)).toBe(true);
+    expect(covered.has(vocabulary.at(-1)!)).toBe(true);
+    expect(covered.size).toBeGreaterThan(200);
   });
 
   it('keeps a missed pair and its correct answer visible before replay', () => {
@@ -97,5 +116,38 @@ describe('WordsRecall', () => {
     view.unmount();
     act(() => jest.runOnlyPendingTimers());
     expect(report).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues the no-replacement prompt deck across replays', () => {
+    const view = render(
+      <WordsRecall
+        prompts={['amber cabin', 'delta fable', 'grace habit']}
+        displayMs={10}
+        totalRounds={1}
+        random={() => 0}
+      />
+    );
+    const shownPrompts: string[] = [];
+
+    for (let session = 0; session < 4; session += 1) {
+      fireEvent.press(
+        view.getByTestId(session === 0 ? 'start-button' : 'play-again')
+      );
+      const shown = [
+        view.getByTestId('recall-word-0').props.children,
+        view.getByTestId('recall-word-1').props.children,
+      ].join(' ');
+      shownPrompts.push(shown);
+      act(() => jest.advanceTimersByTime(11));
+      fireEvent.changeText(view.getByTestId('recall-input'), shown);
+      fireEvent.press(view.getByTestId('submit-recall'));
+      act(() =>
+        jest.advanceTimersByTime(getRecallFeedbackDurationMs(shown, true) + 1)
+      );
+      expect(view.getByTestId('end')).toBeTruthy();
+    }
+
+    expect(new Set(shownPrompts.slice(0, 3)).size).toBe(3);
+    expect(shownPrompts[3]).not.toBe(shownPrompts[2]);
   });
 });

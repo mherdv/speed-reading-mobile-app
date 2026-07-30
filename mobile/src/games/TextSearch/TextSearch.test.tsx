@@ -34,9 +34,9 @@ describe('TextSearch', () => {
 
   it('uses reviewed natural passage pools at every difficulty', () => {
     expect(validateTextSearchContent()).toEqual([]);
-    expect(TEXT_SEARCH_VARIATIONS.easy).toHaveLength(12);
-    expect(TEXT_SEARCH_VARIATIONS.medium).toHaveLength(12);
-    expect(TEXT_SEARCH_VARIATIONS.hard).toHaveLength(12);
+    expect(TEXT_SEARCH_VARIATIONS.easy).toHaveLength(18);
+    expect(TEXT_SEARCH_VARIATIONS.medium).toHaveLength(18);
+    expect(TEXT_SEARCH_VARIATIONS.hard).toHaveLength(18);
   });
 
   it('builds a full no-replacement passage cycle and protects its boundary', () => {
@@ -47,12 +47,12 @@ describe('TextSearch', () => {
     );
     const secondDeck = buildTextSearchDeck(
       TEXT_SEARCH_VARIATIONS.medium,
-      firstDeck[0]!.id,
+      firstDeck.at(-1)!.id,
       () => 0
     );
-    expect(firstDeck).toHaveLength(12);
-    expect(new Set(firstDeck.map((item) => item.id)).size).toBe(12);
-    expect(secondDeck[0]!.id).not.toBe(firstDeck[0]!.id);
+    expect(firstDeck).toHaveLength(18);
+    expect(new Set(firstDeck.map((item) => item.id)).size).toBe(18);
+    expect(secondDeck[0]!.id).not.toBe(firstDeck.at(-1)!.id);
   });
 
   it('does not immediately repeat a built-in passage on replay', () => {

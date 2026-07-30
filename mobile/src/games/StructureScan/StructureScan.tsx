@@ -8,6 +8,11 @@ import {
   type StructureScanSection,
 } from '../../data/structureScanPassages';
 import { levelToStars, updateProgress } from '../../data/progressStore';
+import {
+  buildRotatingDeck,
+  shuffleItems,
+  type RandomSource,
+} from '../../data/randomization';
 import { colors, shadows, spacing } from '../../theme/colors';
 import { Button } from '../../ui/Button';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
@@ -22,7 +27,7 @@ type Props = {
   rounds?: readonly StructureScanRound[];
   roundCount?: number;
   previewLimitMs?: number | null;
-  random?: () => number;
+  random?: RandomSource;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
@@ -46,31 +51,6 @@ function getDifficultyConfig(difficulty: Difficulty): DifficultyConfig {
   return { sectionCount: 5, roundCount: 5, previewLimitMs: 25_000 };
 }
 
-function selectRounds(
-  source: readonly StructureScanRound[],
-  count: number,
-  offset: number
-): StructureScanRound[] {
-  if (source.length === 0) return [];
-  return Array.from(
-    { length: Math.min(count, source.length) },
-    (_, index) => source[(offset + index) % source.length]
-  );
-}
-
-function shuffleWith<T>(source: readonly T[], random: () => number): T[] {
-  const shuffled = [...source];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const randomValue = Math.min(0.999999, Math.max(0, random()));
-    const swapIndex = Math.floor(randomValue * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [
-      shuffled[swapIndex],
-      shuffled[index],
-    ];
-  }
-  return shuffled;
-}
-
 /**
  * Builds the section map shown for one goal. The answer is selected first so
  * reduced Easy/Medium maps can never remove it, then the complete map is
@@ -79,13 +59,13 @@ function shuffleWith<T>(source: readonly T[], random: () => number): T[] {
 export function prepareStructureScanSections(
   round: StructureScanRound,
   sectionCount: number,
-  random: () => number = Math.random
+  random: RandomSource = Math.random
 ): StructureScanSection[] {
   const correctSection = round.sections.find(
     (section) => section.heading === round.correctHeading
   );
   if (!correctSection) {
-    return shuffleWith(
+    return shuffleItems(
       round.sections.slice(0, Math.max(0, sectionCount)),
       random
     );
@@ -95,14 +75,14 @@ export function prepareStructureScanSections(
     round.sections.length,
     Math.max(1, sectionCount)
   );
-  const distractors = shuffleWith(
+  const distractors = shuffleItems(
     round.sections.filter(
       (section) => section.heading !== round.correctHeading
     ),
     random
   ).slice(0, safeCount - 1);
 
-  return shuffleWith([correctSection, ...distractors], random);
+  return shuffleItems([correctSection, ...distractors], random);
 }
 
 export default function StructureScan({
@@ -135,6 +115,7 @@ export default function StructureScan({
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const sessionOrdinalRef = useRef<number | null>(null);
 
   const config = getDifficultyConfig(selectedDifficulty);
   const configuredRoundCount = roundCount ?? config.roundCount;
@@ -154,6 +135,12 @@ export default function StructureScan({
       clearPreviewTimer();
     };
   }, []);
+
+  useEffect(() => {
+    if (progressLoaded && sessionOrdinalRef.current === null) {
+      sessionOrdinalRef.current = gameProgress.totalPlays;
+    }
+  }, [gameProgress.totalPlays, progressLoaded]);
 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
@@ -175,10 +162,14 @@ export default function StructureScan({
     setCorrectCount(0);
     setRoundIndex(0);
     setSelectedHeading(null);
-    const selectedRounds = selectRounds(
+    const sessionOrdinal =
+      sessionOrdinalRef.current ?? gameProgress.totalPlays;
+    sessionOrdinalRef.current = sessionOrdinal + 1;
+    const selectedRounds = buildRotatingDeck(
       rounds,
       configuredRoundCount,
-      gameProgress.totalPlays % Math.max(rounds.length, 1)
+      sessionOrdinal,
+      random
     );
     sessionRoundsRef.current = selectedRounds;
     sessionSectionsRef.current = selectedRounds.map((round) =>

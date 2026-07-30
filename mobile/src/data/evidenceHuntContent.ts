@@ -385,6 +385,8 @@ export const EVIDENCE_HUNT_ROUNDS: readonly EvidenceHuntRound[] = (
   TOPICS.map((topic, index) => buildRound(topic, difficulty, index))
 );
 
+export const EVIDENCE_HUNT_ROUNDS_PER_DIFFICULTY = 12;
+
 export function getEvidenceHuntRounds(difficulty: Difficulty): EvidenceHuntRound[] {
   return EVIDENCE_HUNT_ROUNDS.filter((round) => round.difficulty === difficulty);
 }
@@ -394,6 +396,11 @@ export function validateEvidenceHuntContent(
 ): string[] {
   const errors: string[] = [];
   const ids = new Set<string>();
+  const expectedEvidencePrefix: Record<EvidenceRequirement['role'], string> = {
+    'tested-change': 'The team ',
+    outcome: 'Records showed that ',
+    limitation: 'The report also notes that ',
+  };
 
   for (const round of rounds) {
     if (ids.has(round.id)) errors.push(`Duplicate round id: ${round.id}`);
@@ -428,6 +435,19 @@ export function validateEvidenceHuntContent(
       )
     ) {
       errors.push(`${round.id}: evidence requirements must describe every keyed sentence`);
+    }
+    for (const requirement of round.evidenceRequirements) {
+      const sentence = round.sentences.find(
+        (candidate) => candidate.id === requirement.sentenceId
+      );
+      if (
+        sentence &&
+        !sentence.text.startsWith(expectedEvidencePrefix[requirement.role])
+      ) {
+        errors.push(
+          `${round.id}: ${requirement.role} evidence points to the wrong semantic sentence`
+        );
+      }
     }
     const requiredEvidence = round.difficulty === 'hard' ? 2 : 1;
     if (round.evidenceSentenceIds.length !== requiredEvidence) {
@@ -466,8 +486,10 @@ export function validateEvidenceHuntContent(
 
   for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     const levelRounds = rounds.filter((round) => round.difficulty === difficulty);
-    if (levelRounds.length < 12) {
-      errors.push(`${difficulty}: at least 12 reviewed rounds required`);
+    if (levelRounds.length !== EVIDENCE_HUNT_ROUNDS_PER_DIFFICULTY) {
+      errors.push(
+        `${difficulty}: exactly ${EVIDENCE_HUNT_ROUNDS_PER_DIFFICULTY} reviewed rounds required`
+      );
     }
     const answerPositions = [0, 0, 0, 0];
     levelRounds.forEach((round) => {

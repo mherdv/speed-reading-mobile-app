@@ -23,11 +23,14 @@ describe('LastWordRecall', () => {
         wordDisplayMs={20}
         sequenceLength={4}
         totalRounds={1}
+        difficulty="hard"
       />
     );
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('stream-word')).toBeTruthy();
+    expect(getByTestId('stream-word-mask')).toBeTruthy();
+    expect(getByTestId('stream-word')).toHaveProp('numberOfLines', 1);
 
     act(() => {
       jest.advanceTimersByTime(65);
@@ -232,5 +235,49 @@ describe('LastWordRecall', () => {
         }),
       })
     );
+  });
+
+  it('uses one no-replacement word stream across rounds and replays', () => {
+    const words = ['amber', 'cabin', 'delta', 'fable'];
+    const view = render(
+      <LastWordRecall
+        words={words}
+        wordDisplayMs={20}
+        sequenceLength={3}
+        totalRounds={1}
+        contentRandom={() => 0}
+      />
+    );
+    const shownWords: string[] = [];
+
+    for (let session = 0; session < 2; session += 1) {
+      fireEvent.press(
+        view.getByTestId(session === 0 ? 'start-button' : 'play-again')
+      );
+      if (session > 0) {
+        act(() => jest.advanceTimersByTime(51));
+      }
+      shownWords.push(
+        view.getByTestId('stream-word').props.children as string
+      );
+      for (let index = 1; index < 3; index += 1) {
+        act(() => jest.advanceTimersByTime(21));
+        shownWords.push(
+          view.getByTestId('stream-word').props.children as string
+        );
+      }
+      const answer = shownWords.at(-1)!;
+      act(() => jest.advanceTimersByTime(21));
+      fireEvent.press(view.getByLabelText(answer));
+      act(() =>
+        jest.advanceTimersByTime(getRecallFeedbackDurationMs(answer, true) + 1)
+      );
+      expect(view.getByTestId('end')).toBeTruthy();
+    }
+
+    expect(new Set(shownWords.slice(0, words.length)).size).toBe(words.length);
+    for (let index = 1; index < shownWords.length; index += 1) {
+      expect(shownWords[index]).not.toBe(shownWords[index - 1]);
+    }
   });
 });

@@ -5,6 +5,7 @@ import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import { formatDuration } from '../../domain/results';
 import { colors } from '../../theme/colors';
+import { BriefStimulus } from '../../ui/BriefStimulus';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useTrackedTimeouts, type Difficulty } from '../gameHooks';
@@ -248,9 +249,16 @@ export default function NumberSearch({
       {phase === 'preview' && (
         <View testID="target-preview" style={styles.previewArea}>
           <Text style={styles.previewLabel}>Remember this number</Text>
-          <Text testID="target-number" style={styles.previewNumber}>
-            {gridData.target}
-          </Text>
+          <BriefStimulus
+            value={String(gridData.target)}
+            difficulty={difficulty}
+            testID="target-number"
+            color={colors.interactivePrimary}
+            backgroundColor={colors.background}
+            maxFontSize={68}
+            minFontSize={18}
+            containerStyle={styles.previewStimulus}
+          />
           <Text style={styles.previewHint}>It will hide before the grid appears.</Text>
         </View>
       )}
@@ -335,10 +343,7 @@ const styles = StyleSheet.create({
   },
   previewArea: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   previewLabel: { color: colors.textSecondary, fontSize: 16, fontWeight: '600' },
-  previewNumber: {
-    color: colors.interactivePrimary,
-    fontSize: 64,
-    fontWeight: '800',
+  previewStimulus: {
     marginVertical: 18,
   },
   previewHint: { color: colors.textMuted, fontSize: 13 },

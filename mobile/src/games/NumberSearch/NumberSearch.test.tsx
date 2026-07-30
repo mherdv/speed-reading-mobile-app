@@ -18,11 +18,13 @@ describe('NumberSearch', () => {
 
   it('previews the target, then hides it before making the grid actionable', () => {
     const { getByTestId, queryByTestId } = render(
-      <NumberSearch previewMs={500} gridSize={3} />
+      <NumberSearch previewMs={500} gridSize={3} difficulty="hard" />
     );
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('target-preview')).toBeTruthy();
+    expect(getByTestId('target-number-mask')).toBeTruthy();
+    expect(getByTestId('target-number')).toHaveProp('numberOfLines', 1);
     expect(queryByTestId('cell-0-0')).toBeNull();
 
     act(() => {

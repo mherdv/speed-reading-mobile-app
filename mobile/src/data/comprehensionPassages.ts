@@ -1,17 +1,23 @@
 import type { Difficulty } from './difficultyPreferences';
-import { getWpmTestPool } from './wpmTestContent';
+import {
+  getWpmTestPool,
+  validateWpmTestPool,
+} from './wpmTestContent';
 
 export type ComprehensionQuestion = {
+  id?: string;
   question: string;
   options: string[];
   correctIndex: number;
+  type?: 'main-idea' | 'detail-evidence' | 'inference-purpose';
   rationale?: string;
   answerDependency?: 'passage-required';
 };
 
 export type ComprehensionPassage = {
-  /** Stable ID of the underlying TextSample shared with baseline reading. */
+  /** Stable ID of the underlying non-baseline training TextSample. */
   sampleId: string;
+  contentVersion: number;
   /** Difficulty-specific paced variant ID used only inside this exercise. */
   id: string;
   difficulty: Difficulty;
@@ -44,6 +50,7 @@ const CHUNK_SIZE = {
 function buildPool(difficulty: Difficulty): ComprehensionPassage[] {
   return getWpmTestPool(difficulty).map(({ sample, questions }) => ({
     sampleId: sample.id,
+    contentVersion: sample.version ?? 1,
     id: `comprehension-${difficulty}-${sample.id}`,
     difficulty,
     challenge: CHALLENGE_BY_DIFFICULTY[difficulty],
@@ -51,9 +58,11 @@ function buildPool(difficulty: Difficulty): ComprehensionPassage[] {
     chunkSize: CHUNK_SIZE[difficulty],
     text: sample.text,
     questions: questions.map((question) => ({
+      id: question.id,
       question: question.prompt,
       options: [...question.choices],
       correctIndex: question.correctIndex,
+      type: question.type,
       rationale: question.rationale,
       answerDependency: question.answerDependency,
     })),
@@ -78,15 +87,25 @@ export const COMPREHENSION_PASSAGES: Record<Difficulty, ComprehensionPassage> = 
 };
 
 export function validateComprehensionPassages(): string[] {
-  const errors: string[] = [];
+  const errors = validateWpmTestPool().map(
+    (error) => `source pool: ${error}`
+  );
+  const allSampleIds = new Set<string>();
   for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     const pool = COMPREHENSION_PASSAGE_POOLS[difficulty];
     const expectedQuestions =
       difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
-    if (new Set(pool.map((item) => item.id)).size < 3) {
-      errors.push(`${difficulty}: at least three distinct passages required`);
+    if (
+      pool.length !== 10 ||
+      new Set(pool.map((item) => item.id)).size !== 10
+    ) {
+      errors.push(`${difficulty}: exactly ten distinct passages required`);
     }
     for (const item of pool) {
+      if (allSampleIds.has(item.sampleId)) {
+        errors.push(`${item.id}: passage cannot appear in multiple levels`);
+      }
+      allSampleIds.add(item.sampleId);
       if (!item.sampleId || !item.id.endsWith(item.sampleId)) {
         errors.push(`${item.id}: missing underlying sample identity`);
       }
@@ -96,7 +115,16 @@ export function validateComprehensionPassages(): string[] {
       if (
         item.questions.some(
           (question) =>
+            !question.id ||
+            !question.type ||
+            !question.rationale?.trim() ||
             question.answerDependency !== 'passage-required' ||
+            question.options.length !== 4 ||
+            new Set(
+              question.options.map((option) =>
+                option.trim().toLocaleLowerCase('en')
+              )
+            ).size !== 4 ||
             question.correctIndex < 0 ||
             question.correctIndex >= question.options.length
         )
@@ -104,6 +132,9 @@ export function validateComprehensionPassages(): string[] {
         errors.push(`${item.id}: invalid passage-dependent question`);
       }
     }
+  }
+  if (allSampleIds.size !== 30) {
+    errors.push('Paced Comprehension requires thirty disjoint passage IDs');
   }
   return errors;
 }

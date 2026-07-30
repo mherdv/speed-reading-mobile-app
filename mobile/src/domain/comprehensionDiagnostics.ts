@@ -1,3 +1,4 @@
+import { getCuratedComprehensionPool } from '../data/curatedComprehensionContent';
 import { TEXT_SAMPLES } from '../data/textSamples';
 import type { AttemptResult, TextSample } from './types';
 
@@ -72,6 +73,28 @@ function questionsForSample(sample: TextSample): readonly DiagnosticQuestion[] {
     type: question.type,
     rationale: question.rationale,
   }));
+}
+
+function sourceQuestionsForSample(
+  sample: TextSample,
+  samples: readonly TextSample[]
+): readonly DiagnosticQuestion[] {
+  for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+    const curated = getCuratedComprehensionPool(difficulty, samples).find(
+      (item) => item.sample.id === sample.id
+    );
+    if (curated) {
+      return curated.questions.map((question) => ({
+        id: question.id,
+        prompt: question.prompt,
+        choices: question.choices,
+        correctIndex: question.correctIndex,
+        type: question.type,
+        rationale: question.rationale,
+      }));
+    }
+  }
+  return questionsForSample(sample);
 }
 
 function isQuestionType(value: unknown): value is ComprehensionQuestionType {
@@ -179,7 +202,7 @@ export function getComprehensionDiagnostic(
     typeof contentVersion === 'number' &&
     (sample.version ?? 1) === contentVersion;
   const sourceQuestions = versionMatches
-    ? questionsForSample(sample)
+    ? sourceQuestionsForSample(sample, samples)
     : [];
 
   const wrongAnswers = outcomes.flatMap((outcome) => {
@@ -227,4 +250,3 @@ export function getComprehensionDiagnostic(
     nextAction,
   };
 }
-

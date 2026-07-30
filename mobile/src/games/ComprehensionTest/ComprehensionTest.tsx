@@ -9,6 +9,12 @@ import {
 } from '../../data/comprehensionPassages';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
+import {
+  buildNoReplacementDeck,
+  shuffleAnswerOptions,
+  type RandomSource,
+} from '../../data/randomization';
+import { createQuestionOutcomes } from '../../domain/comprehensionDiagnostics';
 import { borderRadius, colors, spacing } from '../../theme/colors';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
 import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
@@ -34,6 +40,7 @@ type Props = {
   chunkSize?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
+  random?: RandomSource;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
@@ -43,6 +50,40 @@ export function getComprehensionChallenge(difficulty: Difficulty) {
   return COMPREHENSION_PASSAGES[difficulty];
 }
 
+export function buildComprehensionDeck(
+  passages: readonly ComprehensionPassage[],
+  avoidFirstId = '',
+  random: RandomSource = Math.random
+): ComprehensionPassage[] {
+  return buildNoReplacementDeck(
+    passages,
+    (passage) => passage.id,
+    avoidFirstId,
+    random
+  );
+}
+
+export function prepareComprehensionPassage(
+  passage: ComprehensionPassage,
+  random: RandomSource = Math.random
+): ComprehensionPassage {
+  return {
+    ...passage,
+    questions: passage.questions.map((question) => {
+      const shuffled = shuffleAnswerOptions(
+        question.options,
+        question.correctIndex,
+        random
+      );
+      return {
+        ...question,
+        options: shuffled.options,
+        correctIndex: shuffled.correctIndex,
+      };
+    }),
+  };
+}
+
 export default function ComprehensionTest({
   passage: passageProp,
   questions: questionsProp,
@@ -50,6 +91,7 @@ export default function ComprehensionTest({
   chunkSize: chunkSizeProp,
   difficulty = 'medium',
   autoStart = false,
+  random = Math.random,
   onReportResult,
 }: Props) {
   const { tokens: readingDisplay } = useReadingDisplay();
@@ -84,6 +126,8 @@ export default function ComprehensionTest({
   const answersRef = useRef<number[]>([]);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousContentIdRef = useRef('');
+  const contentDeckRef = useRef<ComprehensionPassage[]>([]);
+  const contentDeckDifficultyRef = useRef<Difficulty | null>(null);
 
   useEffect(() => {
     if (phase !== 'reading' || !isPacing || chunks.length <= 1) return;
@@ -114,18 +158,30 @@ export default function ComprehensionTest({
   useAutoStart(autoStart, phase, true, start);
 
   function chooseChallenge(): ComprehensionPassage {
-    if (passageProp) return fallback;
-    const eligible = pool.filter(
-      (item) => item.id !== previousContentIdRef.current
-    );
-    return eligible[Math.floor(Math.random() * eligible.length)] ?? fallback;
+    if (passageProp) {
+      contentDeckRef.current = [];
+      contentDeckDifficultyRef.current = null;
+      return fallback;
+    }
+    if (
+      contentDeckRef.current.length === 0 ||
+      contentDeckDifficultyRef.current !== difficulty
+    ) {
+      contentDeckRef.current = buildComprehensionDeck(
+        pool,
+        previousContentIdRef.current,
+        random
+      );
+      contentDeckDifficultyRef.current = difficulty;
+    }
+    return contentDeckRef.current.shift() ?? fallback;
   }
 
   function start(force = false) {
     if (!force && phase !== 'idle') return;
     const nextChallenge = chooseChallenge();
     previousContentIdRef.current = nextChallenge.id;
-    setChallenge(nextChallenge);
+    setChallenge(prepareComprehensionPassage(nextChallenge, random));
     cancelledRef.current = false;
     reportedRef.current = false;
     scoreRef.current = 0;
@@ -180,6 +236,23 @@ export default function ComprehensionTest({
     ).length;
     const accuracy = questions.length > 0 ? correctCount / questions.length : 0;
     const scorePercent = Math.round(accuracy * 100);
+    const contentId = passageProp ? 'custom' : challenge.sampleId;
+    const answerByQuestion = answersRef.current.reduce<Record<number, number>>(
+      (result, answer, index) => {
+        result[index] = answer;
+        return result;
+      },
+      {}
+    );
+    const questionOutcomes = createQuestionOutcomes(
+      questions.map((question, index) => ({
+        id: question.id ?? `${contentId}-question-${index + 1}`,
+        choices: question.options,
+        correctIndex: question.correctIndex,
+        type: question.type ?? 'main-idea',
+      })),
+      answerByQuestion
+    );
     setPhase('ended');
     void updateProgress(GAME_ID, accuracy >= 0.7, scorePercent).catch(
       () => undefined
@@ -191,8 +264,10 @@ export default function ComprehensionTest({
       score: scorePercent,
       accuracy,
       details: {
+        schemaVersion: 1,
         activityType: 'paced-comprehension',
-        contentId: passageProp ? 'custom' : challenge.sampleId,
+        contentId,
+        contentVersion: passageProp ? 1 : challenge.contentVersion,
         pacedChallengeId: passageProp ? 'custom' : challenge.id,
         challenge: passageProp ? 'custom' : challenge.challenge,
         questionsTotal: questions.length,
@@ -205,6 +280,7 @@ export default function ComprehensionTest({
         wpm: 0,
         comprehensionCorrect: correctCount === questions.length,
         contentPoolSize: pool.length,
+        questionOutcomes,
       },
     });
   }

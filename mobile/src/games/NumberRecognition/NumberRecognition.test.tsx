@@ -33,6 +33,8 @@ describe('NumberRecognition (TDD from spec)', () => {
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('current-number')).toHaveTextContent('37');
+    expect(getByTestId('current-number-mask')).toBeTruthy();
+    expect(getByTestId('current-number')).toHaveProp('numberOfLines', 1);
 
     fireEvent.press(getByTestId('match'));
     expect(getByTestId('score')).toHaveTextContent('Score: 10');

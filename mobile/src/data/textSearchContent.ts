@@ -1,4 +1,5 @@
 import type { Difficulty } from './difficultyPreferences';
+import { ADDITIONAL_TEXT_SEARCH_VARIATIONS } from './additionalTextSearchContent';
 
 export type TextSearchVariation = {
   id: string;
@@ -199,9 +200,9 @@ export const TEXT_SEARCH_VARIATIONS: Record<
   Difficulty,
   readonly TextSearchVariation[]
 > = {
-  easy: EASY,
-  medium: MEDIUM,
-  hard: HARD,
+  easy: [...EASY, ...ADDITIONAL_TEXT_SEARCH_VARIATIONS.easy],
+  medium: [...MEDIUM, ...ADDITIONAL_TEXT_SEARCH_VARIATIONS.medium],
+  hard: [...HARD, ...ADDITIONAL_TEXT_SEARCH_VARIATIONS.hard],
 };
 
 function normalizedWord(word: string): string {
@@ -218,13 +219,19 @@ export function validateTextSearchContent(): string[] {
   const errors: string[] = [];
   for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     const items = TEXT_SEARCH_VARIATIONS[difficulty];
-    if (items.length < 12) errors.push(`${difficulty}: at least twelve passages required`);
+    if (items.length !== 18) {
+      errors.push(`${difficulty}: exactly eighteen passages required`);
+    }
     if (new Set(items.map((item) => item.id)).size !== items.length) {
       errors.push(`${difficulty}: duplicate passage ID`);
     }
+    if (new Set(items.map((item) => item.target)).size !== items.length) {
+      errors.push(`${difficulty}: target words must be unique`);
+    }
     for (const item of items) {
-      if (countTextSearchTargets(item) < 3) {
-        errors.push(`${item.id}: target must appear at least three times`);
+      const targetCount = countTextSearchTargets(item);
+      if (targetCount < 3 || targetCount > 5) {
+        errors.push(`${item.id}: target must appear three to five times`);
       }
       if (item.text.split(/\s+/).length < 35) {
         errors.push(`${item.id}: passage is too short`);

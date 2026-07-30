@@ -1,5 +1,6 @@
 import { GAME_CATALOG } from './gameCatalog';
 import { GAME_IDS } from './gameIds';
+import { getWpmTestPool } from './wpmTestContent';
 import { BASELINE_TEXT_SAMPLES } from './textSamples';
 import { getDifficultyOptions } from '../ui/GameDifficultyControl';
 
@@ -14,7 +15,7 @@ describe('game catalog', () => {
 
   it('keeps the advertised baseline passage inventory in sync with content', () => {
     const advertisedCount = `${BASELINE_TEXT_SAMPLES.length} reviewed passages`;
-    expect(BASELINE_TEXT_SAMPLES).toHaveLength(12);
+    expect(BASELINE_TEXT_SAMPLES).toHaveLength(18);
     expect(
       Object.values(GAME_CATALOG.WpmTest.difficulty).every((option) =>
         option.helper.includes(advertisedCount)
@@ -22,19 +23,32 @@ describe('game catalog', () => {
     ).toBe(true);
   });
 
+  it('keeps the advertised paced-comprehension inventory in sync with content', () => {
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      const advertisedCount =
+        `${getWpmTestPool(difficulty).length} passages`;
+      expect(getWpmTestPool(difficulty)).toHaveLength(10);
+      expect(
+        GAME_CATALOG.ComprehensionTest.difficulty[
+          difficulty
+        ].helper
+      ).toContain(advertisedCount);
+    }
+  });
+
   it('describes the actual Number and Symbol Hunt challenge bands', () => {
     expect(GAME_CATALOG.NumberRecognition.difficulty).toEqual({
       easy: {
         label: 'Easy',
-        helper: '1 digit · 30-item deck · 1.6s response window',
+        helper: '1 digit · clear · 30-item deck · 1.6s response window',
       },
       medium: {
         label: 'Medium',
-        helper: '2 digits · 50-item deck · 1.1s response window',
+        helper: '2 digits · black lower-edge marker · 50-item deck · 1.1s response window',
       },
       hard: {
         label: 'Hard',
-        helper: '3 similar digits · 70-item deck · 0.7s response window',
+        helper: '3 similar digits · deeper black marker · 70-item deck · 0.7s response window',
       },
     });
     expect(GAME_CATALOG.SymbolRecognition.difficulty).toEqual({

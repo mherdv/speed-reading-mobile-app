@@ -17,6 +17,12 @@ import {
   levelToStars,
   updateTwoSessionDifficultySuggestion,
 } from '../../data/progressStore';
+import {
+  canonicalItemSetSignature,
+  selectRotatingWindow,
+  shuffleItems,
+  type RandomSource,
+} from '../../data/randomization';
 import type { ContextBuilderResultDetails } from '../../domain/types';
 import { useAccessibilityPreferences } from '../../hooks/useAccessibilityPreferences';
 import { colors, shadows, spacing } from '../../theme/colors';
@@ -40,36 +46,11 @@ type Confidence = 'unsure' | 'confident';
 type Props = {
   rounds?: readonly ContextBuilderRound[];
   roundCount?: number;
-  random?: () => number;
+  random?: RandomSource;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
-
-function shuffleWith<T>(values: readonly T[], random: () => number): T[] {
-  const result = [...values];
-  for (let index = result.length - 1; index > 0; index -= 1) {
-    const next = Math.floor(
-      Math.min(0.999999, Math.max(0, random())) * (index + 1)
-    );
-    [result[index], result[next]] = [result[next], result[index]];
-  }
-  return result;
-}
-
-function rotateFresh<T>(
-  values: readonly T[],
-  count: number,
-  sessionOrdinal: number
-): T[] {
-  if (values.length === 0) return [];
-  const safeCount = Math.min(count, values.length);
-  const offset = (sessionOrdinal * safeCount) % values.length;
-  return Array.from(
-    { length: safeCount },
-    (_, index) => values[(offset + index) % values.length]
-  );
-}
 
 function TargetSentence({
   round,
@@ -164,7 +145,7 @@ export default function ContextBuilder({
   const sessionRoundsRef = useRef<ContextBuilderRound[]>([]);
   const meaningOrdersRef = useRef<ContextMeaningOption[][]>([]);
   const clueOrdersRef = useRef<ContextClueOption[][]>([]);
-  const sessionOrdinalRef = useRef(gameProgress.totalPlays);
+  const sessionOrdinalRef = useRef<number | null>(null);
   const previousItemIdsRef = useRef<string[]>([]);
   const currentItemIdsRef = useRef<string[]>([]);
   const startedAtRef = useRef(0);
@@ -199,18 +180,20 @@ export default function ContextBuilder({
     setCompletedClueCorrect(0);
     setRoundIndex(0);
     resetSelections();
-    const chosen = rotateFresh(
+    const sessionOrdinal =
+      sessionOrdinalRef.current ?? gameProgress.totalPlays;
+    const chosen = selectRotatingWindow(
       sourceRounds,
       roundCount,
-      sessionOrdinalRef.current
+      sessionOrdinal
     );
-    sessionOrdinalRef.current += 1;
-    sessionRoundsRef.current = shuffleWith(chosen, random);
+    sessionOrdinalRef.current = sessionOrdinal + 1;
+    sessionRoundsRef.current = shuffleItems(chosen, random);
     meaningOrdersRef.current = sessionRoundsRef.current.map((round) =>
-      shuffleWith(round.meaningOptions, random)
+      shuffleItems(round.meaningOptions, random)
     );
     clueOrdersRef.current = sessionRoundsRef.current.map((round) =>
-      shuffleWith(round.clueOptions, random)
+      shuffleItems(round.clueOptions, random)
     );
     previousItemIdsRef.current = currentItemIdsRef.current;
     currentItemIdsRef.current = sessionRoundsRef.current.map((round) => round.id);
@@ -293,7 +276,8 @@ export default function ContextBuilder({
         : undefined;
     const immediateReplayDuplicate =
       replayOfItemIds !== undefined &&
-      replayOfItemIds.join('|') === itemIds.join('|');
+      canonicalItemSetSignature(replayOfItemIds) ===
+        canonicalItemSetSignature(itemIds);
     const adaptiveQualificationEligible =
       sessionRoundsRef.current.length >= 5 &&
       attempts === sessionRoundsRef.current.length &&
@@ -473,7 +457,11 @@ export default function ContextBuilder({
             </View>
 
             <Text style={styles.sectionHeading}>
-              2. Passage clue(s) that support this meaning
+              {current.difficulty === 'easy'
+                ? '2. Most direct clue that defines this meaning'
+                : current.difficulty === 'medium'
+                  ? '2. One clue that independently supports this meaning'
+                  : '2. Complete clue set needed to support this meaning'}
             </Text>
             <View accessibilityRole="radiogroup">
               {clueOptions.map((option, index) => {

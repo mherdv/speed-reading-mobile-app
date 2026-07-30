@@ -1,3 +1,5 @@
+import { ADDITIONAL_MAIN_IDEA_PASSAGES } from './additionalMainIdeaPassages';
+
 export type MainIdeaPassage = {
   id: string;
   title: string;
@@ -265,4 +267,78 @@ export const MAIN_IDEA_PASSAGES: MainIdeaPassage[] = [
     difficulty: 'hard',
     inferenceDepth: 'qualification',
   },
+  ...ADDITIONAL_MAIN_IDEA_PASSAGES,
 ];
+
+export const MAIN_IDEA_PASSAGES_PER_DIFFICULTY = 12;
+
+const EXPECTED_DEPTH = {
+  easy: 'explicit',
+  medium: 'synthesis',
+  hard: 'qualification',
+} as const;
+
+export function validateMainIdeaPassages(
+  passages: readonly MainIdeaPassage[] = MAIN_IDEA_PASSAGES
+): string[] {
+  const errors: string[] = [];
+  const ids = new Set<string>();
+
+  for (const passage of passages) {
+    if (!passage.id.trim()) {
+      errors.push('Main Idea passage ID is required');
+    } else if (ids.has(passage.id)) {
+      errors.push(`Duplicate Main Idea passage ID: ${passage.id}`);
+    }
+    ids.add(passage.id);
+
+    if (!passage.title.trim() || !passage.text.trim() || !passage.feedback.trim()) {
+      errors.push(`${passage.id}: title, text, and feedback are required`);
+    }
+    if (passage.choices.length !== 4) {
+      errors.push(`${passage.id}: exactly four choices required`);
+    }
+    if (
+      new Set(
+        passage.choices.map((choice) => choice.trim().toLocaleLowerCase('en'))
+      ).size !== passage.choices.length ||
+      passage.choices.some((choice) => !choice.trim())
+    ) {
+      errors.push(`${passage.id}: answer choices must be non-empty and unique`);
+    }
+    if (
+      passage.correctIndex < 0 ||
+      passage.correctIndex >= passage.choices.length
+    ) {
+      errors.push(`${passage.id}: correct answer is missing`);
+    }
+    if (
+      !passage.difficulty ||
+      passage.inferenceDepth !== EXPECTED_DEPTH[passage.difficulty]
+    ) {
+      errors.push(`${passage.id}: difficulty and inference depth do not match`);
+    }
+  }
+
+  for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+    const levelPassages = passages.filter(
+      (passage) => passage.difficulty === difficulty
+    );
+    if (levelPassages.length !== MAIN_IDEA_PASSAGES_PER_DIFFICULTY) {
+      errors.push(
+        `${difficulty}: exactly ${MAIN_IDEA_PASSAGES_PER_DIFFICULTY} Main Idea passages required`
+      );
+    }
+    const positions = [0, 0, 0, 0];
+    for (const passage of levelPassages) {
+      if (passage.correctIndex >= 0 && passage.correctIndex < 4) {
+        positions[passage.correctIndex] += 1;
+      }
+    }
+    if (Math.max(...positions) - Math.min(...positions) > 1) {
+      errors.push(`${difficulty}: correct-answer positions must be balanced`);
+    }
+  }
+
+  return errors;
+}

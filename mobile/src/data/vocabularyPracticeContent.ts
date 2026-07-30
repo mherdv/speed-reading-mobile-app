@@ -1,4 +1,8 @@
 import type { Difficulty } from './difficultyPreferences';
+import {
+  ADDITIONAL_MIXUP_WORDS,
+  ADDITIONAL_OPPOSITE_ITEMS,
+} from './vocabularyPracticeExpansion';
 
 export type PartOfSpeech = 'adjective' | 'adverb' | 'noun' | 'verb';
 
@@ -20,7 +24,7 @@ export type OppositeItem = {
  * These compact semantic hints are authored for this app, not copied from a
  * competitor or commercial vocabulary course.
  */
-export const MIXUP_WORDS: Record<Difficulty, readonly MixupWord[]> = {
+const BASE_MIXUP_WORDS: Record<Difficulty, readonly MixupWord[]> = {
   easy: [
     { word: 'apple', definition: 'a round fruit that grows on a tree', partOfSpeech: 'noun' },
     { word: 'bread', definition: 'food baked from flour and water', partOfSpeech: 'noun' },
@@ -85,7 +89,7 @@ export const MIXUP_WORDS: Record<Difficulty, readonly MixupWord[]> = {
     { word: 'habitat', definition: 'the natural home of a plant or animal', partOfSpeech: 'noun' },
     { word: 'maintain', definition: 'to keep something in effective condition', partOfSpeech: 'verb' },
     { word: 'preserve', definition: 'to protect something from loss or damage', partOfSpeech: 'verb' },
-    { word: 'reflect', definition: 'to think carefully or send back light', partOfSpeech: 'verb' },
+    { word: 'reflect', definition: 'to think carefully about an idea or experience', partOfSpeech: 'verb' },
     { word: 'strategy', definition: 'a planned approach for reaching a goal', partOfSpeech: 'noun' },
     { word: 'translate', definition: 'to express meaning in another language', partOfSpeech: 'verb' },
   ],
@@ -125,12 +129,12 @@ export const MIXUP_WORDS: Record<Difficulty, readonly MixupWord[]> = {
   ],
 };
 
-export const OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
+const BASE_OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
   easy: [
     { word: 'hot', correct: 'cold', partOfSpeech: 'adjective', distractors: ['open', 'early', 'wide'] },
     { word: 'open', correct: 'closed', partOfSpeech: 'adjective', distractors: ['empty', 'quiet', 'smooth'] },
     { word: 'early', correct: 'late', partOfSpeech: 'adjective', distractors: ['quick', 'young', 'bright'] },
-    { word: 'above', correct: 'below', partOfSpeech: 'adjective', distractors: ['inside', 'near', 'wide'] },
+    { word: 'above', correct: 'below', partOfSpeech: 'adverb', distractors: ['inside', 'near', 'wide'] },
     { word: 'happy', correct: 'sad', partOfSpeech: 'adjective', distractors: ['calm', 'kind', 'tired'] },
     { word: 'light', correct: 'dark', partOfSpeech: 'adjective', distractors: ['pale', 'clear', 'soft'] },
     { word: 'hard', correct: 'soft', partOfSpeech: 'adjective', distractors: ['rough', 'solid', 'heavy'] },
@@ -140,7 +144,7 @@ export const OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
     { word: 'clean', correct: 'dirty', partOfSpeech: 'adjective', distractors: ['plain', 'fresh', 'smooth'] },
     { word: 'wide', correct: 'narrow', partOfSpeech: 'adjective', distractors: ['deep', 'high', 'long'] },
     { word: 'fast', correct: 'slow', partOfSpeech: 'adjective', distractors: ['early', 'short', 'near'] },
-    { word: 'inside', correct: 'outside', partOfSpeech: 'adjective', distractors: ['above', 'around', 'under'] },
+    { word: 'inside', correct: 'outside', partOfSpeech: 'adverb', distractors: ['above', 'around', 'under'] },
     { word: 'old', correct: 'new', partOfSpeech: 'adjective', distractors: ['large', 'used', 'plain'] },
     { word: 'push', correct: 'pull', partOfSpeech: 'verb', distractors: ['hold', 'carry', 'drop'] },
     { word: 'start', correct: 'finish', partOfSpeech: 'verb', distractors: ['pause', 'enter', 'follow'] },
@@ -152,11 +156,11 @@ export const OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
     { word: 'young', correct: 'old', partOfSpeech: 'adjective', distractors: ['small', 'quick', 'new'] },
     { word: 'bright', correct: 'dim', partOfSpeech: 'adjective', distractors: ['clear', 'warm', 'pale'] },
     { word: 'enter', correct: 'leave', partOfSpeech: 'verb', distractors: ['wait', 'open', 'visit'] },
-    { word: 'laugh', correct: 'cry', partOfSpeech: 'verb', distractors: ['speak', 'smile', 'shout'] },
+    { word: 'appear', correct: 'disappear', partOfSpeech: 'verb', distractors: ['arrive', 'remain', 'return'] },
     { word: 'give', correct: 'take', partOfSpeech: 'verb', distractors: ['hold', 'send', 'keep'] },
     { word: 'rise', correct: 'fall', partOfSpeech: 'verb', distractors: ['stand', 'climb', 'lift'] },
     { word: 'front', correct: 'back', partOfSpeech: 'noun', distractors: ['side', 'top', 'edge'] },
-    { word: 'sweet', correct: 'sour', partOfSpeech: 'adjective', distractors: ['fresh', 'soft', 'warm'] },
+    { word: 'kind', correct: 'cruel', partOfSpeech: 'adjective', distractors: ['calm', 'helpful', 'quiet'] },
   ],
   medium: [
     { word: 'scarce', correct: 'abundant', partOfSpeech: 'adjective', distractors: ['limited', 'rare', 'uneven'] },
@@ -175,7 +179,7 @@ export const OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
     { word: 'frequent', correct: 'rare', partOfSpeech: 'adjective', distractors: ['regular', 'common', 'repeated'] },
     { word: 'maximum', correct: 'minimum', partOfSpeech: 'noun', distractors: ['average', 'total', 'limit'] },
     { word: 'permit', correct: 'forbid', partOfSpeech: 'verb', distractors: ['request', 'delay', 'consider'] },
-    { word: 'visible', correct: 'hidden', partOfSpeech: 'adjective', distractors: ['bright', 'distant', 'unclear'] },
+    { word: 'visible', correct: 'invisible', partOfSpeech: 'adjective', distractors: ['bright', 'distant', 'unclear'] },
     { word: 'combine', correct: 'separate', partOfSpeech: 'verb', distractors: ['compare', 'arrange', 'connect'] },
     { word: 'generous', correct: 'selfish', partOfSpeech: 'adjective', distractors: ['helpful', 'careful', 'wealthy'] },
     { word: 'legal', correct: 'illegal', partOfSpeech: 'adjective', distractors: ['formal', 'public', 'valid'] },
@@ -218,20 +222,37 @@ export const OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
     { word: 'maximize', correct: 'minimize', partOfSpeech: 'verb', distractors: ['increase', 'optimize', 'multiply'] },
     { word: 'predecessor', correct: 'successor', partOfSpeech: 'noun', distractors: ['ancestor', 'competitor', 'partner'] },
     { word: 'transient', correct: 'enduring', partOfSpeech: 'adjective', distractors: ['mobile', 'changing', 'brief'] },
-    { word: 'uniform', correct: 'variable', partOfSpeech: 'adjective', distractors: ['regular', 'consistent', 'standard'] },
-    { word: 'theoretical', correct: 'empirical', partOfSpeech: 'adjective', distractors: ['conceptual', 'abstract', 'logical'] },
+    { word: 'constant', correct: 'variable', partOfSpeech: 'adjective', distractors: ['regular', 'consistent', 'standard'] },
+    { word: 'concrete', correct: 'abstract', partOfSpeech: 'adjective', distractors: ['physical', 'specific', 'visible'] },
     { word: 'accelerate', correct: 'decelerate', partOfSpeech: 'verb', distractors: ['advance', 'intensify', 'continue'] },
     { word: 'conspicuous', correct: 'inconspicuous', partOfSpeech: 'adjective', distractors: ['prominent', 'colorful', 'distinctive'] },
   ],
 };
 
+export const MIXUP_WORDS: Record<Difficulty, readonly MixupWord[]> = {
+  easy: [...BASE_MIXUP_WORDS.easy, ...ADDITIONAL_MIXUP_WORDS.easy],
+  medium: [...BASE_MIXUP_WORDS.medium, ...ADDITIONAL_MIXUP_WORDS.medium],
+  hard: [...BASE_MIXUP_WORDS.hard, ...ADDITIONAL_MIXUP_WORDS.hard],
+};
+
+export const OPPOSITE_ITEMS: Record<Difficulty, readonly OppositeItem[]> = {
+  easy: [...BASE_OPPOSITE_ITEMS.easy, ...ADDITIONAL_OPPOSITE_ITEMS.easy],
+  medium: [...BASE_OPPOSITE_ITEMS.medium, ...ADDITIONAL_OPPOSITE_ITEMS.medium],
+  hard: [...BASE_OPPOSITE_ITEMS.hard, ...ADDITIONAL_OPPOSITE_ITEMS.hard],
+};
+
 export function validateVocabularyPracticeContent(): string[] {
   const errors: string[] = [];
   const unorderedPairs = new Set<string>();
+  const expectedOppositeCounts: Record<Difficulty, number> = {
+    easy: 46,
+    medium: 46,
+    hard: 47,
+  };
   for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     const mixups = MIXUP_WORDS[difficulty];
-    if (mixups.length < 32) {
-      errors.push(`${difficulty}: Letter Mixup requires at least 32 items`);
+    if (mixups.length !== 48) {
+      errors.push(`${difficulty}: Letter Mixup requires exactly 48 items`);
     }
     if (new Set(mixups.map((item) => item.word)).size !== mixups.length) {
       errors.push(`${difficulty}: duplicate Letter Mixup words`);
@@ -241,8 +262,17 @@ export function validateVocabularyPracticeContent(): string[] {
     }
 
     const opposites = OPPOSITE_ITEMS[difficulty];
-    if (opposites.length < 30) {
-      errors.push(`${difficulty}: Opposites requires at least 30 items`);
+    if (opposites.length !== expectedOppositeCounts[difficulty]) {
+      errors.push(
+        `${difficulty}: Opposites requires exactly ${expectedOppositeCounts[difficulty]} items`
+      );
+    }
+    if (
+      new Set(
+        opposites.map((item) => item.word.toLocaleLowerCase('en'))
+      ).size !== opposites.length
+    ) {
+      errors.push(`${difficulty}: duplicate Opposites prompt words`);
     }
     for (const item of opposites) {
       const pairKey = [item.word, item.correct].sort().join('\u0000');
@@ -251,10 +281,20 @@ export function validateVocabularyPracticeContent(): string[] {
       }
       unorderedPairs.add(pairKey);
       if (
-        new Set([item.correct, ...item.distractors].map((value) => value.toLocaleLowerCase())).size !==
-        item.distractors.length + 1
+        item.word.toLocaleLowerCase('en') ===
+          item.correct.toLocaleLowerCase('en') ||
+        [item.correct, ...item.distractors].some(
+          (value) =>
+            value.toLocaleLowerCase('en') ===
+            item.word.toLocaleLowerCase('en')
+        ) ||
+        new Set(
+          [item.correct, ...item.distractors].map((value) =>
+            value.toLocaleLowerCase('en')
+          )
+        ).size !== item.distractors.length + 1
       ) {
-        errors.push(`${difficulty}/${item.word}: duplicate answer option`);
+        errors.push(`${difficulty}/${item.word}: invalid or duplicate answer option`);
       }
     }
   }

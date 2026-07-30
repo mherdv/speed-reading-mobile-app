@@ -3,6 +3,7 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 
 import type { StructureScanRound } from '../../data/structureScanPassages';
 import { STRUCTURE_SCAN_ROUNDS } from '../../data/structureScanPassages';
+import * as progressStore from '../../data/progressStore';
 import StructureScan, { prepareStructureScanSections } from './StructureScan';
 
 const ROUND: StructureScanRound = {
@@ -25,6 +26,7 @@ describe('StructureScan', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     jest.useRealTimers();
   });
 
@@ -135,7 +137,10 @@ describe('StructureScan', () => {
     fireEvent.press(getByTestId('structure-choice-0'));
     expect(getByTestId('structure-scan-feedback')).toBeTruthy();
     expect(getByText('Applications')).toBeTruthy();
-    fireEvent.press(getByTestId('continue-structure-scan'));
+    await act(async () => {
+      fireEvent.press(getByTestId('continue-structure-scan'));
+      await Promise.resolve();
+    });
 
     expect(getByTestId('end')).toBeTruthy();
     expect(onReportResult).toHaveBeenCalledTimes(1);
@@ -173,5 +178,45 @@ describe('StructureScan', () => {
       jest.runOnlyPendingTimers();
     });
     expect(onReportResult).not.toHaveBeenCalled();
+  });
+
+  it('advances to a disjoint round window before progress storage resolves', async () => {
+    jest
+      .spyOn(progressStore, 'updateProgress')
+      .mockImplementation(() => new Promise(() => undefined));
+    const rounds = Array.from({ length: 4 }, (_, index) => ({
+      ...ROUND,
+      id: `rotating-round-${index + 1}`,
+      title: `Rotating article ${index + 1}`,
+      goal: `Find answer ${index + 1}.`,
+    }));
+    const view = render(
+      <StructureScan
+        rounds={rounds}
+        roundCount={2}
+        random={() => 0.999}
+      />
+    );
+    await loadProgress();
+
+    const finishRound = () => {
+      const currentRound = rounds.find((round) =>
+        view.queryByText(round.title)
+      );
+      expect(currentRound).toBeDefined();
+      fireEvent.press(view.getByTestId('show-structure-choices'));
+      fireEvent.press(view.getByTestId('structure-choice-0'));
+      fireEvent.press(view.getByTestId('continue-structure-scan'));
+      return currentRound!.id;
+    };
+
+    fireEvent.press(view.getByTestId('start-button'));
+    const firstSession = new Set([finishRound(), finishRound()]);
+    expect(view.getByTestId('end')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('play-again'));
+    const secondSession = new Set([finishRound(), finishRound()]);
+    expect(view.getByTestId('end')).toBeTruthy();
+    expect([...firstSession].filter((id) => secondSession.has(id))).toEqual([]);
   });
 });

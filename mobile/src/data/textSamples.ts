@@ -1,6 +1,8 @@
 import type { TextSample } from '../domain/types';
 import { countWords } from '../domain/wpm';
+import { ADDITIONAL_BASELINE_EXPANSION_TEXT_SAMPLES } from './additionalBaselineExpansionTextSamples';
 import { ADDITIONAL_BASELINE_TEXT_SAMPLES } from './additionalBaselineTextSamples';
+import { ADDITIONAL_REPEATED_READING_SAMPLES } from './additionalRepeatedReadingSamples';
 
 const RAW_TEXT_SAMPLES: TextSample[] = [
   {
@@ -183,6 +185,7 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
     ],
   },
   ...ADDITIONAL_BASELINE_TEXT_SAMPLES,
+  ...ADDITIONAL_BASELINE_EXPANSION_TEXT_SAMPLES,
   {
     id: 'sample-4',
     comparisonBand: 'general-practice-brief-v1',
@@ -207,6 +210,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'A goal of skipping the difficult idea',
       ],
       correctIndex: 0,
+      type: 'detail-evidence',
+      rationale:
+        'The passage says to name the missing information and turn that gap into a specific question before rereading.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -233,6 +240,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'It removes the need to practice',
       ],
       correctIndex: 1,
+      type: 'inference-purpose',
+      rationale:
+        'The passage explains that the moving cue guides the eyes, reduces hesitation, and supports consistent scanning.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -259,6 +270,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'To avoid forming a main idea',
       ],
       correctIndex: 1,
+      type: 'inference-purpose',
+      rationale:
+        'Hiding the passage removes recognition cues and reveals what the reader can retrieve from memory.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -285,6 +300,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'Ignore transition words',
       ],
       correctIndex: 0,
+      type: 'inference-purpose',
+      rationale:
+        'The passage recommends checking whether details explain, illustrate, or provide evidence for the proposed main idea.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -311,6 +330,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'Increasing screen brightness',
       ],
       correctIndex: 0,
+      type: 'main-idea',
+      rationale:
+        'The passage presents one-sentence summaries as practice in extracting a paragraph’s central meaning quickly.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -332,6 +355,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
       prompt: 'What should you focus on while skimming?',
       choices: ['Topic sentences and transitions', 'Every adjective', 'Only footnotes', 'Random lines'],
       correctIndex: 0,
+      type: 'detail-evidence',
+      rationale:
+        'The passage explicitly names topic sentences, transitions, and repeated keywords as skimming targets.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -358,6 +385,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'Never rereading any sentence',
       ],
       correctIndex: 1,
+      type: 'main-idea',
+      rationale:
+        'The passage defines flexible pacing as slowing for important or dense material and accelerating through simpler material.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -384,6 +415,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'Guess randomly',
       ],
       correctIndex: 1,
+      type: 'inference-purpose',
+      rationale:
+        'The passage recommends using grammar, definitions, examples, and tone to infer a word before consulting a reference.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -410,6 +445,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'Never pausing between paragraphs',
       ],
       correctIndex: 1,
+      type: 'main-idea',
+      rationale:
+        'The passage contrasts passive attention with active questioning, predicting, and checking for answers.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -436,6 +475,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'Avoid thinking about the content',
       ],
       correctIndex: 1,
+      type: 'main-idea',
+      rationale:
+        'The passage explicitly says notes should capture central ideas in the reader’s own words instead of copying.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -462,6 +505,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'Read faster to make up for lost time',
       ],
       correctIndex: 1,
+      type: 'detail-evidence',
+      rationale:
+        'The passage instructs readers to notice the distraction and return gently to the text.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -488,6 +535,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'Reading multiple books at once',
       ],
       correctIndex: 1,
+      type: 'detail-evidence',
+      rationale:
+        'The passage defines spaced repetition as revisiting material after successively longer delays.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -514,6 +565,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'When the recall check is removed',
       ],
       correctIndex: 1,
+      type: 'main-idea',
+      rationale:
+        'The passage says speed is useful only while the reader can still state the main idea and supporting detail accurately.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -540,6 +595,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'To make every line as long as possible',
       ],
       correctIndex: 1,
+      type: 'inference-purpose',
+      rationale:
+        'The recommended layout changes reduce visual search and interruptions so more attention remains for understanding.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -566,6 +625,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'It replaces comprehension',
       ],
       correctIndex: 1,
+      type: 'main-idea',
+      rationale:
+        'The passage explains that recognizing a structure lets readers predict the role and order of upcoming information.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -573,18 +636,18 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
     comparisonBand: 'general-practice-brief-v1',
     title: 'Practice: Consistency Over Intensity',
     text:
-      'Like any skill, reading speed improves with consistent practice. '
-      + 'Short daily sessions are more effective than occasional long sessions. '
-      + 'Aim for 15 to 20 minutes of focused practice each day. '
+      'Reading efficiently benefits from deliberate, consistent practice. '
+      + 'Short daily sessions are often easier to sustain than occasional long sessions. '
+      + 'Choose a duration you can repeat comfortably; fifteen minutes can be a practical starting point. '
       + 'During practice, use a variety of techniques: chunking, pointer pacing, timed reading, and comprehension checks. '
-      + 'Track your progress by measuring words per minute weekly. '
-      + 'Celebrate small improvements—they compound over time. '
+      + 'Compare your progress on similar texts by recording both words per minute and comprehension. '
+      + 'Look for steady, repeatable performance rather than one unusually fast result. '
       + 'Do not expect dramatic gains overnight. '
-      + 'Reading speed typically improves by 50 to 100 words per minute over several weeks of practice. '
-      + 'Consistency builds habits, and habits become automatic. '
-      + 'The goal is to make efficient reading your default mode, not a special effort.',
+      + 'The size and timing of improvement vary with the reader, the text, and the comprehension target. '
+      + 'Consistency makes it easier to notice which strategies help and which disrupt understanding. '
+      + 'The goal is a repeatable practice routine that keeps meaning intact.',
     question: {
-      prompt: 'What is more effective for improving reading speed?',
+      prompt: 'Which practice schedule does the passage describe as easier to sustain?',
       choices: [
         'Occasional long practice sessions',
         'Consistent short daily sessions',
@@ -592,6 +655,10 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'Avoiding all practice',
       ],
       correctIndex: 1,
+      type: 'main-idea',
+      rationale:
+        'The passage recommends short daily sessions because they are often easier to sustain than occasional long sessions.',
+      answerDependency: 'passage-required',
     },
   },
   {
@@ -608,7 +675,7 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
       + 'If comprehension drops as speed increases, slow down slightly and rebuild. '
       + 'Assessments also reveal which text types challenge you most. '
       + 'You might read fiction quickly but struggle with technical material. '
-      + 'Targeted practice on weak areas accelerates overall improvement.',
+      + 'Targeted practice on weak areas can make the next session more focused.',
     question: {
       prompt: 'Why is assessment important for speed reading?',
       choices: [
@@ -618,8 +685,13 @@ const RAW_TEXT_SAMPLES: TextSample[] = [
         'It makes reading unnecessary',
       ],
       correctIndex: 1,
+      type: 'inference-purpose',
+      rationale:
+        'The passage uses regular speed-and-comprehension records to reveal improvement, decline, and text-specific weaknesses.',
+      answerDependency: 'passage-required',
     },
   },
+  ...ADDITIONAL_REPEATED_READING_SAMPLES,
 ];
 
 function moveCorrectChoiceToIndex<
@@ -655,8 +727,30 @@ function moveCorrectChoiceToIndex<
 }
 
 let baselineSampleIndex = 0;
+let repeatedReadingSampleIndex = 0;
 export const TEXT_SAMPLES: TextSample[] = RAW_TEXT_SAMPLES.map((sample) => {
-  if (sample.complexityBand !== 'baseline-brief' || !sample.questions) {
+  if (sample.complexityBand !== 'baseline-brief') {
+    const samplePosition = repeatedReadingSampleIndex;
+    repeatedReadingSampleIndex += 1;
+    return {
+      version: 1,
+      language: 'en',
+      genre: 'practical',
+      complexityBand: 'repeated-reading-training-v1',
+      source: 'Original editorial content',
+      license: 'Original content for this application',
+      accessibilityNotes:
+        'Connected English text with no image-dependent information.',
+      ...sample,
+      question: moveCorrectChoiceToIndex(
+        sample.question,
+        sample.question.choices.length > 0
+          ? samplePosition % sample.question.choices.length
+          : sample.question.correctIndex
+      ),
+    };
+  }
+  if (!sample.questions) {
     return sample;
   }
   const samplePosition = baselineSampleIndex;
@@ -686,15 +780,154 @@ export const BASELINE_TEXT_SAMPLES = TEXT_SAMPLES.filter(
   (sample) => sample.complexityBand === 'baseline-brief'
 );
 
+export const REPEATED_READING_TEXT_SAMPLES = TEXT_SAMPLES.filter(
+  (sample) => sample.complexityBand !== 'baseline-brief'
+);
+
+export const MIN_REPEATED_READING_SAMPLES = 30;
+export const MIN_REPEATED_READING_SAMPLES_PER_DIFFICULTY = 10;
+export const EXPECTED_REPEATED_READING_SAMPLES =
+  MIN_REPEATED_READING_SAMPLES;
+export const EXPECTED_REPEATED_READING_SAMPLES_PER_DIFFICULTY =
+  MIN_REPEATED_READING_SAMPLES_PER_DIFFICULTY;
+
+export function validateRepeatedReadingTextSamples(
+  samples: readonly TextSample[] = REPEATED_READING_TEXT_SAMPLES
+): string[] {
+  const errors: string[] = [];
+  const seenIds = new Set<string>();
+  const seenTitles = new Set<string>();
+  const answerPositionCounts = [0, 0, 0, 0];
+
+  if (samples.length < MIN_REPEATED_READING_SAMPLES) {
+    errors.push(
+      `Repeated Reading requires at least ${MIN_REPEATED_READING_SAMPLES} training passages`
+    );
+  }
+  if (samples.length !== EXPECTED_REPEATED_READING_SAMPLES) {
+    errors.push(
+      `Repeated Reading requires exactly ${EXPECTED_REPEATED_READING_SAMPLES} training passages`
+    );
+  }
+
+  const difficultyBandSize = Math.ceil(samples.length / 3);
+  const estimatedDifficultySizes = [
+    difficultyBandSize,
+    difficultyBandSize,
+    Math.max(0, samples.length - difficultyBandSize * 2),
+  ];
+  if (
+    Math.min(...estimatedDifficultySizes) <
+    MIN_REPEATED_READING_SAMPLES_PER_DIFFICULTY
+  ) {
+    errors.push(
+      `Repeated Reading requires at least ${MIN_REPEATED_READING_SAMPLES_PER_DIFFICULTY} passages in every difficulty pool`
+    );
+  }
+  if (
+    estimatedDifficultySizes.some(
+      (size) =>
+        size !== EXPECTED_REPEATED_READING_SAMPLES_PER_DIFFICULTY
+    )
+  ) {
+    errors.push(
+      `Repeated Reading requires exactly ${EXPECTED_REPEATED_READING_SAMPLES_PER_DIFFICULTY} passages in every difficulty pool`
+    );
+  }
+
+  for (const sample of samples) {
+    const normalizedId = sample.id.trim();
+    const normalizedTitle = sample.title.trim().toLocaleLowerCase('en');
+    const wordCount = countWords(sample.text);
+    const normalizedChoices = sample.question.choices.map((choice) =>
+      choice.trim().toLocaleLowerCase('en')
+    );
+
+    if (!normalizedId) {
+      errors.push('Repeated Reading passage ID cannot be empty');
+    } else if (seenIds.has(normalizedId)) {
+      errors.push(`${sample.id}: duplicate Repeated Reading passage ID`);
+    }
+    seenIds.add(normalizedId);
+
+    if (!normalizedTitle) {
+      errors.push(`${sample.id}: title cannot be empty`);
+    } else if (seenTitles.has(normalizedTitle)) {
+      errors.push(`${sample.id}: duplicate Repeated Reading title`);
+    }
+    seenTitles.add(normalizedTitle);
+
+    if (sample.complexityBand === 'baseline-brief') {
+      errors.push(`${sample.id}: baseline passage cannot enter training pool`);
+    }
+    if (typeof sample.version !== 'number') {
+      errors.push(`${sample.id}: content version required`);
+    }
+    if (sample.language !== 'en') {
+      errors.push(`${sample.id}: English language metadata required`);
+    }
+    if (!sample.genre?.trim()) {
+      errors.push(`${sample.id}: genre metadata required`);
+    }
+    if (!sample.source?.trim() || !sample.license?.trim()) {
+      errors.push(`${sample.id}: source and license metadata required`);
+    }
+    if (!sample.accessibilityNotes?.trim()) {
+      errors.push(`${sample.id}: accessibility notes required`);
+    }
+    if (wordCount < 80 || wordCount > 220) {
+      errors.push(
+        `${sample.id}: expected 80–220 computed words, received ${wordCount}`
+      );
+    }
+    if (!sample.question.prompt.trim()) {
+      errors.push(`${sample.id}: question prompt cannot be empty`);
+    }
+    if (sample.question.choices.length !== 4) {
+      errors.push(`${sample.id}: question requires exactly four choices`);
+    }
+    if (
+      normalizedChoices.some((choice) => !choice) ||
+      new Set(normalizedChoices).size !== normalizedChoices.length
+    ) {
+      errors.push(`${sample.id}: question choices must be nonempty and unique`);
+    }
+    if (
+      sample.question.correctIndex < 0 ||
+      sample.question.correctIndex >= sample.question.choices.length
+    ) {
+      errors.push(`${sample.id}: invalid correct answer index`);
+    } else if (sample.question.correctIndex < answerPositionCounts.length) {
+      answerPositionCounts[sample.question.correctIndex] += 1;
+    }
+  }
+
+  if (answerPositionCounts.some((count) => count === 0)) {
+    errors.push('Repeated Reading must use every correct-answer position');
+  } else if (
+    Math.max(...answerPositionCounts) - Math.min(...answerPositionCounts) > 1
+  ) {
+    errors.push('Repeated Reading correct-answer positions must be balanced');
+  }
+
+  return errors;
+}
+
 export function validateBaselineTextSamples(
   samples: readonly TextSample[] = BASELINE_TEXT_SAMPLES
 ): string[] {
   const errors: string[] = [];
-  if (new Set(samples.map((sample) => sample.id)).size < 3) {
-    errors.push('Baseline requires at least three distinct passage IDs');
+  if (samples.length !== 18) {
+    errors.push(
+      `Baseline requires exactly 18 passages; received ${samples.length}`
+    );
+  }
+  if (new Set(samples.map((sample) => sample.id)).size !== samples.length) {
+    errors.push('Baseline passage IDs must be unique');
   }
   const answerPositionCounts = [0, 0, 0, 0];
   const mainIdeaPositionCounts = [0, 0, 0, 0];
+  const questionIds = new Set<string>();
   for (const sample of samples) {
     const wordCount = countWords(sample.text);
     if (typeof sample.version !== 'number') {
@@ -703,8 +936,8 @@ export function validateBaselineTextSamples(
     if (!sample.comparisonBand.trim()) {
       errors.push(`${sample.id}: authored comparison band required`);
     }
-    if ((sample.questions?.length ?? 0) < 3) {
-      errors.push(`${sample.id}: at least three dependent questions required`);
+    if ((sample.questions?.length ?? 0) !== 3) {
+      errors.push(`${sample.id}: exactly three dependent questions required`);
     }
     if (wordCount < 120 || wordCount > 220) {
       errors.push(
@@ -717,6 +950,25 @@ export function validateBaselineTextSamples(
       errors.push(`${sample.id}: main idea, detail, and inference required`);
     }
     for (const question of sample.questions ?? []) {
+      if (questionIds.has(question.id)) {
+        errors.push(`${sample.id}/${question.id}: duplicate question ID`);
+      }
+      questionIds.add(question.id);
+      if (question.choices.length !== 4) {
+        errors.push(`${sample.id}/${question.id}: exactly four choices required`);
+      }
+      if (
+        question.choices.some((choice) => !choice.trim()) ||
+        new Set(
+          question.choices.map((choice) =>
+            choice.trim().toLocaleLowerCase('en')
+          )
+        ).size !== question.choices.length
+      ) {
+        errors.push(
+          `${sample.id}/${question.id}: choices must be non-empty and unique`
+        );
+      }
       if (question.correctIndex >= 0 && question.correctIndex < 4) {
         answerPositionCounts[question.correctIndex] += 1;
         if (question.type === 'main-idea') {

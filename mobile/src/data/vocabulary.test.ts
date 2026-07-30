@@ -26,9 +26,26 @@ describe('reviewed vocabulary pools', () => {
   });
 
   it('meets the expanded reviewed inventory at every level', () => {
-    expect(BEGINNER_WORDS.length).toBeGreaterThanOrEqual(270);
-    expect(INTERMEDIATE_WORDS.length).toBeGreaterThanOrEqual(230);
-    expect(ADVANCED_WORDS.length).toBeGreaterThanOrEqual(300);
+    expect(BEGINNER_WORDS.length).toBeGreaterThanOrEqual(360);
+    expect(INTERMEDIATE_WORDS.length).toBeGreaterThanOrEqual(300);
+    expect(ADVANCED_WORDS.length).toBeGreaterThanOrEqual(380);
+  });
+
+  it('keeps difficulty banks disjoint so progression introduces fresh words', () => {
+    const easy = new Set(
+      BEGINNER_WORDS.map((word) => word.toLocaleLowerCase('en'))
+    );
+    const medium = new Set(
+      INTERMEDIATE_WORDS.map((word) => word.toLocaleLowerCase('en'))
+    );
+    const hard = new Set(
+      ADVANCED_WORDS.map((word) => word.toLocaleLowerCase('en'))
+    );
+
+    expect([...easy].filter((word) => medium.has(word) || hard.has(word))).toEqual(
+      []
+    );
+    expect([...medium].filter((word) => hard.has(word))).toEqual([]);
   });
 
   it('draws deterministic samples without random-sort bias or source mutation', () => {

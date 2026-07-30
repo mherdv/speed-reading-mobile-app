@@ -1,14 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
+  createPersistentVariedDeckState,
   createRecognitionOptions,
-  createVariedSequence,
   getFlashWordPool,
+  takeNextPersistentVariedItem,
+  uniqueStrings,
+  type RandomSource,
 } from '../../data/flashPracticeContent';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { levelToStars, updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
+import { BriefStimulus } from '../../ui/BriefStimulus';
 import { ChoiceAnswerFeedback } from '../../ui/ChoiceAnswerFeedback';
 import { FlashPaceControl } from '../../ui/FlashPaceControl';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
@@ -49,6 +53,7 @@ type Props = {
   totalRounds?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
+  random?: RandomSource;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
@@ -75,6 +80,7 @@ export default function TimedWordRecognition({
   totalRounds,
   difficulty = 'easy',
   autoStart = false,
+  random = Math.random,
   onReportResult,
 }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -108,19 +114,19 @@ export default function TimedWordRecognition({
   const correctRef = useRef(0);
   const roundRef = useRef(0);
   const wordRef = useRef('');
-  const previousWordRef = useRef('');
-  const deckRef = useRef<string[]>([]);
-  const deckIndexRef = useRef(0);
+  const deckStateRef = useRef(createPersistentVariedDeckState());
   const paceRef = useRef<FlashPaceState>(
     createFlashPaceState(defaultWpm)
   );
   const initialWpmRef = useRef(defaultWpm);
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
-  const wordPool =
-    wordsProp && wordsProp.length > 0
-      ? wordsProp
+  const wordPool = useMemo(() => {
+    const customPool = uniqueStrings(wordsProp ?? []);
+    return customPool.length > 0
+      ? customPool
       : getFlashWordPool(selectedDifficulty);
+  }, [selectedDifficulty, wordsProp]);
 
   useEffect(() => {
     const nextConfig = getPaceConfig(selectedDifficulty);
@@ -139,26 +145,22 @@ export default function TimedWordRecognition({
   }, []);
 
   function takeNextWord() {
-    if (deckIndexRef.current >= deckRef.current.length) {
-      deckRef.current = createVariedSequence(
+    return (
+      takeNextPersistentVariedItem(
+        deckStateRef.current,
         wordPool,
-        Math.max(32, wordPool.length),
-        previousWordRef.current
-      );
-      deckIndexRef.current = 0;
-    }
-    const word =
-      deckRef.current[deckIndexRef.current] ?? wordPool[0] ?? 'focus';
-    deckIndexRef.current += 1;
-    return word;
+        random
+      ) ??
+      wordPool[0] ??
+      'focus'
+    );
   }
 
   function showRound() {
     const word = takeNextWord();
     wordRef.current = word;
-    previousWordRef.current = word;
     setCurrentWord(word);
-    setOptions(createRecognitionOptions(word, wordPool));
+    setOptions(createRecognitionOptions(word, wordPool, 4, random));
     setAnswerReview(null);
     setPhase('show');
     scheduleTimeout(
@@ -179,12 +181,6 @@ export default function TimedWordRecognition({
     roundRef.current = 0;
     initialWpmRef.current = startingWpm;
     paceRef.current = createFlashPaceState(startingWpm);
-    deckRef.current = createVariedSequence(
-      wordPool,
-      Math.max(32, wordPool.length),
-      previousWordRef.current
-    );
-    deckIndexRef.current = 0;
     setRound(0);
     setScore(0);
     setCorrectStreak(0);
@@ -349,9 +345,15 @@ export default function TimedWordRecognition({
         <View style={styles.gameArea}>
           {stats}
           <View testID="word-flash" style={styles.wordCard}>
-            <Text testID="word" style={styles.word}>
-              {currentWord}
-            </Text>
+            <BriefStimulus
+              value={currentWord}
+              difficulty={selectedDifficulty}
+              testID="word"
+              color={colors.primaryDark}
+              backgroundColor={colors.background}
+              maxFontSize={44}
+              minFontSize={14}
+            />
           </View>
           <Text style={styles.instruction}>Read and remember this word</Text>
         </View>
@@ -464,20 +466,13 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 17, fontWeight: '800', color: colors.primaryDark },
   statLabel: { fontSize: 10, color: colors.textSecondary },
   wordCard: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 24,
-    padding: 32,
     alignItems: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 0,
     justifyContent: 'center',
     minHeight: 180,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  word: {
-    fontSize: 40,
-    fontWeight: '800',
-    color: colors.primaryDark,
-    textAlign: 'center',
+    margin: 0,
+    padding: 0,
   },
   instruction: {
     textAlign: 'center',

@@ -1,3 +1,4 @@
+import { getCuratedComprehensionPool } from '../data/curatedComprehensionContent';
 import { TEXT_SAMPLES } from '../data/textSamples';
 import type { AttemptResult } from './types';
 import {
@@ -89,5 +90,40 @@ describe('comprehension diagnostics', () => {
 
     expect(diagnostic.available).toBe(true);
     expect(diagnostic.wrongAnswers).toEqual([]);
+  });
+
+  it('resolves supplemental paced-comprehension questions in History', () => {
+    const item = getCuratedComprehensionPool('hard').find(
+      (candidate) => candidate.sample.id === 'repeated-training-06'
+    )!;
+    const supplemental = item.questions[2]!;
+    const wrongIndex = supplemental.correctIndex === 0 ? 1 : 0;
+    const outcome = createQuestionOutcomes(item.questions, {
+      2: wrongIndex,
+    });
+    const result: AttemptResult = {
+      id: 'paced-result',
+      sampleId: item.sample.id,
+      sampleTitle: item.sample.title,
+      startedAtIso: '2026-07-28T10:00:00.000Z',
+      finishedAtIso: '2026-07-28T10:02:00.000Z',
+      elapsedMs: 120_000,
+      wordCount: 0,
+      wpm: 0,
+      details: {
+        contentId: item.sample.id,
+        contentVersion: item.sample.version ?? 1,
+        questionOutcomes: outcome,
+      },
+    };
+
+    expect(getComprehensionDiagnostic(result).wrongAnswers).toEqual([
+      expect.objectContaining({
+        questionId: supplemental.id,
+        correctAnswer:
+          supplemental.choices[supplemental.correctIndex],
+        rationale: supplemental.rationale,
+      }),
+    ]);
   });
 });

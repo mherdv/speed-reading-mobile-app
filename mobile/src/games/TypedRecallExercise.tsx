@@ -2,11 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { GAME_DESCRIPTIONS } from '../data/gameDescriptions';
-import { createVariedSequence } from '../data/flashPracticeContent';
+import {
+  createPersistentVariedDeckState,
+  takeNextPersistentVariedItem,
+  type RandomSource,
+} from '../data/flashPracticeContent';
 import type { GameId } from '../data/gameIds';
 import { normalizeRecallAnswer } from '../data/recallContent';
 import { updateProgress } from '../data/progressStore';
 import { colors } from '../theme/colors';
+import { BriefStimulus } from '../ui/BriefStimulus';
 import { SimpleIdlePanel } from '../ui/SimpleIdlePanel';
 import { StatsRow } from '../ui/StatsRow';
 import { useAutoStart, useTrackedTimeouts, type Difficulty } from './gameHooks';
@@ -32,6 +37,7 @@ type Props = {
   difficulty: Difficulty;
   autoStart?: boolean;
   twoWordLayout?: boolean;
+  random?: RandomSource;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
@@ -48,6 +54,7 @@ export function TypedRecallExercise({
   difficulty,
   autoStart = false,
   twoWordLayout = false,
+  random = Math.random,
   onReportResult,
 }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -61,9 +68,7 @@ export function TypedRecallExercise({
   const roundRef = useRef(0);
   const correctRef = useRef(0);
   const promptRef = useRef('');
-  const deckRef = useRef<string[]>([]);
-  const deckIndexRef = useRef(0);
-  const previousPromptRef = useRef('');
+  const deckStateRef = useRef(createPersistentVariedDeckState());
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
@@ -79,21 +84,17 @@ export function TypedRecallExercise({
   );
 
   function takePrompt(): string {
-    if (deckIndexRef.current >= deckRef.current.length) {
-      deckRef.current = createVariedSequence(
+    return (
+      takeNextPersistentVariedItem(
+        deckStateRef.current,
         prompts,
-        Math.max(totalRounds, prompts.length),
-        previousPromptRef.current
-      );
-      deckIndexRef.current = 0;
-    }
-    const next =
-      deckRef.current[deckIndexRef.current] ??
+        random
+      ) ??
       prompts[0] ??
-      (twoWordLayout ? 'quiet focus' : 'Quiet readers notice the central idea.');
-    deckIndexRef.current += 1;
-    previousPromptRef.current = next;
-    return next;
+      (twoWordLayout
+        ? 'quiet focus'
+        : 'Quiet readers notice the central idea.')
+    );
   }
 
   function showRound() {
@@ -115,12 +116,6 @@ export function TypedRecallExercise({
     reportedRef.current = false;
     roundRef.current = 0;
     correctRef.current = 0;
-    deckRef.current = createVariedSequence(
-      prompts,
-      Math.max(totalRounds, prompts.length),
-      previousPromptRef.current
-    );
-    deckIndexRef.current = 0;
     setRound(0);
     setCorrect(0);
     startedAtRef.current = Date.now();
@@ -210,16 +205,34 @@ export function TypedRecallExercise({
 
           {phase === 'display' && (
             <View testID="recall-display" style={styles.promptCard}>
-              {twoWordLayout ? (
-                <View style={styles.wordPair}>
-                  <Text testID="recall-word-0" style={styles.word}>{displayedWords[0]}</Text>
-                  <Text testID="recall-word-1" style={styles.word}>{displayedWords[1]}</Text>
-                </View>
-              ) : (
-                <Text testID="recall-sentence" style={styles.sentence}>
-                  {prompt}
-                </Text>
-              )}
+              <BriefStimulus
+                value={prompt}
+                difficulty={difficulty}
+                testID={
+                  twoWordLayout ? 'recall-prompt' : 'recall-sentence'
+                }
+                color={
+                  twoWordLayout
+                    ? colors.interactivePrimary
+                    : colors.textPrimary
+                }
+                backgroundColor={colors.background}
+                maxFontSize={twoWordLayout ? 34 : 24}
+                minFontSize={12}
+                allowWrap
+                maxLines={twoWordLayout ? 2 : 3}
+                style={twoWordLayout ? undefined : styles.sentence}
+              >
+                {twoWordLayout ? (
+                  <>
+                    <Text testID="recall-word-0">{displayedWords[0]}</Text>
+                    {' '}
+                    <Text testID="recall-word-1">{displayedWords[1]}</Text>
+                  </>
+                ) : (
+                  prompt
+                )}
+              </BriefStimulus>
             </View>
           )}
 
@@ -316,21 +329,16 @@ const styles = StyleSheet.create({
   gameArea: { flex: 1, gap: 14, paddingTop: 14 },
   promptCard: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceTonal,
-    borderRadius: 16,
+    backgroundColor: colors.background,
+    borderWidth: 0,
     flex: 1,
     justifyContent: 'center',
+    margin: 0,
     minHeight: 180,
-    padding: 24,
+    padding: 0,
   },
-  wordPair: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, justifyContent: 'center' },
-  word: { color: colors.interactivePrimary, fontSize: 34, fontWeight: '800' },
   sentence: {
-    color: colors.textPrimary,
-    fontSize: 25,
     fontWeight: '700',
-    lineHeight: 36,
-    textAlign: 'center',
   },
   entryCard: {
     backgroundColor: colors.cardBackground,

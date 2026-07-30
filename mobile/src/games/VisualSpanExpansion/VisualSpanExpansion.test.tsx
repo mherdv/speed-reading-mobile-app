@@ -46,7 +46,7 @@ describe('VisualSpanExpansion', () => {
       'wide',
     ]);
 
-    const poolSizes = { easy: 71, medium: 194, hard: 75 };
+    const poolSizes = { easy: 96, medium: 227, hard: 124 };
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
       expect(getVisualSpanWordPool(difficulty)).toHaveLength(
         poolSizes[difficulty]
@@ -81,6 +81,7 @@ describe('VisualSpanExpansion', () => {
       <VisualSpanExpansion
         itemCount={3}
         displayMs={50}
+        difficulty="hard"
         random={random}
       />
     );
@@ -92,13 +93,16 @@ describe('VisualSpanExpansion', () => {
     expect(view.queryByTestId('span-board')).toBeNull();
     act(() => jest.advanceTimersByTime(VISUAL_SPAN_FIXATION_CUE_MS));
 
-    const trial = createVisualSpanTrial('easy', 3, random);
+    const trial = createVisualSpanTrial('hard', 3, random);
     expect(view.getByTestId('span-board')).toBeTruthy();
     expect(view.getByTestId('span-fixation')).toBeTruthy();
     for (const item of trial.items) {
       expect(
         view.getByTestId(`span-item-${item.positionId}`)
       ).toHaveTextContent(item.word);
+      expect(
+        view.getByTestId(`span-item-${item.positionId}-mask`)
+      ).toBeTruthy();
     }
     expect(view.queryByTestId('recall-input')).toBeNull();
   });

@@ -2,12 +2,14 @@ import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import PowerReader, {
+  clampPowerReaderProgress,
   createSerializedProgressWriter,
   getOfflinePowerReaderArticles,
   getPowerReaderReadingWordStyles,
   getPowerReaderRsvpTypography,
   OFFLINE_POWER_READER_ARTICLES,
 } from './PowerReader';
+import { ARTICLES } from '../../data/articles';
 import * as progressStore from '../../data/progressStore';
 
 describe('PowerReader', () => {
@@ -22,10 +24,15 @@ describe('PowerReader', () => {
   });
 
   it('exposes the full bundled article library by difficulty', () => {
-    expect(OFFLINE_POWER_READER_ARTICLES).toHaveLength(16);
-    expect(getOfflinePowerReaderArticles('easy')).toHaveLength(6);
+    expect(OFFLINE_POWER_READER_ARTICLES).toHaveLength(24);
+    expect(getOfflinePowerReaderArticles('easy')).toHaveLength(8);
     expect(getOfflinePowerReaderArticles('medium')).toHaveLength(8);
-    expect(getOfflinePowerReaderArticles('hard')).toHaveLength(2);
+    expect(getOfflinePowerReaderArticles('hard')).toHaveLength(8);
+    expect(
+      OFFLINE_POWER_READER_ARTICLES.map((article) => article.id)
+    ).toEqual(
+      ARTICLES.map((article) => `offline-${article.id}-v${article.version}`)
+    );
   });
 
   it('shows every bundled article and selects one for the chosen difficulty', async () => {
@@ -36,7 +43,7 @@ describe('PowerReader', () => {
       await Promise.resolve();
     });
 
-    expect(getAllByText('SpeedRead library')).toHaveLength(6);
+    expect(getAllByText('SpeedRead library')).toHaveLength(8);
     expect(getByText('Read now')).toBeTruthy();
   });
 
@@ -313,5 +320,37 @@ describe('PowerReader', () => {
       pageIndex: 3,
       highlightIndex: 12,
     });
+  });
+
+  it('clamps restored progress to the pages and words in the current book', () => {
+    expect(
+      clampPowerReaderProgress(
+        { pageIndex: 99, highlightIndex: 99 },
+        365
+      )
+    ).toEqual({ pageIndex: 2, highlightIndex: 4 });
+    expect(
+      clampPowerReaderProgress(
+        { pageIndex: 1.9, highlightIndex: 7.8 },
+        365
+      )
+    ).toEqual({ pageIndex: 1, highlightIndex: 7 });
+    expect(
+      clampPowerReaderProgress(
+        { pageIndex: Number.NaN, highlightIndex: Number.POSITIVE_INFINITY },
+        365
+      )
+    ).toEqual({ pageIndex: 0, highlightIndex: 0 });
+    expect(clampPowerReaderProgress('invalid', 0)).toEqual({
+      pageIndex: 0,
+      highlightIndex: 0,
+    });
+    expect(
+      clampPowerReaderProgress(
+        { pageIndex: 1, highlightIndex: 99 },
+        12,
+        10
+      )
+    ).toEqual({ pageIndex: 1, highlightIndex: 1 });
   });
 });

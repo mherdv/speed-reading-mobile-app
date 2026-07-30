@@ -7,6 +7,11 @@ import {
   type MainIdeaPassage,
 } from '../../data/mainIdeaPassages';
 import { levelToStars, updateProgress } from '../../data/progressStore';
+import {
+  buildRotatingDeck,
+  shuffleAnswerOptions,
+  type RandomSource,
+} from '../../data/randomization';
 import { colors, shadows, spacing } from '../../theme/colors';
 import { Button } from '../../ui/Button';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
@@ -23,6 +28,7 @@ type Props = {
   retrievalBufferMs?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
+  random?: RandomSource;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
@@ -50,16 +56,20 @@ export function getMainIdeaChallenge(difficulty: Difficulty) {
   } as const;
 }
 
-function selectPassages(
-  source: MainIdeaPassage[],
-  count: number,
-  offset: number
-): MainIdeaPassage[] {
-  if (source.length === 0) return [];
-  return Array.from(
-    { length: Math.min(count, source.length) },
-    (_, index) => source[(offset + index) % source.length]
+export function prepareMainIdeaPassage(
+  passage: MainIdeaPassage,
+  random: RandomSource = Math.random
+): MainIdeaPassage {
+  const shuffledAnswers = shuffleAnswerOptions(
+    passage.choices,
+    passage.correctIndex,
+    random
   );
+  return {
+    ...passage,
+    choices: shuffledAnswers.options,
+    correctIndex: shuffledAnswers.correctIndex,
+  };
 }
 
 export default function MainIdeaSprint({
@@ -68,6 +78,7 @@ export default function MainIdeaSprint({
   retrievalBufferMs,
   difficulty = 'easy',
   autoStart = false,
+  random = Math.random,
   onReportResult,
 }: Props) {
   const { tokens: readingDisplay } = useReadingDisplay();
@@ -94,6 +105,7 @@ export default function MainIdeaSprint({
     useRef<ReturnType<typeof setTimeout> | null>(null);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const sessionOrdinalRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -104,6 +116,12 @@ export default function MainIdeaSprint({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (progressLoaded && sessionOrdinalRef.current === null) {
+      sessionOrdinalRef.current = gameProgress.totalPlays;
+    }
+  }, [gameProgress.totalPlays, progressLoaded]);
 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
@@ -126,11 +144,15 @@ export default function MainIdeaSprint({
         passage.difficulty === undefined ||
         passage.difficulty === challenge.passageLevel
     );
-    sessionPassagesRef.current = selectPassages(
+    const sessionOrdinal =
+      sessionOrdinalRef.current ?? gameProgress.totalPlays;
+    sessionOrdinalRef.current = sessionOrdinal + 1;
+    sessionPassagesRef.current = buildRotatingDeck(
       leveledPassages.length > 0 ? leveledPassages : passages,
       configuredRoundCount,
-      gameProgress.totalPlays % Math.max(leveledPassages.length, 1)
-    );
+      sessionOrdinal,
+      random
+    ).map((passage) => prepareMainIdeaPassage(passage, random));
     reportedRef.current = false;
     correctCountRef.current = 0;
     completedRoundsRef.current = 0;

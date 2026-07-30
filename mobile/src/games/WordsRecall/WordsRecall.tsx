@@ -4,6 +4,7 @@ import {
   createWordsRecallPool,
   WORDS_RECALL_CONFIG,
 } from '../../data/recallContent';
+import type { RandomSource } from '../../data/randomization';
 import { TypedRecallExercise } from '../TypedRecallExercise';
 import type { Difficulty } from '../gameHooks';
 import type { GameReportPayload } from '../registry';
@@ -14,6 +15,7 @@ type Props = {
   totalRounds?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
+  random?: RandomSource;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
@@ -23,6 +25,7 @@ export default function WordsRecall({
   totalRounds,
   difficulty = 'medium',
   autoStart = false,
+  random = Math.random,
   onReportResult,
 }: Props) {
   const config = WORDS_RECALL_CONFIG[difficulty];
@@ -42,6 +45,7 @@ export default function WordsRecall({
       difficulty={difficulty}
       autoStart={autoStart}
       twoWordLayout
+      random={random}
       onReportResult={onReportResult}
     />
   );

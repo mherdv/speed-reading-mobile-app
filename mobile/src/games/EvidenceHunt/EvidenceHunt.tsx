@@ -16,6 +16,12 @@ import {
   levelToStars,
   updateTwoSessionDifficultySuggestion,
 } from '../../data/progressStore';
+import {
+  canonicalItemSetSignature,
+  selectRotatingWindow,
+  shuffleItems,
+  type RandomSource,
+} from '../../data/randomization';
 import { formatDuration } from '../../domain/results';
 import type { EvidenceHuntResultDetails } from '../../domain/types';
 import { useAccessibilityPreferences } from '../../hooks/useAccessibilityPreferences';
@@ -39,38 +45,13 @@ type Phase = 'idle' | 'active' | 'feedback' | 'ended';
 type Props = {
   rounds?: readonly EvidenceHuntRound[];
   roundCount?: number;
-  random?: () => number;
+  random?: RandomSource;
   initialTimed?: boolean;
   roundDurationMs?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
 };
-
-function shuffleWith<T>(values: readonly T[], random: () => number): T[] {
-  const result = [...values];
-  for (let index = result.length - 1; index > 0; index -= 1) {
-    const next = Math.floor(
-      Math.min(0.999999, Math.max(0, random())) * (index + 1)
-    );
-    [result[index], result[next]] = [result[next], result[index]];
-  }
-  return result;
-}
-
-function rotateFresh<T>(
-  values: readonly T[],
-  count: number,
-  sessionOrdinal: number
-): T[] {
-  if (values.length === 0) return [];
-  const safeCount = Math.min(count, values.length);
-  const offset = (sessionOrdinal * safeCount) % values.length;
-  return Array.from(
-    { length: safeCount },
-    (_, index) => values[(offset + index) % values.length]
-  );
-}
 
 function median(values: readonly number[]): number {
   if (values.length === 0) return 0;
@@ -117,7 +98,7 @@ export default function EvidenceHunt({
 
   const sessionRoundsRef = useRef<EvidenceHuntRound[]>([]);
   const optionOrdersRef = useRef<EvidenceOption[][]>([]);
-  const sessionOrdinalRef = useRef(gameProgress.totalPlays);
+  const sessionOrdinalRef = useRef<number | null>(null);
   const previousItemIdsRef = useRef<string[]>([]);
   const currentItemIdsRef = useRef<string[]>([]);
   const startedAtRef = useRef(0);
@@ -190,15 +171,17 @@ export default function EvidenceHunt({
     setRoundIndex(0);
     setSelectedEvidence([]);
     setSelectedAnswer(null);
-    const chosen = rotateFresh(
+    const sessionOrdinal =
+      sessionOrdinalRef.current ?? gameProgress.totalPlays;
+    const chosen = selectRotatingWindow(
       sourceRounds,
       roundCount,
-      sessionOrdinalRef.current
+      sessionOrdinal
     );
-    sessionOrdinalRef.current += 1;
-    sessionRoundsRef.current = shuffleWith(chosen, random);
+    sessionOrdinalRef.current = sessionOrdinal + 1;
+    sessionRoundsRef.current = shuffleItems(chosen, random);
     optionOrdersRef.current = sessionRoundsRef.current.map((round) =>
-      shuffleWith(round.options, random)
+      shuffleItems(round.options, random)
     );
     previousItemIdsRef.current = currentItemIdsRef.current;
     currentItemIdsRef.current = sessionRoundsRef.current.map((round) => round.id);
@@ -308,7 +291,8 @@ export default function EvidenceHunt({
         : undefined;
     const immediateReplayDuplicate =
       replayOfItemIds !== undefined &&
-      replayOfItemIds.join('|') === itemIds.join('|');
+      canonicalItemSetSignature(replayOfItemIds) ===
+        canonicalItemSetSignature(itemIds);
     const adaptiveQualificationEligible =
       !immediateReplayDuplicate &&
       answerAccuracy >= 0.8 &&

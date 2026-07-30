@@ -60,7 +60,7 @@ describe('LetterJumble', () => {
   it('uses reviewed unique word definitions at every difficulty', () => {
     expect(validateVocabularyPracticeContent()).toEqual([]);
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
-      expect(MIXUP_WORDS[difficulty]).toHaveLength(32);
+      expect(MIXUP_WORDS[difficulty]).toHaveLength(48);
     }
   });
 

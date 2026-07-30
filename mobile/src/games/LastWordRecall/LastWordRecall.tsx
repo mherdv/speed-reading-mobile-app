@@ -1,16 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
+  createPersistentVariedDeckState,
   createRecognitionOptions,
-  createVariedSequence,
   getFlashWordPool,
+  takeNextPersistentVariedItem,
   uniqueStrings,
   type RandomSource,
 } from '../../data/flashPracticeContent';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
+import { BriefStimulus } from '../../ui/BriefStimulus';
 import { ChoiceAnswerFeedback } from '../../ui/ChoiceAnswerFeedback';
 import { FlashPaceControl } from '../../ui/FlashPaceControl';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
@@ -52,6 +54,7 @@ type Props = {
   totalRounds?: number;
   sequenceLength?: number;
   random?: RandomSource;
+  contentRandom?: RandomSource;
   difficulty?: Difficulty;
   autoStart?: boolean;
   onReportResult?: (payload: GameReportPayload) => void;
@@ -111,6 +114,7 @@ export default function LastWordRecall({
   totalRounds,
   sequenceLength: sequenceLengthProp,
   random = Math.random,
+  contentRandom = Math.random,
   difficulty = 'easy',
   autoStart = false,
   onReportResult,
@@ -120,12 +124,18 @@ export default function LastWordRecall({
     sequenceLengthProp == null
       ? null
       : clampStreamLength(sequenceLengthProp);
-  const defaultPool = getFlashWordPool(difficulty);
-  const wordPool =
-    wordsProp && wordsProp.length > 0
-      ? uniqueStrings(wordsProp)
-      : defaultPool;
-  const optionPool = uniqueStrings([...wordPool, ...defaultPool]);
+  const defaultPool = useMemo(
+    () => getFlashWordPool(difficulty),
+    [difficulty]
+  );
+  const wordPool = useMemo(() => {
+    const customPool = uniqueStrings(wordsProp ?? []);
+    return customPool.length > 0 ? customPool : defaultPool;
+  }, [defaultPool, wordsProp]);
+  const optionPool = useMemo(
+    () => uniqueStrings([...wordPool, ...defaultPool]),
+    [defaultPool, wordPool]
+  );
   const defaultWpm =
     wordDisplayMs == null
       ? config.baseWpm
@@ -153,7 +163,7 @@ export default function LastWordRecall({
   const sequenceRef = useRef<string[]>([]);
   const shownIndexRef = useRef(0);
   const answerRef = useRef('');
-  const previousAnswerRef = useRef('');
+  const deckStateRef = useRef(createPersistentVariedDeckState());
   const streamLengthsRef = useRef<number[]>([]);
   const paceRef = useRef<FlashPaceState>(
     createFlashPaceState(defaultWpm)
@@ -182,7 +192,9 @@ export default function LastWordRecall({
       sequence[sequence.length - 1] ?? wordPool[0] ?? 'focus';
     return createRecognitionOptions(
       answer,
-      uniqueStrings([...sequence.slice(0, -1), ...optionPool])
+      uniqueStrings([...sequence.slice(0, -1), ...optionPool]),
+      4,
+      contentRandom
     );
   }
 
@@ -205,17 +217,18 @@ export default function LastWordRecall({
   function startRound() {
     const sequenceLength =
       fixedSequenceLength ?? createRandomStreamLength(random);
-    const sequence = createVariedSequence(
-      wordPool,
-      sequenceLength,
-      previousAnswerRef.current
+    const sequence = Array.from({ length: sequenceLength }, () =>
+      takeNextPersistentVariedItem(
+        deckStateRef.current,
+        wordPool,
+        contentRandom
+      ) ?? wordPool[0] ?? 'focus'
     );
     streamLengthsRef.current.push(sequenceLength);
     sequenceRef.current = sequence;
     shownIndexRef.current = 0;
     const answer = sequence[sequence.length - 1] ?? wordPool[0] ?? 'focus';
     answerRef.current = answer;
-    previousAnswerRef.current = answer;
     setOptions(createLastWordOptions(sequence));
     setShownIndex(0);
     setShownWord(sequence[0] ?? answer);
@@ -413,9 +426,15 @@ export default function LastWordRecall({
             <Text style={styles.streamCounter}>
               Word {shownIndex + 1}
             </Text>
-            <Text testID="stream-word" style={styles.word}>
-              {shownWord}
-            </Text>
+            <BriefStimulus
+              value={shownWord}
+              difficulty={difficulty}
+              testID="stream-word"
+              color={colors.warningForeground}
+              backgroundColor={colors.background}
+              maxFontSize={46}
+              minFontSize={14}
+            />
           </View>
           <Text style={styles.instruction}>Keep following—do not tap yet</Text>
         </View>
@@ -527,13 +546,12 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 10, color: colors.textSecondary },
   wordCard: {
     minHeight: 205,
-    backgroundColor: colors.cardBackground,
-    borderRadius: 28,
     alignItems: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 0,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 28,
+    margin: 0,
+    padding: 0,
   },
   streamCounter: {
     position: 'absolute',
@@ -541,12 +559,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
-  },
-  word: {
-    color: colors.primaryDark,
-    fontSize: 42,
-    fontWeight: '800',
-    textAlign: 'center',
   },
   instruction: {
     color: colors.textMuted,

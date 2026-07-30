@@ -1,3 +1,5 @@
+import { ADDITIONAL_STRUCTURE_SCAN_ROUNDS } from './additionalStructureScanPassages';
+
 export type StructureScanSection = {
   heading: string;
   body: string;
@@ -303,4 +305,56 @@ export const STRUCTURE_SCAN_ROUNDS: readonly StructureScanRound[] = [
     correctHeading: 'Expired codes',
     evidence: 'That section explains how to request a replacement and when support is required.',
   },
+  ...ADDITIONAL_STRUCTURE_SCAN_ROUNDS,
 ];
+
+export const EXPECTED_STRUCTURE_SCAN_ROUNDS = 24;
+
+export function validateStructureScanRounds(
+  rounds: readonly StructureScanRound[] = STRUCTURE_SCAN_ROUNDS
+): string[] {
+  const errors: string[] = [];
+  const ids = new Set<string>();
+
+  if (rounds.length !== EXPECTED_STRUCTURE_SCAN_ROUNDS) {
+    errors.push(
+      `Structure Scan requires exactly ${EXPECTED_STRUCTURE_SCAN_ROUNDS} reviewed scenarios`
+    );
+  }
+
+  for (const round of rounds) {
+    if (!round.id.trim()) {
+      errors.push('Structure Scan scenario ID is required');
+    } else if (ids.has(round.id)) {
+      errors.push(`Duplicate Structure Scan scenario ID: ${round.id}`);
+    }
+    ids.add(round.id);
+
+    if (!round.title.trim() || !round.goal.trim() || !round.evidence.trim()) {
+      errors.push(`${round.id}: title, goal, and evidence are required`);
+    }
+    if (round.sections.length !== 5) {
+      errors.push(`${round.id}: exactly five sections required`);
+    }
+    const normalizedHeadings = round.sections.map((section) =>
+      section.heading.trim().toLocaleLowerCase('en')
+    );
+    if (
+      new Set(normalizedHeadings).size !== round.sections.length ||
+      round.sections.some(
+        (section) => !section.heading.trim() || !section.body.trim()
+      )
+    ) {
+      errors.push(`${round.id}: section headings and bodies must be non-empty and headings unique`);
+    }
+    const matchingHeadings = normalizedHeadings.filter(
+      (heading) =>
+        heading === round.correctHeading.trim().toLocaleLowerCase('en')
+    );
+    if (matchingHeadings.length !== 1) {
+      errors.push(`${round.id}: correct heading must identify one section`);
+    }
+  }
+
+  return errors;
+}

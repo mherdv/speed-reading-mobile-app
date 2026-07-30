@@ -2,6 +2,11 @@ import {
   shuffleItems,
   type RandomSource,
 } from './randomization';
+import {
+  ADDITIONAL_ADVANCED_WORDS,
+  ADDITIONAL_BEGINNER_WORDS,
+  ADDITIONAL_INTERMEDIATE_WORDS,
+} from './languageExpansionContent';
 
 /**
  * Original English practice vocabulary maintained for this application.
@@ -74,6 +79,7 @@ const BEGINNER_WORD_SOURCE: string[] = [
   'clear', 'close', 'cool', 'fair', 'gentle', 'local', 'lucky', 'modern',
   'neat', 'proud', 'ready', 'round', 'simple', 'slow', 'small', 'steady',
   'sweet', 'warm',
+  ...ADDITIONAL_BEGINNER_WORDS,
 ];
 export const BEGINNER_WORDS = uniqueReviewedWords(BEGINNER_WORD_SOURCE);
 
@@ -115,6 +121,7 @@ const INTERMEDIATE_WORD_SOURCE: string[] = [
   'promote', 'propose', 'recover', 'reflect', 'respond', 'restore', 'review',
   'select', 'simulate', 'strategy', 'summarize', 'support', 'survive',
   'symbol', 'transfer', 'translate', 'verify', 'version',
+  ...ADDITIONAL_INTERMEDIATE_WORDS,
 ];
 export const INTERMEDIATE_WORDS = uniqueReviewedWords(INTERMEDIATE_WORD_SOURCE);
 
@@ -185,6 +192,7 @@ const ADVANCED_WORD_SOURCE: string[] = [
   'responsive', 'significant', 'strategic', 'terminology', 'theoretical',
   'transparency', 'uncertainty', 'variability', 'verification', 'vocabulary',
   'cognitive', 'comprehension', 'inference',
+  ...ADDITIONAL_ADVANCED_WORDS,
 ];
 export const ADVANCED_WORDS = uniqueReviewedWords(ADVANCED_WORD_SOURCE);
 

@@ -6,6 +6,7 @@ import { formatDuration } from '../../domain/results';
 import { useAutoStart, type Difficulty } from '../gameHooks';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
+import { BriefStimulus } from '../../ui/BriefStimulus';
 import { colors } from '../../theme/colors';
 import {
   interleaveBalancedTrials,
@@ -192,6 +193,12 @@ export default function NumberRecognition({
   useAutoStart(autoStart, phase, true, start);
 
   const current = seq[Math.min(index, seq.length - 1)] ?? 0;
+  const stimulusBackground =
+    feedback === 'correct'
+      ? '#D1FAE5'
+      : feedback === 'wrong'
+        ? '#FEE2E2'
+        : '#FFFBEB';
 
   useEffect(() => {
     if (phase !== 'running') return;
@@ -380,7 +387,15 @@ export default function NumberRecognition({
             feedback === 'correct' && styles.cardCorrect,
             feedback === 'wrong' && styles.cardWrong,
           ]}>
-            <Text testID="current-number" style={styles.number}>{current}</Text>
+            <BriefStimulus
+              value={String(current)}
+              difficulty={difficulty}
+              testID="current-number"
+              color="#92400E"
+              backgroundColor={stimulusBackground}
+              maxFontSize={68}
+              minFontSize={18}
+            />
           </View>
 
           <View style={styles.buttonsRow}>
@@ -427,16 +442,15 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 10, color: '#B45309' },
   numberCard: {
     backgroundColor: '#FFFBEB',
-    borderRadius: 12,
-    padding: 32,
     alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#FCD34D',
+    borderWidth: 0,
+    justifyContent: 'center',
+    margin: 0,
+    minHeight: 150,
+    padding: 0,
   },
-  cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
-  cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
-  number: { fontSize: 64, fontWeight: '800', color: '#92400E' },
+  cardCorrect: { backgroundColor: '#D1FAE5' },
+  cardWrong: { backgroundColor: '#FEE2E2' },
   buttonsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   choiceBtn: { flex: 1, paddingVertical: 16, borderRadius: 10, alignItems: 'center' },
   matchBtn: { backgroundColor: '#10B981' },

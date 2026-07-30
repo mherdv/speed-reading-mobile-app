@@ -4,12 +4,13 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import * as progressStore from '../../data/progressStore';
 import {
   getBaselineReadingPool,
+  getWpmTestPool,
   validateBaselineReadingPool,
   validateWpmTestPool,
   type WpmQuestion,
 } from '../../data/wpmTestContent';
 import type { TextSample } from '../../domain/types';
-import WpmTest from './WpmTest';
+import WpmTest, { buildWpmReadingDeck } from './WpmTest';
 
 const SAMPLE: TextSample = {
   id: 'wpm-test-sample',
@@ -204,13 +205,36 @@ describe('WpmTest', () => {
     updateProgress.mockRestore();
   });
 
-  it('provides multiple reviewed passages with 1, 2, and 3 questions by difficulty', () => {
+  it('provides ten non-baseline passages with 1, 2, and 3 questions by difficulty', () => {
     expect(validateWpmTestPool()).toEqual([]);
+    const baselineIds = new Set(
+      getBaselineReadingPool('easy').map((item) => item.sample.id)
+    );
+    const comprehensionIds = new Set<string>();
+
+    for (const [difficulty, expectedQuestions] of [
+      ['easy', 1],
+      ['medium', 2],
+      ['hard', 3],
+    ] as const) {
+      const pool = getWpmTestPool(difficulty);
+      expect(pool).toHaveLength(10);
+      expect(
+        pool.every(
+          (item) =>
+            !baselineIds.has(item.sample.id) &&
+            item.questions.length === expectedQuestions
+        )
+      ).toBe(true);
+      pool.forEach((item) => comprehensionIds.add(item.sample.id));
+    }
+
+    expect(comprehensionIds.size).toBe(30);
   });
 
-  it('uses twelve standalone baseline passages and keeps three questions at every difficulty', () => {
+  it('uses eighteen standalone baseline passages and keeps three questions at every difficulty', () => {
     expect(validateBaselineReadingPool()).toEqual([]);
-    expect(getBaselineReadingPool('easy')).toHaveLength(12);
+    expect(getBaselineReadingPool('easy')).toHaveLength(18);
     expect(
       getBaselineReadingPool('easy').every(
         (item) =>
@@ -235,22 +259,89 @@ describe('WpmTest', () => {
     }
   });
 
+  it('builds a complete unique passage cycle and protects its boundary', () => {
+    const pool = getBaselineReadingPool('easy');
+    const firstDeck = buildWpmReadingDeck(pool, '', () => 0);
+    const boundaryId = firstDeck[0]!.sample.id;
+    const protectedDeck = buildWpmReadingDeck(pool, boundaryId, () => 0);
+
+    expect(firstDeck).toHaveLength(pool.length);
+    expect(new Set(firstDeck.map((item) => item.sample.id)).size).toBe(
+      pool.length
+    );
+    expect(protectedDeck[0]!.sample.id).not.toBe(boundaryId);
+    expect(new Set(protectedDeck.map((item) => item.sample.id)).size).toBe(
+      pool.length
+    );
+  });
+
+  it('uses every generated passage before refilling the local deck', () => {
+    const pool = getBaselineReadingPool('easy');
+    let randomCalls = 0;
+    const random = () => {
+      randomCalls += 1;
+      if (randomCalls <= pool.length - 1) return 0.999;
+      if (randomCalls === pool.length) return 0;
+      return 0.999;
+    };
+    const report = jest.fn();
+    const view = render(
+      <WpmTest
+        difficulty="easy"
+        random={random}
+        onReportResult={report}
+      />
+    );
+
+    const completeSession = (startTestId: 'start-button' | 'play-again') => {
+      fireEvent.press(view.getByTestId(startTestId));
+      fireEvent.press(view.getByTestId('finish-wpm-reading'));
+      for (let questionIndex = 0; questionIndex < 3; questionIndex += 1) {
+        fireEvent.press(
+          view.getByTestId(`wpm-question-${questionIndex}-option-0`)
+        );
+      }
+      fireEvent.press(view.getByTestId('submit-wpm-questions'));
+    };
+
+    for (let index = 0; index < pool.length; index += 1) {
+      completeSession(index === 0 ? 'start-button' : 'play-again');
+    }
+    const firstCycleIds = report.mock.calls.map(
+      ([payload]) => payload.details.contentId
+    );
+    expect(new Set(firstCycleIds).size).toBe(pool.length);
+
+    completeSession('play-again');
+    const nextCycleId =
+      report.mock.calls[pool.length]![0].details.contentId;
+    expect(nextCycleId).not.toBe(firstCycleIds.at(-1));
+  });
+
   it('excludes the prior result passage from a generated session', () => {
     const pool = getBaselineReadingPool('easy');
-    const random = jest.spyOn(Math, 'random').mockReturnValue(0);
     const view = render(
       <WpmTest
         difficulty="easy"
         excludedContentId={pool[0]!.sample.id}
+        random={() => 0}
       />
     );
 
     fireEvent.press(view.getByTestId('start-button'));
 
-    expect(view.getByTestId('wpm-passage')).toHaveTextContent(
-      pool[1]!.sample.text
+    expect(view.getByTestId('wpm-passage')).not.toHaveTextContent(
+      pool[0]!.sample.text
     );
-    random.mockRestore();
+    expect(
+      pool
+        .slice(1)
+        .some((item) =>
+          view.getByTestId('wpm-passage').props.children.includes(
+            item.sample.text
+          )
+        )
+    ).toBe(true);
   });
 
   it('falls back to the sample question when an empty override is supplied', () => {

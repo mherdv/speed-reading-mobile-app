@@ -68,6 +68,27 @@ describe('Context Builder', () => {
     expect(report).toHaveBeenCalledTimes(1);
   });
 
+  it('starts from the persisted fresh-content window after remount', async () => {
+    const rounds = getContextBuilderRounds('easy').slice(0, 6);
+    await AsyncStorage.setItem(
+      'speed-reading:progress:v1',
+      JSON.stringify({
+        ContextBuilder: { level: 1, streak: 0, totalPlays: 1 },
+      })
+    );
+    const view = render(
+      <ContextBuilder
+        rounds={rounds}
+        roundCount={2}
+        random={() => 0.999}
+      />
+    );
+    await settle();
+
+    fireEvent.press(view.getByTestId('start-button'));
+    expect(view.getByText(rounds[2]!.title)).toBeTruthy();
+  });
+
   it('makes the target-sentence meaning and supporting-clue steps explicit', async () => {
     const round = getContextBuilderRounds('easy')[0]!;
     const view = render(
@@ -92,7 +113,7 @@ describe('Context Builder', () => {
       )
     ).toBeTruthy();
     expect(
-      view.getByText('2. Passage clue(s) that support this meaning')
+      view.getByText('2. Most direct clue that defines this meaning')
     ).toBeTruthy();
     expect(
       view.getByLabelText(/^Meaning option A:/)
@@ -100,6 +121,26 @@ describe('Context Builder', () => {
     expect(
       view.getByLabelText(/^Clue option A:/)
     ).toBeTruthy();
+  });
+
+  it('states the accepted clue contract explicitly at every difficulty', async () => {
+    for (const [difficulty, heading] of [
+      ['easy', '2. Most direct clue that defines this meaning'],
+      ['medium', '2. One clue that independently supports this meaning'],
+      ['hard', '2. Complete clue set needed to support this meaning'],
+    ] as const) {
+      const view = render(
+        <ContextBuilder
+          rounds={getContextBuilderRounds(difficulty).slice(0, 1)}
+          roundCount={1}
+          random={() => 0.999}
+        />
+      );
+      await settle();
+      fireEvent.press(view.getByTestId('start-button'));
+      expect(view.getByText(heading)).toBeTruthy();
+      view.unmount();
+    }
   });
 
   it('keeps attempted accuracy truthful but does not qualify one answer plus four skips', async () => {

@@ -10,6 +10,7 @@ import {
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { levelToStars, updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
+import { BriefStimulus } from '../../ui/BriefStimulus';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import {
@@ -97,6 +98,7 @@ type SpatialBoardProps = {
   trial: VisualSpanTrial;
   spread: VisualSpanSpread;
   revealWords: boolean;
+  difficulty: Difficulty;
   showTarget?: boolean;
   testID?: string;
 };
@@ -105,6 +107,7 @@ function SpatialBoard({
   trial,
   spread,
   revealWords,
+  difficulty,
   showTarget = false,
   testID,
 }: SpatialBoardProps) {
@@ -125,18 +128,29 @@ function SpatialBoard({
               isTarget && styles.targetSlot,
             ]}
           >
-            <Text
-              testID={
-                revealWords ? `span-item-${item.positionId}` : undefined
-              }
-              style={[
-                styles.positionText,
-                !revealWords && styles.hiddenPositionText,
-                isTarget && styles.targetPositionText,
-              ]}
-            >
-              {revealWords ? item.word : isTarget ? '?' : '•'}
-            </Text>
+            {revealWords ? (
+              <BriefStimulus
+                value={item.word}
+                difficulty={difficulty}
+                testID={`span-item-${item.positionId}`}
+                color={colors.infoForeground}
+                backgroundColor={colors.infoSurface}
+                maxFontSize={18}
+                minFontSize={7}
+                availableWidth={66}
+                style={styles.positionText}
+              />
+            ) : (
+              <Text
+                style={[
+                  styles.positionText,
+                  styles.hiddenPositionText,
+                  isTarget && styles.targetPositionText,
+                ]}
+              >
+                {isTarget ? '?' : '•'}
+              </Text>
+            )}
           </View>
         );
       })}
@@ -441,6 +455,7 @@ export default function VisualSpanExpansion({
             trial={trial}
             spread={config.spread}
             revealWords
+            difficulty={selectedDifficulty}
           />
         </View>
       )}
@@ -459,6 +474,7 @@ export default function VisualSpanExpansion({
             trial={trial}
             spread={config.spread}
             revealWords={false}
+            difficulty={selectedDifficulty}
             testID="span-fixation-cue"
           />
         </View>
@@ -477,6 +493,7 @@ export default function VisualSpanExpansion({
             trial={trial}
             spread={config.spread}
             revealWords={false}
+            difficulty={selectedDifficulty}
             showTarget
           />
           <View testID="span-options" style={styles.options}>
@@ -680,7 +697,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 40,
     minWidth: 70,
-    paddingHorizontal: 8,
+    overflow: 'hidden',
+    paddingHorizontal: 2,
     position: 'absolute',
   },
   targetSlot: {
@@ -689,8 +707,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   positionText: {
-    color: colors.infoForeground,
-    fontSize: 18,
     fontWeight: '800',
   },
   hiddenPositionText: {

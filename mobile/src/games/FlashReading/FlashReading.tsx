@@ -1,13 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
-  createVariedSequence,
+  createPersistentVariedDeckState,
   getFlashWordPool,
+  takeNextPersistentVariedItem,
+  uniqueStrings,
+  type RandomSource,
 } from '../../data/flashPracticeContent';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
+import { BriefStimulus } from '../../ui/BriefStimulus';
 import { FlashPaceControl } from '../../ui/FlashPaceControl';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
@@ -48,37 +52,34 @@ type Props = {
   totalRounds?: number;
   difficulty?: Difficulty;
   autoStart?: boolean;
+  random?: RandomSource;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
 type Phase = 'idle' | 'flash' | 'recall' | 'feedback' | 'ended';
 type FinishReason = 'three-misses' | 'manual' | 'round-limit';
 
-function getConfig(difficulty: Difficulty): FlashPaceBounds & {
-  baseWpm: number;
-  masked: boolean;
-} {
+function getConfig(
+  difficulty: Difficulty
+): FlashPaceBounds & { baseWpm: number } {
   switch (difficulty) {
     case 'easy':
       return {
         baseWpm: 120,
         minWpm: 80,
         maxWpm: RAPID_FLASH_MAX_WPM,
-        masked: false,
       };
     case 'medium':
       return {
         baseWpm: 220,
         minWpm: 140,
         maxWpm: RAPID_FLASH_MAX_WPM,
-        masked: false,
       };
     case 'hard':
       return {
         baseWpm: 320,
         minWpm: 220,
         maxWpm: RAPID_FLASH_MAX_WPM,
-        masked: true,
       };
   }
 }
@@ -89,13 +90,16 @@ export default function FlashReading({
   totalRounds,
   difficulty = 'easy',
   autoStart = false,
+  random = Math.random,
   onReportResult,
 }: Props) {
   const config = getConfig(difficulty);
-  const wordPool =
-    wordsProp && wordsProp.length > 0
-      ? wordsProp
+  const wordPool = useMemo(() => {
+    const customPool = uniqueStrings(wordsProp ?? []);
+    return customPool.length > 0
+      ? customPool
       : getFlashWordPool(difficulty);
+  }, [difficulty, wordsProp]);
   const defaultWpm =
     displayMsProp == null
       ? config.baseWpm
@@ -120,9 +124,7 @@ export default function FlashReading({
   const roundRef = useRef(0);
   const correctRef = useRef(0);
   const currentRef = useRef('');
-  const previousWordRef = useRef('');
-  const deckRef = useRef<string[]>([]);
-  const deckIndexRef = useRef(0);
+  const deckStateRef = useRef(createPersistentVariedDeckState());
   const paceRef = useRef<FlashPaceState>(
     createFlashPaceState(defaultWpm)
   );
@@ -146,24 +148,20 @@ export default function FlashReading({
   }, []);
 
   function takeNextWord() {
-    if (deckIndexRef.current >= deckRef.current.length) {
-      deckRef.current = createVariedSequence(
+    return (
+      takeNextPersistentVariedItem(
+        deckStateRef.current,
         wordPool,
-        Math.max(32, wordPool.length),
-        previousWordRef.current
-      );
-      deckIndexRef.current = 0;
-    }
-    const word =
-      deckRef.current[deckIndexRef.current] ?? wordPool[0] ?? 'focus';
-    deckIndexRef.current += 1;
-    return word;
+        random
+      ) ??
+      wordPool[0] ??
+      'focus'
+    );
   }
 
   function showRound() {
     const word = takeNextWord();
     currentRef.current = word;
-    previousWordRef.current = word;
     setCurrent(word);
     setInput('');
     setFeedback(null);
@@ -186,12 +184,6 @@ export default function FlashReading({
     correctRef.current = 0;
     initialWpmRef.current = startingWpm;
     paceRef.current = createFlashPaceState(startingWpm);
-    deckRef.current = createVariedSequence(
-      wordPool,
-      Math.max(32, wordPool.length),
-      previousWordRef.current
-    );
-    deckIndexRef.current = 0;
     setScore(0);
     setRound(0);
     setCorrectStreak(0);
@@ -342,11 +334,9 @@ export default function FlashReading({
           <Text style={styles.sessionHint}>
             +25 WPM after {CORRECT_ANSWERS_TO_INCREASE} correct · 3 misses end
           </Text>
-          {config.masked && (
-            <Text style={styles.maskHint}>
-              Hard mode partially masks the lower word area
-            </Text>
-          )}
+          <Text style={styles.maskHint}>
+            Easy is clear · Medium hides the lower edge · Hard hides more
+          </Text>
           <FlashPaceControl
             wpm={startingWpm}
             minWpm={config.minWpm}
@@ -362,12 +352,15 @@ export default function FlashReading({
         <View style={styles.gameArea}>
           {stats}
           <View style={styles.flashCard}>
-            <View style={styles.wordContainer}>
-              <Text testID="flash-word" style={styles.flashWord}>
-                {current}
-              </Text>
-              {config.masked && <View style={styles.maskOverlay} />}
-            </View>
+            <BriefStimulus
+              value={current}
+              difficulty={difficulty}
+              testID="flash-word"
+              color={colors.warningForeground}
+              backgroundColor={colors.background}
+              maxFontSize={44}
+              minFontSize={14}
+            />
           </View>
         </View>
       )}
@@ -515,27 +508,12 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 10, color: colors.textSecondary },
   flashCard: {
     minHeight: 190,
-    backgroundColor: colors.cardBackground,
-    borderRadius: 24,
-    padding: 30,
     alignItems: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 0,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  wordContainer: { position: 'relative' },
-  flashWord: {
-    fontSize: 40,
-    fontWeight: '800',
-    color: colors.warningForeground,
-  },
-  maskOverlay: {
-    position: 'absolute',
-    left: -4,
-    right: -4,
-    bottom: -2,
-    height: 21,
-    backgroundColor: colors.textPrimary,
+    margin: 0,
+    padding: 0,
   },
   inputCard: {
     backgroundColor: colors.cardBackground,

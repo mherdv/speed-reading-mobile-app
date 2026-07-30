@@ -47,6 +47,20 @@ describe('TimedWordRecognition', () => {
     expect(getByTestId('option-3')).toBeTruthy();
   });
 
+  it('uses the Hard lower-word mask without allowing a line break', () => {
+    const view = render(
+      <TimedWordRecognition
+        words={['observation']}
+        displayMs={100}
+        difficulty="hard"
+      />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+    expect(view.getByTestId('word-mask')).toBeTruthy();
+    expect(view.getByTestId('word')).toHaveProp('numberOfLines', 1);
+  });
+
   it('shows correct feedback when right option is selected', () => {
     const testWords = ['apple', 'banana', 'cherry', 'date'];
     const { getByTestId, getByText } = render(
@@ -233,5 +247,41 @@ describe('TimedWordRecognition', () => {
         }),
       })
     );
+  });
+
+  it('continues the no-replacement word deck across replays', async () => {
+    const words = ['amber', 'cabin', 'delta'];
+    const view = render(
+      <TimedWordRecognition
+        words={words}
+        displayMs={10}
+        totalRounds={1}
+        random={() => 0}
+      />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const shownWords: string[] = [];
+
+    for (let session = 0; session < 4; session += 1) {
+      fireEvent.press(
+        view.getByTestId(session === 0 ? 'start-button' : 'play-again')
+      );
+      if (session > 0) {
+        act(() => jest.advanceTimersByTime(51));
+      }
+      const shown = view.getByTestId('word').props.children as string;
+      shownWords.push(shown);
+      act(() => jest.advanceTimersByTime(11));
+      fireEvent.press(view.getByLabelText(shown));
+      act(() =>
+        jest.advanceTimersByTime(getRecallFeedbackDurationMs(shown, true) + 1)
+      );
+      expect(view.getByTestId('end')).toBeTruthy();
+    }
+
+    expect(new Set(shownWords.slice(0, words.length)).size).toBe(words.length);
+    expect(shownWords[3]).not.toBe(shownWords[2]);
   });
 });

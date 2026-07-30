@@ -1,10 +1,13 @@
 import {
+  countWords,
+  createPersistentVariedDeckState,
   createRecognitionOptions,
   createVariedSequence,
   generatePhrasePool,
   getPhraseCombinationCount,
   getFlashWordPool,
   selectSimilarDistractors,
+  takeNextPersistentVariedItem,
   uniqueStrings,
 } from './flashPracticeContent';
 
@@ -39,10 +42,32 @@ describe('flash practice content', () => {
     expect(sequence[0]).not.toBe('alpha');
   });
 
+  it('keeps a persistent no-replacement cursor until a complete cycle is consumed', () => {
+    const state = createPersistentVariedDeckState();
+    const random = seededRandom(9);
+    const firstCycle = Array.from({ length: 3 }, () =>
+      takeNextPersistentVariedItem(
+        state,
+        ['alpha', 'beta', 'gamma'],
+        random
+      )
+    );
+    const nextCycleFirst = takeNextPersistentVariedItem(
+      state,
+      ['alpha', 'beta', 'gamma'],
+      random
+    );
+
+    expect(new Set(firstCycle)).toEqual(
+      new Set(['alpha', 'beta', 'gamma'])
+    );
+    expect(nextCycleFirst).not.toBe(firstCycle.at(-1));
+  });
+
   it('provides large unique word banks for every difficulty', () => {
-    expect(getFlashWordPool('easy')).toHaveLength(272);
-    expect(getFlashWordPool('medium')).toHaveLength(230);
-    expect(getFlashWordPool('hard')).toHaveLength(307);
+    expect(getFlashWordPool('easy')).toHaveLength(364);
+    expect(getFlashWordPool('medium')).toHaveLength(308);
+    expect(getFlashWordPool('hard')).toHaveLength(384);
   });
 
   it('builds four unique, length-similar recognition options', () => {
@@ -109,7 +134,7 @@ describe('flash practice content', () => {
 
   it('generates hundreds of different phrase combinations', () => {
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
-      expect(getPhraseCombinationCount(difficulty)).toBe(5_832);
+      expect(getPhraseCombinationCount(difficulty)).toBe(13_824);
       const phrases = generatePhrasePool(
         difficulty,
         200,
@@ -124,5 +149,52 @@ describe('flash practice content', () => {
     const phrases = generatePhrasePool('hard', 240, () => 0);
     expect(phrases).toHaveLength(240);
     expect(new Set(phrases).size).toBe(240);
+  });
+
+  it('keeps every Easy combination in a human learning context', () => {
+    const phrases = generatePhrasePool(
+      'easy',
+      getPhraseCombinationCount('easy'),
+      seededRandom(31)
+    );
+    const inanimateLegacySubjects =
+      /^(?:Bright stars|Small rivers|Fresh ideas|Quick foxes|Playful dolphins) /u;
+
+    expect(phrases).toHaveLength(13_824);
+    expect(new Set(phrases).size).toBe(13_824);
+    expect(
+      phrases.every(
+        (phrase) =>
+          !inanimateLegacySubjects.test(phrase) &&
+          countWords(phrase) >= 7 &&
+          countWords(phrase) <= 8
+      )
+    ).toBe(true);
+  });
+
+  it('keeps every Hard combination compact enough for a readable wrapped flash', () => {
+    const phrases = generatePhrasePool(
+      'hard',
+      getPhraseCombinationCount('hard'),
+      seededRandom(37)
+    );
+
+    expect(phrases).toHaveLength(13_824);
+    expect(new Set(phrases).size).toBe(13_824);
+    const wordCounts = phrases.map(countWords);
+    const characterCounts = phrases.map((phrase) => phrase.length);
+    expect(Math.min(...wordCounts)).toBeGreaterThanOrEqual(7);
+    expect(Math.max(...wordCounts)).toBeLessThanOrEqual(11);
+    expect(Math.max(...characterCounts)).toBeLessThanOrEqual(90);
+    expect(
+      phrases.every(
+        (phrase) =>
+          phrase.endsWith('.') &&
+          !phrase.includes(',') &&
+          !/(?:statistical precision|independent confirmation|available sample|temporary pattern)/u.test(
+            phrase
+          )
+      )
+    ).toBe(true);
   });
 });

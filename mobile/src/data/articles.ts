@@ -1,456 +1,1194 @@
-/**
- * Articles Database for PowerReader
- * Curated collection of engaging articles from various fields:
- * - Science & Technology
- * - Nature & Environment
- * - History & Culture
- * - Health & Psychology
- * - Space & Astronomy
- */
+export type ArticleDifficulty = 'easy' | 'medium' | 'hard';
+export type ArticleCategory =
+  | 'science'
+  | 'nature'
+  | 'history'
+  | 'health'
+  | 'space'
+  | 'technology'
+  | 'psychology';
+
+export type ArticleQuestion = {
+  question: string;
+  options: string[];
+  correctIndex: number;
+};
 
 export type Article = {
   id: string;
+  version: number;
   title: string;
-  category: 'science' | 'nature' | 'history' | 'health' | 'space' | 'technology' | 'psychology';
-  difficulty: 'easy' | 'medium' | 'hard';
+  language: 'en';
+  category: ArticleCategory;
+  difficulty: ArticleDifficulty;
   wordCount: number;
   text: string;
-  comprehensionQuestions?: {
-    question: string;
-    options: string[];
-    correctIndex: number;
-  }[];
+  source: 'Original editorial content';
+  license: 'Original content for this application';
+  comprehensionQuestions: ArticleQuestion[];
 };
 
-export const ARTICLES: Article[] = [
-  // ============== SCIENCE & TECHNOLOGY ==============
+type AuthoredQuestion = {
+  question: string;
+  answer: string;
+  distractors: readonly [string, string, string];
+};
+
+type AuthoredArticle = Omit<Article, 'wordCount' | 'comprehensionQuestions'> & {
+  comprehensionQuestions: readonly AuthoredQuestion[];
+};
+
+const ORIGINAL_SOURCE = 'Original editorial content' as const;
+const ORIGINAL_LICENSE = 'Original content for this application' as const;
+
+export const MIN_ARTICLES_PER_DIFFICULTY = 8;
+export const EXPECTED_ARTICLES_PER_DIFFICULTY =
+  MIN_ARTICLES_PER_DIFFICULTY;
+
+/**
+ * Original, evergreen English passages for the offline Power Reader library.
+ * Dynamic totals, product claims, and medical promises are intentionally
+ * avoided so the material remains useful without a network refresh.
+ */
+const AUTHORED_ARTICLES: readonly AuthoredArticle[] = [
+  // Easy
   {
     id: 'sci-001',
-    title: 'The Science of Sleep',
+    version: 2,
+    title: 'What Sleep Does After Learning',
+    language: 'en',
     category: 'science',
     difficulty: 'easy',
-    wordCount: 180,
-    text: `Sleep is one of the most important activities for human health. During sleep, your brain processes information from the day and forms new memories. Your body repairs tissues, builds muscle, and strengthens your immune system.
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `Sleep is not simply a period when the brain switches off. During the night, the brain moves through several repeating stages. The length and pattern of those stages vary from person to person and also change across the night.
 
-Scientists have discovered that sleep occurs in cycles, each lasting about ninety minutes. During these cycles, you experience different stages of sleep, including light sleep, deep sleep, and REM sleep. REM stands for Rapid Eye Movement, and this is when most dreaming occurs.
+Experiments suggest that sleep helps stabilize some memories formed while a person was awake. A learner still needs to pay attention and practice first; sleep cannot create a clear memory of material that was never understood. It can, however, support the work that happened during the day.
 
-Adults need between seven and nine hours of sleep each night for optimal health. However, many people get less than this recommended amount. Lack of sleep can lead to problems with concentration, memory, and mood. It can also increase the risk of serious health conditions like heart disease and diabetes.
+Sleep also affects alertness. A tired reader may lose the thread of a paragraph, reread the same line, or react more slowly to new information. For that reason, an extra hour of late study is not automatically useful if it replaces needed rest.
 
-To improve your sleep quality, experts recommend maintaining a consistent sleep schedule, avoiding screens before bedtime, and creating a cool, dark sleeping environment.`,
+The practical lesson is balanced. Focused study, a regular opportunity to sleep, and later retrieval practice serve different purposes. Treating any one of them as a complete replacement for the others oversimplifies how learning works.`,
     comprehensionQuestions: [
       {
-        question: 'How long does each sleep cycle last?',
-        options: ['About 60 minutes', 'About 90 minutes', 'About 120 minutes', 'About 30 minutes'],
-        correctIndex: 1,
+        question: 'What is the passage’s main point?',
+        answer:
+          'Sleep supports learning and alertness, but it does not replace attentive study.',
+        distractors: [
+          'Sleep creates accurate memories even when material was not understood.',
+          'Every person moves through sleep stages of exactly the same length.',
+          'Late-night study is always more valuable than regular sleep.',
+        ],
       },
       {
-        question: 'What does REM stand for?',
-        options: ['Rest and Energy Mode', 'Rapid Eye Movement', 'Relaxed Evening Mode', 'Recovery Energy Method'],
-        correctIndex: 1,
+        question: 'Why may replacing sleep with another hour of study be unhelpful?',
+        answer:
+          'Fatigue can weaken attention and make later reading less effective.',
+        distractors: [
+          'Memory is formed only during the first hour of the night.',
+          'Reading after dark prevents the brain from entering any sleep stage.',
+          'Retrieval practice works only immediately before going to bed.',
+        ],
       },
     ],
   },
-  {
-    id: 'sci-002',
-    title: 'How Vaccines Work',
-    category: 'science',
-    difficulty: 'medium',
-    wordCount: 220,
-    text: `Vaccines are one of the greatest achievements in medical history, saving millions of lives each year by preventing infectious diseases. But how exactly do they work?
-
-Your immune system is designed to recognize and fight foreign invaders like bacteria and viruses. When a pathogen enters your body, specialized cells identify it and create antibodies specifically designed to neutralize that threat. Your body also creates memory cells that remember how to fight that pathogen in the future.
-
-Vaccines take advantage of this natural process. They introduce a weakened or inactive form of a pathogen, or just a piece of it, into your body. This is enough to trigger your immune system to respond and create antibodies and memory cells, but not enough to make you sick.
-
-If you later encounter the actual pathogen, your immune system already knows how to fight it. The memory cells quickly produce antibodies, neutralizing the threat before it can cause illness.
-
-Different types of vaccines work in slightly different ways. Some contain weakened live viruses, others use killed pathogens, and newer mRNA vaccines provide instructions for your cells to make a harmless piece of the virus that triggers an immune response.
-
-Widespread vaccination creates herd immunity, protecting even those who cannot be vaccinated due to age or health conditions.`,
-    comprehensionQuestions: [
-      {
-        question: 'What do vaccines introduce to the body?',
-        options: ['Active disease', 'Weakened or inactive pathogens', 'Only antibodies', 'White blood cells'],
-        correctIndex: 1,
-      },
-      {
-        question: 'What is herd immunity?',
-        options: ['Immunity in animals', 'Protection through widespread vaccination', 'Natural immunity from birth', 'Temporary protection'],
-        correctIndex: 1,
-      },
-    ],
-  },
-  {
-    id: 'sci-003',
-    title: 'Quantum Computing Explained',
-    category: 'technology',
-    difficulty: 'hard',
-    wordCount: 280,
-    text: `Quantum computing represents a fundamental shift in how we process information. While classical computers use bits that exist as either 0 or 1, quantum computers use quantum bits, or qubits, which can exist in multiple states simultaneously through a phenomenon called superposition.
-
-This ability to be in multiple states at once gives quantum computers their extraordinary potential power. While a classical computer with n bits can be in one of 2^n possible states, a quantum computer with n qubits can be in a superposition of all 2^n states simultaneously. This allows quantum computers to explore many possible solutions to a problem at once.
-
-Another quantum phenomenon that quantum computers exploit is entanglement. When qubits become entangled, the state of one qubit is correlated with the state of another, regardless of the physical distance between them. This creates powerful connections that can be used for computation.
-
-However, quantum computers face significant challenges. Qubits are extremely fragile and can be disturbed by heat, electromagnetic radiation, or even cosmic rays. This causes decoherence, where the quantum state is lost. Current quantum computers must be cooled to near absolute zero and carefully shielded to maintain their quantum states.
-
-Despite these challenges, quantum computers have already demonstrated quantum supremacy, performing calculations that would take classical computers thousands of years. Applications include drug discovery, cryptography, optimization problems, and simulating quantum systems in physics and chemistry.
-
-The race to build practical, error-corrected quantum computers continues, with major technology companies and governments investing billions in this transformative technology.`,
-    comprehensionQuestions: [
-      {
-        question: 'What is superposition in quantum computing?',
-        options: ['Bits being only 0 or 1', 'Qubits existing in multiple states simultaneously', 'Connecting computers together', 'A type of encryption'],
-        correctIndex: 1,
-      },
-      {
-        question: 'What is decoherence?',
-        options: ['A type of quantum gate', 'Loss of quantum state due to disturbance', 'Connection between qubits', 'A cooling process'],
-        correctIndex: 1,
-      },
-    ],
-  },
-
-  // ============== NATURE & ENVIRONMENT ==============
   {
     id: 'nat-001',
-    title: 'The Amazon Rainforest',
+    version: 2,
+    title: 'The Amazon as a Water and Carbon System',
+    language: 'en',
     category: 'nature',
     difficulty: 'easy',
-    wordCount: 175,
-    text: `The Amazon Rainforest is the largest tropical rainforest on Earth, covering over 5.5 million square kilometers across nine South American countries. Often called the lungs of the Earth, this vast forest produces about twenty percent of the worlds oxygen.
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `The Amazon rainforest influences regions far beyond the ground covered by its trees. Roots draw water from the soil, and leaves release part of that water into the air. Winds can carry the moisture onward, where it may contribute to clouds and rain in another place.
 
-The Amazon is home to an incredible diversity of life. Scientists estimate that one in ten known species on Earth lives in the Amazon. This includes over 40,000 plant species, 1,300 bird species, and more than 3,000 types of fish. New species are still being discovered every year.
+The forest also stores a large amount of carbon in trunks, roots, soil, and other living material. Trees take in carbon dioxide as they grow. When forest is burned or allowed to decay after clearing, part of that stored carbon returns to the atmosphere.
 
-The forest plays a crucial role in regulating the global climate. Trees absorb carbon dioxide from the atmosphere, helping to slow climate change. The Amazon also influences weather patterns far beyond South America, affecting rainfall in distant regions.
+Rainforest plants produce oxygen during photosynthesis, but plants, animals, and decomposers also use oxygen. Describing the Amazon as the source of a fixed share of the oxygen people breathe is therefore misleading. Its global importance is better explained through its biodiversity, carbon storage, and role in the water cycle.
 
-Unfortunately, the Amazon faces serious threats from deforestation, mining, and agriculture. Every minute, an area of rainforest the size of several football fields is destroyed. Protecting this vital ecosystem is essential for the health of our planet.`,
+Protecting the forest is not only about counting trees. The location of clearing, the health of soils and rivers, and whether damaged areas can recover all affect how the larger system functions.`,
     comprehensionQuestions: [
       {
-        question: 'What percentage of the worlds oxygen does the Amazon produce?',
-        options: ['About 10%', 'About 20%', 'About 50%', 'About 5%'],
-        correctIndex: 1,
+        question: 'Which description best captures the passage’s main idea?',
+        answer:
+          'The Amazon matters through connected water, carbon, and ecological processes.',
+        distractors: [
+          'The Amazon is important only because it supplies a fixed share of breathable oxygen.',
+          'Rain produced over the Amazon always falls in the same forest location.',
+          'Counting the number of remaining trees fully measures forest health.',
+        ],
+      },
+      {
+        question: 'Why does the passage reject a fixed oxygen-share claim?',
+        answer:
+          'Oxygen is both produced and consumed within the living forest system.',
+        distractors: [
+          'Rainforest leaves absorb oxygen but never release it.',
+          'Only rivers, rather than plants, take part in photosynthesis.',
+          'The atmosphere contains no oxygen produced by living organisms.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'his-001',
+    version: 2,
+    title: 'What Remains of the Library of Alexandria',
+    language: 'en',
+    category: 'history',
+    difficulty: 'easy',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `The ancient Library of Alexandria became famous for an ambitious goal: gathering written knowledge from many parts of the Mediterranean world. It formed part of a larger research institution where scholars studied literature, mathematics, medicine, geography, and other subjects.
+
+The exact size of the collection is unknown. Ancient and later accounts give very different estimates, and a rolled text was not the same unit as a modern book. Stories about ships surrendering manuscripts for copying also survive, but historians treat the details cautiously because the evidence is incomplete.
+
+The library’s decline was probably not one simple event. Alexandria experienced fires, political conflict, changes in royal support, and shifts in scholarly institutions across several centuries. Different collections associated with the city may have been damaged or dispersed at different times.
+
+This uncertainty is part of the historical lesson. The library remains a symbol of organized learning, yet its story also shows why historians compare sources instead of repeating the most dramatic version. A memorable legend can preserve interest in the past while still requiring careful examination.`,
+    comprehensionQuestions: [
+      {
+        question: 'How does the passage describe the library’s decline?',
+        answer:
+          'It was probably a gradual and complicated process rather than one certain disaster.',
+        distractors: [
+          'It is fully documented as the result of one fire on a known date.',
+          'It happened because scholars stopped studying every subject at once.',
+          'It occurred before the library gathered any manuscripts.',
+        ],
+      },
+      {
+        question: 'Why should estimates of the collection’s size be treated cautiously?',
+        answer:
+          'Sources disagree, and ancient scroll counts do not map neatly to modern books.',
+        distractors: [
+          'The library kept only spoken performances and no written works.',
+          'Every surviving source reports exactly the same total.',
+          'Historians know the total but have agreed not to publish it.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'psy-002',
+    version: 1,
+    title: 'Changing a Habit by Changing Its Setting',
+    language: 'en',
+    category: 'psychology',
+    difficulty: 'easy',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `A habit is a response that becomes easier to repeat in a familiar situation. The setting may include a time, a place, an object, or a feeling. Seeing a phone beside the bed, for example, can prompt checking it before a person has made a deliberate choice.
+
+Because settings matter, changing the environment can make a behavior easier or harder. Someone who wants to read in the morning might place a book on the breakfast table and move the phone to another room. The book becomes visible at the useful moment, while the competing cue requires extra effort to reach.
+
+This does not mean every behavior follows one simple formula. Motivation, stress, social expectations, and access to resources also influence action. A plan that works during a quiet week may fail when the schedule changes.
+
+Useful habit experiments are small and observable. Change one cue, decide what action should follow it, and notice what happens for several days. If the behavior does not occur, revise the setting or make the action smaller instead of treating one missed attempt as proof of failure.`,
+    comprehensionQuestions: [
+      {
+        question: 'What strategy does the passage recommend for changing a habit?',
+        answer:
+          'Adjust a cue in the environment and observe whether the desired action becomes easier.',
+        distractors: [
+          'Depend on motivation while leaving every competing cue unchanged.',
+          'Judge the entire plan after one missed attempt.',
+          'Assume that every behavior follows an identical formula.',
+        ],
+      },
+      {
+        question: 'Why does the author call useful habit experiments small?',
+        answer:
+          'A limited change makes it easier to observe what helped and revise the plan.',
+        distractors: [
+          'Small actions never require a cue or a particular setting.',
+          'Long-term behavior can be measured accurately after a single hour.',
+          'Social expectations stop influencing any action that is easy.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'tec-001',
+    version: 2,
+    title: 'How Pattern-Finding Systems Learn',
+    language: 'en',
+    category: 'technology',
+    difficulty: 'easy',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `Some computer systems are trained by showing them many examples rather than by writing a separate rule for every situation. A system that sorts photographs might receive examples labeled “bridge,” “tree,” or “bicycle.” During training, it adjusts internal values so its later guesses fit the examples more closely.
+
+The system does not understand a bridge in the way a person does. It detects statistical patterns in the data it was given. If nearly every bridge photograph was taken on a sunny day, the system might accidentally use bright sky as a clue. It could then perform poorly on a bridge photographed in fog.
+
+This is why evaluation needs material that was not used for training. Test examples can reveal whether the system learned a useful pattern or merely repeated a shortcut. Reviewers also examine whether important groups or conditions were missing from the data.
+
+Pattern-finding systems can assist with many tasks, but fluent output is not proof of sound reasoning. Their results still need checks suited to the consequences of the decision.`,
+    comprehensionQuestions: [
+      {
+        question: 'Why should a trained system be tested on new examples?',
+        answer:
+          'New examples can reveal whether it learned a useful pattern instead of a shortcut.',
+        distractors: [
+          'New examples guarantee that the system understands objects like a person.',
+          'Testing removes the need to inspect the training data.',
+          'A system can adjust its values only after all evaluation has ended.',
+        ],
+      },
+      {
+        question: 'What bridge-photograph problem illustrates a shortcut?',
+        answer:
+          'The system may treat sunny skies as evidence that a bridge is present.',
+        distractors: [
+          'The system may refuse to process any photograph containing a tree.',
+          'The labels may cause every internal value to remain fixed.',
+          'The camera may physically rebuild the bridge during training.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'psy-001',
+    version: 2,
+    title: 'When a Task Absorbs Attention',
+    language: 'en',
+    category: 'psychology',
+    difficulty: 'easy',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `People sometimes become so involved in an activity that they notice little else and lose track of time. Researchers often call this experience flow. It has been reported during music, sport, writing, craft work, games, and many other activities.
+
+Flow is more likely when a task has a clear goal and offers useful feedback. The challenge also needs to be manageable. If the task demands almost no attention, boredom can appear. If it seems far beyond current skill, worry may take over. The helpful range is not a perfect fixed point; it can shift as skill, energy, and experience change.
+
+The experience cannot be commanded on schedule. Interruptions, unclear instructions, or concern about evaluation may prevent deep involvement even when the activity is usually enjoyable. People also differ in which tasks hold their attention.
+
+The practical value of the idea is not that flow guarantees happiness or excellent work. It is that clear goals, feedback, and an appropriate challenge can create better conditions for sustained attention. Those conditions can be improved even when the special feeling of flow does not occur.`,
+    comprehensionQuestions: [
+      {
+        question: 'Which conditions does the passage connect with sustained attention?',
+        answer:
+          'Clear goals, useful feedback, and a manageable challenge.',
+        distractors: [
+          'Unclear instructions, constant interruptions, and public evaluation.',
+          'A task that remains far below the person’s skill.',
+          'A fixed level of challenge that never changes with experience.',
+        ],
+      },
+      {
+        question: 'What qualification does the author make about flow?',
+        answer:
+          'Helpful conditions can be created, but the experience itself is not guaranteed.',
+        distractors: [
+          'Flow occurs on command whenever a task includes a score.',
+          'Only professional athletes and musicians can experience flow.',
+          'The feeling always proves that the resulting work is excellent.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'sci-004',
+    version: 1,
+    title: 'Why Bridges Need Room to Move',
+    language: 'en',
+    category: 'science',
+    difficulty: 'easy',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `A long bridge may look completely still, yet its materials move by small amounts. Steel and concrete expand when they warm and contract when they cool. Traffic, wind, and the bridge’s own weight also make parts bend slightly.
+
+Engineers plan for this motion instead of trying to eliminate it. An expansion joint creates a controlled gap between sections of a bridge deck. The gap can narrow or widen as temperature changes. Bearings beneath the deck allow limited movement while continuing to support the structure.
+
+These parts need inspection because dirt, corrosion, or damaged seals can stop them working freely. A blocked joint may transfer force into another part of the bridge. A loose or worn component can also allow more movement than the design intended.
+
+Movement alone is therefore not evidence that a bridge is failing. The useful question is whether the motion stays within the planned range and whether the parts that guide it remain in good condition. Safe structures often depend on controlled flexibility rather than perfect rigidity.`,
+    comprehensionQuestions: [
+      {
+        question: 'What is the main purpose of an expansion joint?',
+        answer:
+          'It gives bridge sections controlled room to move as conditions change.',
+        distractors: [
+          'It locks every bridge section into a perfectly rigid position.',
+          'It prevents steel and concrete from changing temperature.',
+          'It carries traffic only when bearings have been removed.',
+        ],
+      },
+      {
+        question: 'Why can a blocked joint create a problem?',
+        answer:
+          'Force that should be relieved by movement may be transferred elsewhere.',
+        distractors: [
+          'The joint will make the entire bridge colder than the air.',
+          'Every bearing will immediately expand beyond the bridge deck.',
+          'The bridge will stop carrying its own weight.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'his-003',
+    version: 1,
+    title: 'How Conservators Stabilize a Wet Book',
+    language: 'en',
+    category: 'history',
+    difficulty: 'easy',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `When a book becomes wet, the first goal is not to make it look perfect. The first goal is to prevent further damage. Wet paper becomes weak, coated pages may stick together, and mold can begin to grow if moisture remains.
+
+Conservators first record what happened and identify the materials involved. A modern glossy book may need different treatment from an older volume made with handmade paper and leather. If many books are soaked at once, some can be frozen. Freezing pauses mold growth and gives a team time to plan drying in manageable groups.
+
+Air drying can work for a small number of damp books. Pages are supported, absorbent material is changed regularly, and air moves around the object without using strong heat. A book is not forced flat while its fibers are swollen.
+
+Later repairs come only after the object is stable and dry. This order matters because a rushed cosmetic repair can trap moisture or tear weakened paper. Conservation begins with evidence, material knowledge, and patience rather than an attempt to erase every sign of age.`,
+    comprehensionQuestions: [
+      {
+        question: 'What is the first priority when a book becomes wet?',
+        answer:
+          'Stabilize it and prevent additional damage.',
+        distractors: [
+          'Press it flat before checking how wet the paper is.',
+          'Apply a cosmetic repair while the fibers are swollen.',
+          'Use strong heat to remove every trace of moisture immediately.',
+        ],
+      },
+      {
+        question: 'Why might a large group of wet books be frozen?',
+        answer:
+          'Freezing slows further damage while the team organizes staged drying.',
+        distractors: [
+          'Freezing permanently repairs every torn or stained page.',
+          'Frozen paper can be flattened without identifying its materials.',
+          'Ice replaces the need to dry the books later.',
+        ],
+      },
+    ],
+  },
+
+  // Medium
+  {
+    id: 'sci-002',
+    version: 2,
+    title: 'How Vaccination Prepares Immune Memory',
+    language: 'en',
+    category: 'science',
+    difficulty: 'medium',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `The immune system responds to distinctive molecules associated with a pathogen. After an infection, some immune cells can retain information that helps the body respond more rapidly to a later encounter. Vaccination aims to build useful immune memory without requiring the full disease.
+
+Vaccines do not all deliver the same material. Depending on the vaccine, the immune system may encounter a weakened organism, an inactivated organism, a purified component, or instructions that allow cells to make a harmless antigen for a short time. The appropriate design depends on the pathogen and the population being protected.
+
+Immune responses also vary. A vaccine may be especially strong at preventing severe disease while offering less complete protection against any infection. Some protection can fade, which is why additional doses are recommended for certain vaccines. Side effects and rare risks are monitored alongside benefits.
+
+Population protection is not a single threshold that works identically for every disease. It depends on how a pathogen spreads, how well a vaccine limits infection or transmission, how long protection lasts, and how evenly coverage is distributed. Accurate explanation therefore requires naming the vaccine and outcome being discussed.`,
+    comprehensionQuestions: [
+      {
+        question: 'Why does the passage describe several vaccine designs?',
+        answer:
+          'Different vaccines present immune targets in different safe forms.',
+        distractors: [
+          'Every vaccine contains a live version of the same organism.',
+          'Vaccine design is unrelated to the pathogen being addressed.',
+          'Immune memory forms only after a person develops the full disease.',
+        ],
+      },
+      {
+        question: 'Why is population protection not one universal threshold?',
+        answer:
+          'Transmission, vaccine effects, duration, and coverage patterns differ.',
+        distractors: [
+          'A threshold depends only on the color of the vaccine packaging.',
+          'Protection is identical for every pathogen once any dose is given.',
+          'Population effects can be calculated without considering transmission.',
+        ],
       },
     ],
   },
   {
     id: 'nat-002',
-    title: 'Ocean Acidification',
+    version: 2,
+    title: 'Why Added Carbon Dioxide Changes Seawater',
+    language: 'en',
     category: 'nature',
     difficulty: 'medium',
-    wordCount: 230,
-    text: `Ocean acidification is often called climate changes equally evil twin. As humans release more carbon dioxide into the atmosphere, about a quarter of it is absorbed by the oceans. This might sound beneficial, but it triggers a chemical reaction that makes seawater more acidic.
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `The ocean exchanges carbon dioxide with the atmosphere. When additional carbon dioxide dissolves in seawater, part of it reacts with water and changes the balance among several dissolved carbon compounds. One result is a decrease in pH, often called ocean acidification.
 
-When carbon dioxide dissolves in seawater, it forms carbonic acid. Since the Industrial Revolution, ocean acidity has increased by about thirty percent. This change is happening faster than at any time in the past 300 million years.
+The term can be confusing because seawater remains on the alkaline side of the pH scale in most places. “Acidification” describes movement toward a lower pH, not a claim that the entire ocean has become an ordinary acid.
 
-The effects on marine life are profound. Many sea creatures, including corals, oysters, and certain plankton, build their shells and skeletons from calcium carbonate. In more acidic water, it becomes harder for these organisms to form and maintain their protective structures. In extremely acidic conditions, shells can actually dissolve.
+The chemical shift also reduces the availability of carbonate ions used by many organisms to build calcium-carbonate shells or skeletons. The effect is not identical for every species or location. Temperature, local water chemistry, food supply, and an organism’s life stage can influence the response.
 
-Coral reefs are particularly vulnerable. These underwater ecosystems support about twenty-five percent of all marine species. As waters become more acidic, coral growth slows, and reefs become weaker and more susceptible to bleaching and disease.
-
-The food web consequences extend beyond shell-building creatures. Fish populations that depend on coral reefs decline, affecting fishing communities worldwide. Pteropods, tiny sea snails that form the base of many marine food chains, are already showing damaged shells in some regions.
-
-Addressing ocean acidification requires reducing carbon dioxide emissions globally, making it inseparable from the broader challenge of climate change.`,
+Researchers study the process with long-term measurements, controlled experiments, and observations near places where naturally carbon-rich water reaches the surface. No single method answers every question. Together, they help distinguish a broad chemical trend from the varied biological effects that follow from it.`,
     comprehensionQuestions: [
       {
-        question: 'How much carbon dioxide do oceans absorb?',
-        options: ['About half', 'About a quarter', 'About three quarters', 'Almost none'],
-        correctIndex: 1,
+        question: 'What does “ocean acidification” mean in this passage?',
+        answer:
+          'Dissolved carbon dioxide shifts seawater toward a lower pH.',
+        distractors: [
+          'All seawater immediately becomes a strong ordinary acid.',
+          'The ocean stops exchanging any gas with the atmosphere.',
+          'Carbonate ions increase equally in every marine habitat.',
+        ],
+      },
+      {
+        question: 'Why do researchers combine several study methods?',
+        answer:
+          'The chemical trend and biological responses vary across conditions.',
+        distractors: [
+          'A single short experiment already describes every ocean location.',
+          'Long-term measurements cannot record changes in water chemistry.',
+          'Natural observations make controlled experiments unnecessary.',
+        ],
       },
     ],
   },
   {
     id: 'nat-003',
-    title: 'Migration Mysteries',
+    version: 2,
+    title: 'How Animals Navigate a Migration',
+    language: 'en',
     category: 'nature',
     difficulty: 'medium',
-    wordCount: 245,
-    text: `Every year, billions of animals undertake incredible journeys across the globe, traveling thousands of miles between breeding and feeding grounds. These migrations are among natures most spectacular phenomena, yet many aspects remain mysterious to scientists.
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `Migration requires more than sustained movement. An animal must begin at a useful time, maintain a direction, find places to rest or feed, and adjust when weather changes. Different species solve these tasks with different combinations of information.
 
-The Arctic Tern holds the record for the longest migration of any animal, traveling from Arctic breeding grounds to Antarctic seas and back each year, a round trip of about 44,000 miles. Over its lifetime, an Arctic Tern may travel the equivalent of three trips to the Moon.
+Some birds can use the position of the sun or stars. Experiments also show that many animals respond to Earth’s magnetic field. Smell helps salmon recognize water associated with their home river, while landmarks and learned routes matter for other travelers. A species may use one cue to set a broad direction and another to make the final approach.
 
-How do animals navigate such vast distances? Research has revealed multiple navigation systems. Many birds can detect Earths magnetic field using specialized cells containing iron-rich minerals. Salmon use their keen sense of smell to return to the exact stream where they were born. Sea turtles may use a combination of magnetic navigation and wave patterns.
+Navigation is only one part of a successful migration. A route can fail if a traditional stopping place loses food or shelter. A protected breeding site is therefore not enough when the journey to it crosses damaged habitat.
 
-The timing of migrations is often triggered by changes in day length, which signals the approach of seasonal changes. However, climate change is disrupting these ancient patterns. Some species are migrating earlier or later than they used to, which can cause mismatches with food availability at their destinations.
-
-Tracking technology has revolutionized our understanding of migration. Tiny GPS devices and satellite transmitters allow scientists to follow individual animals throughout their journeys, revealing stopover sites and previously unknown routes.
-
-Understanding migration is crucial for conservation. Protecting not just breeding grounds but entire migration corridors is essential for the survival of these remarkable travelers.`,
+Tracking tags reveal where animals pause and how routes shift, but the data require care. Tagged individuals may represent only part of a population, and a dot on a map does not by itself explain why an animal chose that path. Conservation decisions are strongest when movement records are combined with habitat and behavior observations.`,
     comprehensionQuestions: [
       {
-        question: 'How far does an Arctic Tern travel each year?',
-        options: ['About 10,000 miles', 'About 25,000 miles', 'About 44,000 miles', 'About 5,000 miles'],
-        correctIndex: 2,
+        question: 'What does the passage emphasize about migration cues?',
+        answer:
+          'Animals may combine several cues for different parts of a journey.',
+        distractors: [
+          'Every migrating species follows stars and ignores all other information.',
+          'A single magnetic cue determines every final destination exactly.',
+          'Learned routes matter only after migration has ended.',
+        ],
       },
-    ],
-  },
-
-  // ============== HISTORY & CULTURE ==============
-  {
-    id: 'his-001',
-    title: 'The Library of Alexandria',
-    category: 'history',
-    difficulty: 'easy',
-    wordCount: 185,
-    text: `The Library of Alexandria was one of the largest and most significant libraries of the ancient world. Located in Alexandria, Egypt, it was founded in the third century BCE under the Ptolemaic dynasty. The library aimed to collect all the worlds knowledge under one roof.
-
-At its height, the library may have held between 40,000 and 400,000 scrolls, containing works on literature, science, mathematics, philosophy, and medicine. Scholars from across the Mediterranean world came to study and conduct research there.
-
-The library employed a remarkable method of expanding its collection. Ships arriving in Alexandria were required to surrender any books they carried. These were copied by scribes, with the copies returned to the owners while the originals were kept in the library.
-
-The fate of the library remains one of historys great mysteries. There was no single catastrophic destruction. Instead, the library likely declined gradually over several centuries due to fire, conflict, and decreasing funding.
-
-Despite its loss, the Library of Alexandria remains a powerful symbol of the pursuit of knowledge and the importance of preserving human intellectual achievement.`,
-    comprehensionQuestions: [
       {
-        question: 'When was the Library of Alexandria founded?',
-        options: ['First century CE', 'Third century BCE', 'Fifth century BCE', 'Second century CE'],
-        correctIndex: 1,
+        question: 'Why is protecting only a breeding site sometimes insufficient?',
+        answer:
+          'Animals also depend on suitable habitat along the migration route.',
+        distractors: [
+          'Breeding sites prevent animals from beginning a journey.',
+          'Tracking tags supply all food needed at stopping places.',
+          'Migrating animals never rest between their two endpoints.',
+        ],
       },
     ],
   },
   {
     id: 'his-002',
-    title: 'The Silk Road',
+    version: 2,
+    title: 'The Silk Roads as a Network',
+    language: 'en',
     category: 'history',
     difficulty: 'medium',
-    wordCount: 240,
-    text: `The Silk Road was not a single road but a vast network of trade routes connecting East Asia with the Mediterranean world. For over 1,500 years, this network facilitated the exchange of goods, ideas, and cultures between civilizations.
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `The name Silk Roads refers to a changing network of routes rather than one road joining two endpoints. Caravans, ships, and local traders connected parts of East Asia, Central Asia, South Asia, the Middle East, North Africa, and Europe across different periods.
 
-The routes earned their name from the lucrative Chinese silk trade, which began during the Han Dynasty around 130 BCE. Chinese silk was highly prized in Rome, where it sold for enormous prices. But silk was just one of many commodities traded. Spices, precious metals, gemstones, glassware, and textiles all traveled these routes.
+Silk was an important luxury product, but it was only one item in motion. Horses, glass, paper, metals, spices, textiles, and many ordinary goods traveled for part of the network. A merchant rarely crossed the whole distance. Goods passed through markets and middlemen, gathering new costs and meanings along the way.
 
-Perhaps more significant than goods were the ideas that spread along the Silk Road. Buddhism traveled from India to China and beyond. Islamic culture and knowledge spread eastward. Scientific and mathematical concepts, artistic styles, and technologies like papermaking and gunpowder diffused across continents.
+Ideas and skills also moved, though not as simple packages. Religious traditions were translated into new languages and adapted to local customs. Techniques such as papermaking spread through people who practiced, taught, or reproduced them in new settings.
 
-The journey along the Silk Road was dangerous and arduous. Merchants rarely traveled the entire route themselves. Instead, goods passed through many hands, with different groups controlling different segments. Caravanserais, roadside inns spaced about a days journey apart, provided rest and protection for travelers.
-
-The Silk Road declined after the fifteenth century as maritime routes became faster and safer for trade. The Ottoman Empires control over key land routes also encouraged Europeans to seek alternative paths to Asia, eventually leading to the Age of Exploration.
-
-Today, Chinas Belt and Road Initiative seeks to revive these ancient connections through modern infrastructure.`,
+Political stability could make a route safer, while war, taxes, disease, or a new maritime connection could redirect trade. The network therefore had no single opening or closing date. Studying it means tracing particular goods, travelers, and institutions rather than imagining an unchanging line across a map.`,
     comprehensionQuestions: [
       {
-        question: 'When did the Chinese silk trade begin?',
-        options: ['Around 500 CE', 'Around 130 BCE', 'Around 1000 CE', 'Around 300 BCE'],
-        correctIndex: 1,
+        question: 'Why does the passage use the plural name “Silk Roads”?',
+        answer:
+          'Trade used many changing and connected routes rather than one fixed road.',
+        distractors: [
+          'Every trader followed one road but gave it a different name.',
+          'Silk could travel only by sea and never by caravan.',
+          'The route joined exactly two cities without intermediate markets.',
+        ],
       },
-    ],
-  },
-
-  // ============== HEALTH & PSYCHOLOGY ==============
-  {
-    id: 'hea-001',
-    title: 'The Power of Habits',
-    category: 'psychology',
-    difficulty: 'easy',
-    wordCount: 190,
-    text: `Habits shape our daily lives more than we realize. Scientists estimate that about forty percent of our daily actions are habits, performed almost automatically without conscious thought. Understanding how habits work can help us build better ones and break harmful ones.
-
-Every habit follows a simple pattern called the habit loop. First comes the cue, a trigger that tells your brain to start the automatic behavior. Then comes the routine, the behavior itself. Finally, there is the reward, which reinforces the habit and makes you want to repeat it.
-
-To build a new habit, make the cue obvious and the reward satisfying. Want to exercise more? Put your workout clothes next to your bed as a visual cue. After exercising, treat yourself to something enjoyable. Over time, the behavior becomes automatic.
-
-Breaking bad habits requires disrupting the loop. Identify the cue that triggers the unwanted behavior and either remove it or replace the routine with a healthier alternative. If stress triggers snacking, try substituting a short walk or deep breathing exercises.
-
-Patience is essential. Research suggests it takes an average of sixty-six days for a new behavior to become automatic. Consistency matters more than perfection.`,
-    comprehensionQuestions: [
       {
-        question: 'What percentage of daily actions are habits?',
-        options: ['About 20%', 'About 40%', 'About 60%', 'About 80%'],
-        correctIndex: 1,
+        question: 'How did ideas move differently from sealed goods?',
+        answer:
+          'People translated and adapted them in new local settings.',
+        distractors: [
+          'Ideas crossed the network without language or human participation.',
+          'Every community adopted each tradition in an identical form.',
+          'Skills moved only when a single merchant traveled the full distance.',
+        ],
       },
     ],
   },
   {
     id: 'hea-002',
-    title: 'The Gut-Brain Connection',
+    version: 2,
+    title: 'Signals Along the Gut–Brain Axis',
+    language: 'en',
     category: 'health',
     difficulty: 'medium',
-    wordCount: 235,
-    text: `You may have experienced butterflies in your stomach before a big presentation or felt your appetite disappear during times of stress. These sensations hint at a remarkable connection between your gut and your brain, a relationship that scientists are only beginning to fully understand.
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `The digestive system and the brain communicate in both directions. Nerves, hormones, immune signals, and products made by gut microbes can all take part. Stress can change digestion, while signals arising in the gut can influence appetite, discomfort, and other body responses.
 
-Your gastrointestinal tract contains its own nervous system, often called the second brain. This enteric nervous system contains over 500 million neurons and can operate independently of the brain in your head. It communicates with your central nervous system through the vagus nerve, creating a bidirectional highway of information.
+The intestine has an extensive network of nerve cells that manages many local functions. It also produces much of the body’s serotonin. That fact is sometimes explained poorly: serotonin made in the gut does not simply cross into the brain. Peripheral serotonin has important roles in the body, while gut–brain communication uses several indirect pathways, including the vagus nerve and immune signaling.
 
-Your gut is also home to trillions of microorganisms collectively known as the gut microbiome. These bacteria, viruses, and fungi do far more than help digest food. They produce neurotransmitters like serotonin, with about ninety percent of your bodys serotonin made in the gut. They also influence inflammation, immune function, and may even affect mood and cognition.
+Researchers have found associations between microbiome patterns and a range of health conditions. An association does not show that one microbial pattern caused a condition. Illness, medication, diet, age, and many other factors can alter the microbiome as well.
 
-Research has linked disruptions in the gut microbiome to conditions including depression, anxiety, autism, and Parkinsons disease. While we cannot yet prove these connections are causal, the correlations are compelling.
-
-Diet significantly affects your gut microbiome. Fiber-rich foods, fermented products, and diverse plant-based foods promote a healthy microbial community. Processed foods, artificial sweeteners, and antibiotics can harm gut bacteria.
-
-This emerging field, sometimes called psychobiotics, may eventually lead to new treatments for mental health conditions targeting the gut rather than the brain directly.`,
+This field may eventually support useful treatments, but broad promises are premature. Strong evidence requires controlled studies that define the intervention, measure meaningful outcomes, track adverse effects, and show that results can be repeated in appropriate groups.`,
     comprehensionQuestions: [
       {
-        question: 'What percentage of the bodys serotonin is made in the gut?',
-        options: ['About 50%', 'About 70%', 'About 90%', 'About 30%'],
-        correctIndex: 2,
+        question: 'What correction does the passage make about gut serotonin?',
+        answer:
+          'Serotonin made in the gut does not simply pass into the brain.',
+        distractors: [
+          'The digestive system contains no serotonin or nerve cells.',
+          'Gut serotonin crosses directly into the brain in every person.',
+          'Only serotonin, rather than nerves or immune signals, connects gut and brain.',
+        ],
+      },
+      {
+        question: 'Why does an observed microbiome association not prove causation?',
+        answer:
+          'Health, medicine, diet, age, and other factors may influence both observations.',
+        distractors: [
+          'Associations are stronger than controlled and repeatable evidence.',
+          'Every person with a condition has an identical microbiome.',
+          'Microbiome patterns remain unchanged by medication or illness.',
+        ],
       },
     ],
   },
-
-  // ============== SPACE & ASTRONOMY ==============
   {
     id: 'spa-001',
-    title: 'Black Holes Explained',
+    version: 2,
+    title: 'Finding a Black Hole by Its Effects',
+    language: 'en',
     category: 'space',
     difficulty: 'medium',
-    wordCount: 225,
-    text: `Black holes are among the most mysterious objects in the universe. These regions of space have such intense gravity that nothing, not even light, can escape once it crosses a boundary called the event horizon. Despite their name, black holes are not empty voids but rather contain enormous amounts of matter compressed into an incredibly small space.
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `A black hole is a region where gravity curves spacetime so strongly that, beyond a boundary called the event horizon, light cannot escape to a distant observer. The boundary is not a solid surface. It marks a point beyond which outward paths no longer lead back out.
 
-Black holes form when massive stars die. When a star several times more massive than our Sun exhausts its nuclear fuel, it can no longer support itself against gravity. The core collapses violently, and if massive enough, forms a black hole. The resulting object might contain several solar masses squeezed into a region smaller than a city.
+Because a black hole emits no ordinary light from inside that boundary, astronomers study its effects. Gas falling toward a black hole can heat and glow before crossing the horizon. Stars may orbit an unseen massive object. When black holes or other compact objects merge, their motion can produce gravitational waves measured by distant instruments.
 
-At the center of most galaxies, including our Milky Way, lurk supermassive black holes millions or billions of times more massive than the Sun. How these giants formed remains an active area of research.
+Different observations answer different questions. An orbit can estimate mass, X-rays can describe hot nearby gas, and gravitational waves can reveal a merger. An image of bright material surrounding a dark central region tests still other predictions.
 
-Despite being invisible, we can detect black holes through their effects on nearby matter. Material falling toward a black hole heats up and emits X-rays. We can also observe stars orbiting invisible companions and measure gravitational waves produced when black holes merge.
-
-In 2019, the Event Horizon Telescope captured the first direct image of a black hole, showing the shadow cast against glowing gas in the galaxy M87. This remarkable achievement confirmed predictions made by Einsteins theory of general relativity over a century ago.`,
+No single observation is labeled “a black hole” merely because something is invisible. Astronomers compare the object’s mass, size, motion, and radiation with competing explanations. Confidence grows when independent methods describe the same compact source consistently.`,
     comprehensionQuestions: [
       {
-        question: 'What is the boundary of a black hole called?',
-        options: ['The core', 'The singularity', 'The event horizon', 'The corona'],
-        correctIndex: 2,
+        question: 'How can astronomers investigate a black hole?',
+        answer:
+          'They measure its effects on nearby matter, orbits, light, and spacetime.',
+        distractors: [
+          'They collect ordinary light emitted from inside the event horizon.',
+          'They classify every invisible region as a black hole without comparison.',
+          'They rely on one photograph and exclude all motion measurements.',
+        ],
+      },
+      {
+        question: 'Why are several observation methods useful?',
+        answer:
+          'Each method reveals different properties and can test competing explanations.',
+        distractors: [
+          'Every method measures exactly the same property in the same way.',
+          'An orbit can identify hot gas but provides no information about mass.',
+          'Independent evidence makes a compact object less clearly described.',
+        ],
       },
     ],
   },
   {
     id: 'spa-002',
-    title: 'The Search for Exoplanets',
+    version: 2,
+    title: 'How Astronomers Detect Distant Planets',
+    language: 'en',
     category: 'space',
     difficulty: 'medium',
-    wordCount: 250,
-    text: `For most of human history, we could only wonder whether planets existed beyond our solar system. Today, we know of over 5,000 confirmed exoplanets, with thousands more candidates awaiting verification. This revolution in our understanding began in 1992 with the discovery of planets orbiting a pulsar, and accelerated with the first planet found around a Sun-like star in 1995.
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `A planet beside a distant star is difficult to see directly because the star is much brighter. Astronomers therefore often detect a planet through a repeated effect on its host star.
 
-Detecting exoplanets is challenging because they are incredibly faint compared to their host stars, like trying to see a firefly next to a searchlight from miles away. Scientists have developed clever techniques to overcome this challenge.
+The transit method looks for a small dip in starlight when a planet crosses between the star and the telescope. Several regular dips can reveal the orbital period and the planet’s size relative to the star. The radial-velocity method measures tiny shifts in the star’s spectrum as the star moves toward and away from the observer. That motion helps estimate a minimum planetary mass.
 
-The transit method watches for tiny dips in a stars brightness as a planet passes in front of it. NASAs Kepler space telescope used this method to discover over 2,600 planets before its retirement. The radial velocity method detects the slight wobble a planet induces in its star as they orbit their common center of mass.
+Each method has selection effects. Transits require an orbit aligned from our viewpoint, and large planets close to their stars are easier to detect than small planets on long orbits. Stellar activity or another companion can also imitate part of a signal.
 
-Among the discoveries are planets unlike anything in our solar system. Hot Jupiters are gas giants orbiting extremely close to their stars. Super-Earths are rocky planets larger than Earth but smaller than Neptune. Some planets orbit in the habitable zone where liquid water could exist on the surface.
-
-The James Webb Space Telescope is now studying exoplanet atmospheres, searching for chemical signatures that might indicate the presence of life. While we have not yet found definitive evidence of life beyond Earth, the sheer number of planets suggests we may not be alone in the universe.`,
+For this reason, a possible detection begins as a candidate. Researchers examine repeated observations, rule out alternative causes, and may combine methods. The number of known planets changes as evidence accumulates, but the reasoning used to verify a signal remains the more durable lesson.`,
     comprehensionQuestions: [
       {
-        question: 'How many confirmed exoplanets are known?',
-        options: ['About 500', 'About 1,000', 'Over 5,000', 'About 100'],
-        correctIndex: 2,
+        question: 'What durable lesson does the passage emphasize?',
+        answer:
+          'Planet candidates require repeated evidence and checks against alternative causes.',
+        distractors: [
+          'One small dip in starlight proves that a planet exists.',
+          'The current number of known planets will never change.',
+          'Direct photographs are the only valid way to detect a planet.',
+        ],
       },
-    ],
-  },
-  {
-    id: 'spa-003',
-    title: 'The Multiverse Theory',
-    category: 'space',
-    difficulty: 'hard',
-    wordCount: 275,
-    text: `The multiverse theory proposes that our universe may be just one of countless universes existing simultaneously. While this sounds like science fiction, several serious scientific theories suggest some form of multiverse might actually exist.
-
-The most straightforward version comes from quantum mechanics. According to the many-worlds interpretation proposed by physicist Hugh Everett in 1957, every time a quantum measurement is made, the universe splits into multiple branches, one for each possible outcome. In this view, all possible histories and futures exist in a vast branching tree of parallel universes.
-
-Cosmic inflation, the theory explaining the rapid expansion of the early universe, also suggests a multiverse. Inflation might be eternal, constantly generating new bubble universes with potentially different physical laws and constants. Our observable universe would be just one bubble in an infinite foam.
-
-String theory, which attempts to unify all fundamental forces, predicts an enormous landscape of possible universes, perhaps 10 to the power of 500 different configurations. Each configuration would represent a universe with different particle physics.
-
-The multiverse idea has both supporters and critics among physicists. Supporters argue it elegantly explains why our universe seems fine-tuned for life, as we naturally find ourselves in one of the rare habitable universes. Critics contend that theories predicting unobservable universes are not truly scientific, as they cannot be tested or falsified.
-
-Whether the multiverse is real remains unknown and perhaps unknowable. Yet exploring these ideas pushes the boundaries of physics and challenges our understanding of reality itself. Even if we can never prove other universes exist, considering the possibility expands our conception of what existence might mean.`,
-    comprehensionQuestions: [
       {
-        question: 'Who proposed the many-worlds interpretation?',
-        options: ['Albert Einstein', 'Stephen Hawking', 'Hugh Everett', 'Richard Feynman'],
-        correctIndex: 2,
-      },
-    ],
-  },
-
-  // ============== TECHNOLOGY ==============
-  {
-    id: 'tec-001',
-    title: 'Artificial Intelligence Today',
-    category: 'technology',
-    difficulty: 'easy',
-    wordCount: 185,
-    text: `Artificial intelligence, or AI, is transforming how we live and work. From voice assistants on our phones to recommendations on streaming services, AI is already part of daily life for millions of people.
-
-At its core, AI refers to computer systems designed to perform tasks that typically require human intelligence. These include recognizing speech, identifying images, making decisions, and understanding language. Modern AI systems learn from large amounts of data, finding patterns that help them improve at their tasks.
-
-Machine learning is a type of AI where systems improve through experience without being explicitly programmed. Deep learning, a subset of machine learning, uses neural networks inspired by the human brain. These networks can process complex data like images and speech remarkably well.
-
-AI has made impressive advances in recent years. AI systems can now write essays, create art, diagnose diseases from medical images, and defeat world champions at complex games. However, current AI lacks the general intelligence and common sense that humans possess.
-
-As AI becomes more powerful, society faces important questions about privacy, employment, and how to ensure these systems are used responsibly and fairly.`,
-    comprehensionQuestions: [
-      {
-        question: 'What is machine learning?',
-        options: ['Robots that learn to walk', 'Systems that improve through experience', 'Computers that think like humans', 'Programming languages for AI'],
-        correctIndex: 1,
+        question: 'Why does the transit method miss many real planets?',
+        answer:
+          'Only suitably aligned orbits pass across their stars from our viewpoint.',
+        distractors: [
+          'Transiting planets stop their stars from producing any light.',
+          'The method works only for objects inside our solar system.',
+          'Every orbit is aligned, but telescopes ignore repeated dips.',
+        ],
       },
     ],
   },
   {
     id: 'tec-002',
-    title: 'The Rise of Electric Vehicles',
+    version: 2,
+    title: 'What Changes When a Vehicle Uses a Battery',
+    language: 'en',
     category: 'technology',
     difficulty: 'medium',
-    wordCount: 240,
-    text: `Electric vehicles are rapidly transforming the automotive industry after more than a century of internal combustion engine dominance. What was once a niche market is now mainstream, with major automakers committing billions to electrification and some countries planning to ban new gasoline car sales within the next two decades.
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `An electric vehicle stores energy in a battery and uses an electric motor to turn the wheels. Because the motor has fewer moving parts than a combustion engine, routine mechanical maintenance can be different. The vehicle still needs tires, brakes, cooling systems, software checks, and repairs.
 
-The shift is driven by multiple factors. Climate change concerns have pushed governments to implement emissions regulations and offer incentives for electric vehicles. Battery technology has improved dramatically, with costs falling over ninety percent since 2010 while energy density has increased. This means electric cars can now travel over 300 miles on a single charge at increasingly competitive prices.
+Environmental comparisons depend on more than what comes from the tailpipe. Producing the battery and vehicle requires materials and energy. Charging emissions depend on how electricity is generated. Over a vehicle’s full use, distance driven, battery size, climate, and the alternative vehicle all affect the comparison.
 
-Electric vehicles offer several advantages beyond environmental benefits. They have fewer moving parts than gasoline engines, reducing maintenance costs. Electric motors provide instant torque, delivering quick acceleration. Operating costs are lower since electricity is cheaper than gasoline per mile.
+Charging also changes travel planning. A driver who can charge at home may begin most days with sufficient range, while a renter without a reliable parking space may depend on public infrastructure. Fast charging can reduce waiting but places different demands on the battery and electrical network.
 
-However, challenges remain. Charging infrastructure, while expanding rapidly, is still less convenient than gas stations in many areas. Charging takes longer than refueling, though fast chargers can add significant range in thirty minutes. Battery production raises concerns about mining practices and material availability for lithium, cobalt, and other critical minerals.
-
-The electric revolution extends beyond personal cars to buses, trucks, and even aircraft. As technology continues to improve and costs decline, the transition away from fossil fuels in transportation appears increasingly inevitable, fundamentally reshaping industries from oil to automotive manufacturing.`,
+These tradeoffs explain why one headline cannot describe every transition. Electric motors can reduce direct fuel use and local exhaust, yet a fair assessment still includes manufacturing, electricity, access, cost, and end-of-life handling.`,
     comprehensionQuestions: [
       {
-        question: 'How much have battery costs fallen since 2010?',
-        options: ['About 50%', 'About 70%', 'Over 90%', 'About 30%'],
-        correctIndex: 2,
+        question: 'Why can two electric vehicles have different environmental results?',
+        answer:
+          'Battery size, electricity source, use, climate, and alternatives can differ.',
+        distractors: [
+          'All vehicle emissions come only from the tailpipe.',
+          'Manufacturing and charging never require materials or energy.',
+          'Every driver uses the same charging network in the same way.',
+        ],
+      },
+      {
+        question: 'What access problem does the passage identify?',
+        answer:
+          'Some drivers lack a dependable place to charge where they park.',
+        distractors: [
+          'Electric motors can operate only while attached to a charger.',
+          'Home charging prevents a vehicle from traveling on public roads.',
+          'Public charging is available equally in every building and region.',
+        ],
       },
     ],
   },
 
-  // Additional short articles for variety
+  // Hard
   {
-    id: 'psy-001',
-    title: 'The Flow State',
-    category: 'psychology',
-    difficulty: 'easy',
-    wordCount: 165,
-    text: `Have you ever been so absorbed in an activity that you lost track of time? This mental state, called flow, was identified by psychologist Mihaly Csikszentmihalyi in the 1970s. During flow, people report feeling completely focused, energized, and enjoying what they are doing.
+    id: 'sci-003',
+    version: 2,
+    title: 'Why Quantum Algorithms Need Interference',
+    language: 'en',
+    category: 'technology',
+    difficulty: 'hard',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `A quantum bit is described by amplitudes associated with possible measurement outcomes. Before measurement, those amplitudes can form a superposition. This does not mean a user can read every possible answer at once. A measurement produces an ordinary result, and most of the information in the full quantum state is not directly accessible.
 
-Flow occurs when the challenge of a task perfectly matches your skill level. If a task is too easy, you feel bored. If it is too hard, you feel anxious. The sweet spot between these extremes is where flow happens.
+Useful quantum algorithms arrange operations so amplitudes interfere. Paths associated with helpful outcomes are amplified, while others are reduced. Designing such interference is the difficult part; superposition alone does not make every computation faster.
 
-Athletes call this being in the zone. Musicians experience it during inspired performances. Writers find it when words seem to flow effortlessly. Even everyday activities like cooking or gardening can trigger flow states.
+Quantum hardware also comes in several forms. Some systems use superconducting circuits at extremely low temperatures, while others use trapped ions, neutral atoms, or particles of light under different operating conditions. Each approach has its own controls and sources of error.
 
-Research shows that people who experience flow regularly report higher levels of happiness and life satisfaction. The key is finding activities that challenge you just enough to require full attention while remaining achievable.
-
-Flow reminds us that happiness often comes not from relaxation but from being fully engaged with life.`,
+Noise can destroy the relationships an algorithm needs. Error correction aims to protect logical information by encoding it across many physical components, but that protection requires substantial resources. Quantum devices are therefore evaluated on specific tasks, error rates, and verification methods—not on a general claim that they try all solutions simultaneously or replace classical computers.`,
     comprehensionQuestions: [
       {
-        question: 'When does flow occur?',
-        options: ['When tasks are very easy', 'When challenge matches skill level', 'During relaxation', 'When multitasking'],
-        correctIndex: 1,
+        question: 'Why is superposition alone insufficient for a useful speedup?',
+        answer:
+          'An algorithm must use interference to favor outcomes that encode useful information.',
+        distractors: [
+          'Measurement reveals every amplitude as a separate readable answer.',
+          'Superposition prevents a device from performing any controlled operation.',
+          'All classical calculations already use quantum error correction.',
+        ],
+      },
+      {
+        question: 'What hardware qualification does the passage make?',
+        answer:
+          'Different quantum platforms operate under different conditions and errors.',
+        distractors: [
+          'Every quantum device uses a superconducting circuit near absolute zero.',
+          'Particles of light require the same cooling system as every trapped ion.',
+          'Hardware choice has no effect on control or error behavior.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'spa-003',
+    version: 2,
+    title: 'Why Multiverse Proposals Are Difficult to Test',
+    language: 'en',
+    category: 'space',
+    difficulty: 'hard',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `“Multiverse” is an umbrella term for several proposals in which the observable universe is not the only domain that exists. The proposals do not all describe the same mechanism. Some arise from interpretations of quantum mechanics, some from models of cosmic inflation, and some from possible solutions in theories of fundamental physics.
+
+That variety matters when discussing evidence. A prediction made by one model cannot automatically support every idea carrying the multiverse label. Researchers must specify which assumptions lead to which observable consequences.
+
+The central difficulty is access. Light and other signals reach us only from the observable region, and a proposed domain may have no causal contact with it. Some models could still have indirect consequences for patterns within our universe, but those consequences may also have competing explanations.
+
+Critics argue that a proposal with no distinguishable observation falls outside empirical science. Supporters reply that a broader theory may earn support through testable predictions even if not every consequence is observed directly. The debate is therefore not settled by saying either “many universes sound strange” or “the mathematics allows them.” It turns on whether a specific model produces risky, discriminating tests.`,
+    comprehensionQuestions: [
+      {
+        question: 'Why should multiverse proposals be discussed separately?',
+        answer:
+          'They arise from different mechanisms and may make different predictions.',
+        distractors: [
+          'Every proposal uses the same assumptions and observational test.',
+          'The word multiverse refers to one experimentally confirmed object.',
+          'A prediction from one model automatically validates all other models.',
+        ],
+      },
+      {
+        question: 'What standard does the passage emphasize for empirical debate?',
+        answer:
+          'A specific model should produce observations that distinguish it from alternatives.',
+        distractors: [
+          'A model is established whenever its mathematics permits many outcomes.',
+          'An idea is rejected solely because its conclusion sounds unfamiliar.',
+          'Indirect consequences never count as scientific evidence.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'sci-005',
+    version: 1,
+    title: 'Why Correlation Does Not Settle Cause',
+    language: 'en',
+    category: 'science',
+    difficulty: 'hard',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `When two measurements change together, they are correlated. The pattern can be valuable, but it does not by itself identify the mechanism connecting them. Several causal structures can produce the same statistical relationship.
+
+One possibility is direct causation: a change in A contributes to a change in B. Reverse causation is another: B may influence A. A third factor can also affect both. For example, umbrella use and wet pavement rise together because rain influences each; umbrellas do not make the pavement wet.
+
+Researchers strengthen causal arguments by asking what else the proposed cause predicts. Random assignment can balance many competing factors in an experiment, though it is not ethical or practical for every question. Natural experiments, timing evidence, dose–response patterns, mechanism studies, and repeated results in different settings can also contribute.
+
+None of these signals works as a magic stamp. A large correlation can be biased, while a modest effect can still matter. The quality of measurement, missing data, selection into the sample, and the plausibility of alternatives all affect interpretation. Causal reasoning is a structured comparison of explanations, not a choice between accepting every correlation and ignoring all observational evidence.`,
+    comprehensionQuestions: [
+      {
+        question: 'What does the umbrella example demonstrate?',
+        answer:
+          'A third factor can create a correlation between two measurements.',
+        distractors: [
+          'Wet pavement causes people to manufacture umbrellas.',
+          'A strong correlation always identifies a direct mechanism.',
+          'Reverse causation and common causes produce identical interventions.',
+        ],
+      },
+      {
+        question: 'What is the passage’s broader position on causal evidence?',
+        answer:
+          'Causal claims improve by comparing explanations with multiple relevant forms of evidence.',
+        distractors: [
+          'Random assignment is the only evidence that can ever inform causation.',
+          'Observational patterns should always be ignored regardless of design.',
+          'The largest numerical correlation is automatically the correct explanation.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'sci-006',
+    version: 1,
+    title: 'A Scientific Model Is a Purposeful Simplification',
+    language: 'en',
+    category: 'science',
+    difficulty: 'hard',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `A scientific model represents selected features of a system so researchers can describe, explain, or predict something. A map, an equation, a physical replica, and a computer simulation can all be models. Their usefulness depends on purpose rather than on copying reality in every detail.
+
+A model of a river may ignore individual ripples while representing channel shape and water flow. That simplification is helpful for one question and inadequate for another. If the goal changes from estimating flood depth to predicting fish habitat, the model may need different variables and resolution.
+
+Researchers test a model by comparing its output with observations not used merely to tune it. They inspect where errors occur, how sensitive results are to assumptions, and whether a simpler alternative performs similarly. Agreement with one dataset does not prove that every internal assumption is literally true.
+
+Uncertainty should travel with the result. Parameter ranges, measurement error, and alternative model structures can produce different forecasts. A responsible model report therefore states the intended use and boundary conditions. The question is not whether the model is perfectly realistic, but whether its simplifications remain appropriate for the decision being made.`,
+    comprehensionQuestions: [
+      {
+        question: 'Why can the same river require different models?',
+        answer:
+          'Different questions require different variables, detail, and boundaries.',
+        distractors: [
+          'A useful model must reproduce every ripple for every possible purpose.',
+          'Changing the purpose makes observations unnecessary.',
+          'Physical replicas are models, but equations and maps are not.',
+        ],
+      },
+      {
+        question: 'What does agreement with one dataset fail to prove?',
+        answer:
+          'That every assumption is true and the model works for every use.',
+        distractors: [
+          'That the model produced any output for the dataset.',
+          'That researchers can inspect where prediction errors occur.',
+          'That a simpler alternative may be available for comparison.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'tec-003',
+    version: 1,
+    title: 'How Public-Key Encryption Separates Two Keys',
+    language: 'en',
+    category: 'technology',
+    difficulty: 'hard',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `In symmetric encryption, the same secret key is used to encrypt and decrypt data. That approach can be efficient, but two parties need a safe way to share the secret. Public-key systems address a different part of the problem by using a related pair of keys.
+
+A public key can be distributed widely. A corresponding private key must remain secret. Depending on the scheme, someone can use the public key to protect a small secret that only the private-key holder can recover. In practice, that secret often becomes a temporary symmetric key for encrypting a larger conversation.
+
+Public-key techniques can also support digital signatures. A private key creates a signature, and the public key helps others verify that the signed data has not changed and that the signer controlled the corresponding private key. Verification still depends on knowing whose public key it is, which is why certificates and other trust systems matter.
+
+Encryption does not solve every security problem. A compromised device can expose readable data before encryption or after decryption. Metadata may reveal who communicated and when. Secure design therefore combines cryptography with key protection, authentication, software updates, access control, and recovery planning.`,
+    comprehensionQuestions: [
+      {
+        question: 'Why is a temporary symmetric key often used after public-key exchange?',
+        answer:
+          'Symmetric encryption is efficient for protecting the larger conversation.',
+        distractors: [
+          'The public and private keys become unrelated after one message.',
+          'A symmetric key can be published without affecting confidentiality.',
+          'Digital signatures make encryption of the conversation impossible.',
+        ],
+      },
+      {
+        question: 'What limitation of encryption does the passage identify?',
+        answer:
+          'A compromised endpoint may expose data outside the encrypted stage.',
+        distractors: [
+          'Encryption automatically repairs vulnerable software on a device.',
+          'A certificate prevents every private key from being stolen.',
+          'Encrypted communication reveals no timing or relationship metadata.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'nat-004',
+    version: 1,
+    title: 'Restoring a Wetland Means Restoring Its Water',
+    language: 'en',
+    category: 'nature',
+    difficulty: 'hard',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `A wetland restoration can fail even when thousands of appropriate plants are installed. Wetland species depend on a pattern of water depth, timing, flow, and soil saturation. If a drain continues removing water or a barrier prevents seasonal flooding, new plants may not recreate the former habitat.
+
+Teams therefore begin by studying hydrology. They compare old maps, soil layers, water-level records, and nearby reference sites. A project might block an artificial ditch, reconnect a floodplain, or reshape a bank before planting. Each intervention can also affect neighboring land, so designers model where water is likely to move.
+
+Success is measured across several functions. Plant cover matters, but so do water storage, sediment movement, nutrient cycling, and use by animals. A wet year can make an early result look stronger than it is; a dry year can hide recovery that becomes visible later.
+
+Monitoring needs a comparison and enough time to separate project effects from ordinary variation. Even then, restoration rarely returns an exact historical copy. Climate, surrounding development, and available species may have changed. A defensible goal is a functioning, resilient system with stated limits, not a photograph that resembles the past for one season.`,
+    comprehensionQuestions: [
+      {
+        question: 'Why may planting alone fail to restore a wetland?',
+        answer:
+          'The required water depth, timing, and flow may still be disrupted.',
+        distractors: [
+          'Wetland plants function independently of soil and water conditions.',
+          'Every artificial drain increases seasonal flooding in the same way.',
+          'Hydrology matters only after all monitoring has ended.',
+        ],
+      },
+      {
+        question: 'Why does the passage reject a one-season photograph as proof?',
+        answer:
+          'Short-term appearance may not show durable ecological function across variable years.',
+        distractors: [
+          'Plant cover is the only function that restoration can measure.',
+          'A wet year permanently removes all uncertainty from a project.',
+          'Historical conditions can always be recreated exactly.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'his-004',
+    version: 1,
+    title: 'Reading Disturbed Archaeological Layers',
+    language: 'en',
+    category: 'history',
+    difficulty: 'hard',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `Archaeologists often use stratigraphy: in an undisturbed deposit, a lower layer is usually older than a layer above it. The principle is powerful, but a site is rarely a perfectly stacked record. Pits, burrowing animals, roots, erosion, rebuilding, and later digging can move material across layers.
+
+Context therefore matters as much as the object itself. A coin can help estimate when a layer was deposited, but only if researchers understand how the coin entered that location. An old coin may remain in use for decades, and a later pit may carry it downward into earlier soil.
+
+Excavators record color, texture, boundaries, position, and relationships before removing material. They compare artifacts with radiocarbon dates, building phases, documents, environmental remains, and evidence from nearby sites. A disagreement is not solved by automatically choosing the most precise-looking date.
+
+Interpretation proceeds through sequences: which feature cut another, which surface sealed a deposit, and whether material was redeposited. The resulting chronology may include ranges and competing possibilities. Archaeological rigor comes from preserving these relationships and explaining uncertainty, not from assigning every object one exact year.`,
+    comprehensionQuestions: [
+      {
+        question: 'Why can a coin give a misleading date for a soil layer?',
+        answer:
+          'It may have remained in use or moved through a later disturbance.',
+        distractors: [
+          'Coins cannot be compared with any other archaeological evidence.',
+          'Every lower object must be newer than every object above it.',
+          'A precise date always identifies when an object entered the soil.',
+        ],
+      },
+      {
+        question: 'What does the passage treat as central to archaeological rigor?',
+        answer:
+          'Recording relationships and explaining uncertainty across several kinds of evidence.',
+        distractors: [
+          'Assigning one exact year before a feature is excavated.',
+          'Ignoring boundaries whenever artifacts have printed dates.',
+          'Selecting the most precise-looking result without comparison.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'nat-005',
+    version: 1,
+    title: 'Feedback Loops Can Reinforce or Resist Change',
+    language: 'en',
+    category: 'nature',
+    difficulty: 'hard',
+    source: ORIGINAL_SOURCE,
+    license: ORIGINAL_LICENSE,
+    text:
+      `A feedback loop occurs when a change in a system produces an effect that returns to influence the original change. Positive feedback reinforces the direction of change; negative feedback resists it. The words positive and negative describe direction, not whether an outcome is desirable.
+
+Consider snow and sunlight. Fresh snow reflects much of the sunlight that reaches it. If warming melts snow, darker ground can absorb more energy, contributing to additional warming and melt. That is a reinforcing loop. Its strength still depends on season, clouds, surface type, and other energy flows.
+
+A regulating loop behaves differently. If a thermostat detects that a room is warmer than the chosen setting, it turns heating off. The response opposes the original temperature rise. Delays or limits can cause the system to overshoot rather than remain perfectly stable.
+
+Real ecological and climate systems contain many interacting loops. Identifying one feedback does not prove it dominates the final outcome. Researchers estimate each process, examine the time scale, and test whether observations match the proposed mechanism. Feedback language is most useful when it names a complete causal path rather than serving as a vague synonym for change.`,
+    comprehensionQuestions: [
+      {
+        question: 'What do “positive” and “negative” mean for feedback loops?',
+        answer:
+          'They indicate whether a loop reinforces or resists a change.',
+        distractors: [
+          'They state whether every outcome is socially good or harmful.',
+          'They rank feedback by the precision of its measurements.',
+          'They show whether the system contains energy or matter.',
+        ],
+      },
+      {
+        question: 'Why is identifying one feedback loop not enough to predict an outcome?',
+        answer:
+          'Other processes, limits, delays, and time scales may also shape the system.',
+        distractors: [
+          'A feedback loop never has a causal mechanism.',
+          'One reinforcing loop always overwhelms every regulating response.',
+          'Observed changes cannot be compared with proposed feedbacks.',
+        ],
       },
     ],
   },
 ];
 
-// Helper functions
-export function getArticlesByCategory(category: Article['category']): Article[] {
-  return ARTICLES.filter(article => article.category === category);
+export function countArticleWords(text: string): number {
+  return text.trim().split(/\s+/u).filter(Boolean).length;
 }
 
-export function getArticlesByDifficulty(difficulty: Article['difficulty']): Article[] {
-  return ARTICLES.filter(article => article.difficulty === difficulty);
+function placeAnswer(
+  question: AuthoredQuestion,
+  answerIndex: number
+): ArticleQuestion {
+  const options = [...question.distractors];
+  options.splice(answerIndex, 0, question.answer);
+  return {
+    question: question.question,
+    options,
+    correctIndex: answerIndex,
+  };
 }
 
-export function getRandomArticle(difficulty?: Article['difficulty'], category?: Article['category']): Article {
+export const ARTICLES: Article[] = AUTHORED_ARTICLES.map(
+  (article, articleIndex) => ({
+    ...article,
+    wordCount: countArticleWords(article.text),
+    comprehensionQuestions: article.comprehensionQuestions.map(
+      (question, questionIndex) =>
+        placeAnswer(question, (articleIndex + questionIndex * 2) % 4)
+    ),
+  })
+);
+
+export function validateArticles(
+  articles: readonly Article[] = ARTICLES
+): string[] {
+  const errors: string[] = [];
+  const ids = new Set<string>();
+  const titles = new Set<string>();
+
+  for (const article of articles) {
+    const idKey = article.id.trim().toLocaleLowerCase('en');
+    const titleKey = article.title.trim().toLocaleLowerCase('en');
+    if (!idKey || ids.has(idKey)) {
+      errors.push(`${article.id || 'missing-id'}: article ID must be unique`);
+    }
+    ids.add(idKey);
+    if (!titleKey || titles.has(titleKey)) {
+      errors.push(`${article.id}: article title must be present and unique`);
+    }
+    titles.add(titleKey);
+
+    const actualWordCount = countArticleWords(article.text);
+    if (article.wordCount !== actualWordCount) {
+      errors.push(
+        `${article.id}: wordCount is ${article.wordCount}, expected ${actualWordCount}`
+      );
+    }
+    if (actualWordCount < 150 || actualWordCount > 320) {
+      errors.push(
+        `${article.id}: expected 150–320 words, received ${actualWordCount}`
+      );
+    }
+    if (
+      !Number.isInteger(article.version) ||
+      article.version < 1 ||
+      article.language !== 'en' ||
+      article.source !== ORIGINAL_SOURCE ||
+      article.license !== ORIGINAL_LICENSE
+    ) {
+      errors.push(`${article.id}: original-content metadata is incomplete`);
+    }
+    if (article.comprehensionQuestions.length < 2) {
+      errors.push(`${article.id}: at least two comprehension questions required`);
+    }
+
+    const prompts = new Set<string>();
+    for (const question of article.comprehensionQuestions) {
+      const promptKey = question.question.trim().toLocaleLowerCase('en');
+      if (!promptKey || prompts.has(promptKey)) {
+        errors.push(`${article.id}: question prompts must be present and unique`);
+      }
+      prompts.add(promptKey);
+      if (question.options.length !== 4) {
+        errors.push(`${article.id}/${question.question}: exactly four options required`);
+      }
+      const optionKeys = question.options.map((option) =>
+        option.trim().toLocaleLowerCase('en')
+      );
+      if (
+        optionKeys.some((option) => !option) ||
+        new Set(optionKeys).size !== optionKeys.length
+      ) {
+        errors.push(`${article.id}/${question.question}: options must be present and unique`);
+      }
+      if (
+        question.correctIndex < 0 ||
+        question.correctIndex >= question.options.length
+      ) {
+        errors.push(`${article.id}/${question.question}: correct index is invalid`);
+      }
+    }
+  }
+
+  for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+    const levelArticles = articles.filter(
+      (article) => article.difficulty === difficulty
+    );
+    if (levelArticles.length < MIN_ARTICLES_PER_DIFFICULTY) {
+      errors.push(
+        `${difficulty}: at least ${MIN_ARTICLES_PER_DIFFICULTY} articles required`
+      );
+    }
+    if (levelArticles.length !== EXPECTED_ARTICLES_PER_DIFFICULTY) {
+      errors.push(
+        `${difficulty}: exactly ${EXPECTED_ARTICLES_PER_DIFFICULTY} articles required`
+      );
+    }
+    const answerPositions = [0, 0, 0, 0];
+    for (const article of levelArticles) {
+      for (const question of article.comprehensionQuestions) {
+        if (
+          question.correctIndex >= 0 &&
+          question.correctIndex < answerPositions.length
+        ) {
+          answerPositions[question.correctIndex] += 1;
+        }
+      }
+    }
+    if (answerPositions.some((count) => count === 0)) {
+      errors.push(`${difficulty}: correct answers must cover all four positions`);
+    } else if (
+      Math.max(...answerPositions) - Math.min(...answerPositions) > 1
+    ) {
+      errors.push(`${difficulty}: correct-answer positions must be balanced`);
+    }
+  }
+
+  return errors;
+}
+
+export function getArticlesByCategory(category: ArticleCategory): Article[] {
+  return ARTICLES.filter((article) => article.category === category);
+}
+
+export function getArticlesByDifficulty(
+  difficulty: ArticleDifficulty
+): Article[] {
+  return ARTICLES.filter((article) => article.difficulty === difficulty);
+}
+
+export function getRandomArticle(
+  difficulty?: ArticleDifficulty,
+  category?: ArticleCategory,
+  random: () => number = Math.random
+): Article | undefined {
   let filtered = ARTICLES;
   if (difficulty) {
-    filtered = filtered.filter(a => a.difficulty === difficulty);
+    filtered = filtered.filter((article) => article.difficulty === difficulty);
   }
   if (category) {
-    filtered = filtered.filter(a => a.category === category);
+    filtered = filtered.filter((article) => article.category === category);
   }
-  return filtered[Math.floor(Math.random() * filtered.length)];
+  if (filtered.length === 0) return undefined;
+  const randomValue = Math.min(0.999999, Math.max(0, random()));
+  return filtered[Math.floor(randomValue * filtered.length)];
 }
 
-export function getAllCategories(): Article['category'][] {
-  return ['science', 'nature', 'history', 'health', 'space', 'technology', 'psychology'];
+export function getAllCategories(): ArticleCategory[] {
+  return [
+    'science',
+    'nature',
+    'history',
+    'health',
+    'space',
+    'technology',
+    'psychology',
+  ];
 }

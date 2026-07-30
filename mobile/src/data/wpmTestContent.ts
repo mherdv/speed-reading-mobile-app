@@ -1,6 +1,10 @@
 import type { TextSample } from '../domain/types';
+import {
+  getCuratedComprehensionPool,
+  validateCuratedComprehensionContent,
+} from './curatedComprehensionContent';
 import type { Difficulty } from './difficultyPreferences';
-import { BASELINE_TEXT_SAMPLES, TEXT_SAMPLES } from './textSamples';
+import { BASELINE_TEXT_SAMPLES } from './textSamples';
 
 export type WpmQuestion = {
   id: string;
@@ -107,31 +111,20 @@ export function getBaselineReadingPool(
  * three-question pools. Baseline Reading uses getBaselineReadingPool instead.
  */
 export function getWpmTestPool(difficulty: Difficulty): WpmTestItem[] {
-  if (difficulty === 'easy') {
-    return TEXT_SAMPLES.slice(3, 12).map((sample, sampleIndex) => ({
+  const questionCount =
+    difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
+  return getCuratedComprehensionPool(difficulty).map(
+    ({ sample, questions }, sampleIndex) => ({
       sample,
-      questions: [
-        withCorrectChoiceAt(
-          legacyQuestion(sample),
-          sampleIndex % sample.question.choices.length
-        ),
-      ],
-    }));
-  }
-
-  const questionCount = difficulty === 'medium' ? 2 : 3;
-  return BASELINE_TEXT_SAMPLES.map((sample, sampleIndex) => ({
-    sample,
-    questions: questionsFor(sample)
-      .slice(0, questionCount)
-      .map((question, questionIndex) =>
+      questions: questions.map((question, questionIndex) =>
         withCorrectChoiceAt(
           question,
           (sampleIndex * questionCount + questionIndex) %
             question.choices.length
         )
       ),
-  }));
+    })
+  );
 }
 
 function validateBalancedAnswerPositions(
@@ -157,8 +150,15 @@ export function validateBaselineReadingPool(): string[] {
     const items = getBaselineReadingPool(difficulty);
     const expectedChoices =
       difficulty === 'easy' ? 2 : difficulty === 'medium' ? 3 : 4;
-    if (new Set(items.map((item) => item.sample.id)).size < 12) {
-      errors.push(`${difficulty}: at least twelve baseline passages required`);
+    if (items.length !== 18) {
+      errors.push(
+        `${difficulty}: exactly eighteen baseline passages required`
+      );
+    }
+    if (
+      new Set(items.map((item) => item.sample.id)).size !== items.length
+    ) {
+      errors.push(`${difficulty}: baseline passage IDs must be unique`);
     }
     for (const item of items) {
       if (item.questions.length !== 3) {
@@ -189,15 +189,35 @@ export function validateBaselineReadingPool(): string[] {
 }
 
 export function validateWpmTestPool(): string[] {
-  const errors: string[] = [];
+  const errors = validateCuratedComprehensionContent().map(
+    (error) => `curated content: ${error}`
+  );
+  const baselineIds = new Set(
+    BASELINE_TEXT_SAMPLES.map((sample) => sample.id)
+  );
+  const allIds = new Set<string>();
   for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     const items = getWpmTestPool(difficulty);
     const expectedQuestions =
       difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
-    if (new Set(items.map((item) => item.sample.id)).size < 3) {
-      errors.push(`${difficulty}: at least three passages required`);
+    if (
+      items.length !== 10 ||
+      new Set(items.map((item) => item.sample.id)).size !== 10
+    ) {
+      errors.push(`${difficulty}: exactly ten unique passages required`);
     }
     for (const item of items) {
+      if (baselineIds.has(item.sample.id)) {
+        errors.push(
+          `${difficulty}/${item.sample.id}: baseline passage cannot enter paced comprehension`
+        );
+      }
+      if (allIds.has(item.sample.id)) {
+        errors.push(
+          `${difficulty}/${item.sample.id}: passage cannot appear in multiple levels`
+        );
+      }
+      allIds.add(item.sample.id);
       if (item.questions.length !== expectedQuestions) {
         errors.push(
           `${difficulty}/${item.sample.id}: expected ${expectedQuestions} questions`
@@ -207,6 +227,15 @@ export function validateWpmTestPool(): string[] {
         item.questions.some(
           (question) =>
             question.answerDependency !== 'passage-required' ||
+            !question.id.trim() ||
+            !question.prompt.trim() ||
+            !question.rationale.trim() ||
+            question.choices.length !== 4 ||
+            new Set(
+              question.choices.map((choice) =>
+                choice.trim().toLocaleLowerCase('en')
+              )
+            ).size !== 4 ||
             question.correctIndex < 0 ||
             question.correctIndex >= question.choices.length
         )
@@ -224,6 +253,9 @@ export function validateWpmTestPool(): string[] {
         errors
       );
     }
+  }
+  if (allIds.size !== 30) {
+    errors.push('paced comprehension requires thirty disjoint passages');
   }
   return errors;
 }

@@ -6,7 +6,12 @@ import { updateProgress } from '../../data/progressStore';
 import {
   getBaselineReadingPool,
   type WpmQuestion,
+  type WpmTestItem,
 } from '../../data/wpmTestContent';
+import {
+  buildNoReplacementDeck,
+  type RandomSource,
+} from '../../data/randomization';
 import { assessReadingMeasurement, formatDuration } from '../../domain/results';
 import { createQuestionOutcomes } from '../../domain/comprehensionDiagnostics';
 import {
@@ -36,6 +41,7 @@ type Props = {
   civilClock?: MillisecondClock;
   difficulty?: Difficulty;
   autoStart?: boolean;
+  random?: RandomSource;
   onReportResult?: (payload: GameReportPayload) => void;
 };
 
@@ -62,6 +68,19 @@ function questionsFromSample(
   ];
 }
 
+export function buildWpmReadingDeck(
+  items: readonly WpmTestItem[],
+  avoidFirstId = '',
+  random: RandomSource = Math.random
+): WpmTestItem[] {
+  return buildNoReplacementDeck(
+    items,
+    (item) => item.sample.id,
+    avoidFirstId,
+    random
+  );
+}
+
 export default function WpmTest({
   sample: sampleProp,
   questions: questionsProp,
@@ -71,6 +90,7 @@ export default function WpmTest({
   civilClock = epochNowMs,
   difficulty = 'medium',
   autoStart = false,
+  random = Math.random,
   onReportResult,
 }: Props) {
   const { tokens: readingDisplay } = useReadingDisplay();
@@ -106,6 +126,8 @@ export default function WpmTest({
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
   const previousSampleIdRef = useRef('');
+  const contentDeckRef = useRef<WpmTestItem[]>([]);
+  const contentDeckKeyRef = useRef('');
 
   useEffect(() => {
     if (phase !== 'reading') return;
@@ -124,6 +146,8 @@ export default function WpmTest({
 
   function chooseItem() {
     if (sampleProp) {
+      contentDeckRef.current = [];
+      contentDeckKeyRef.current = '';
       return {
         sample: sampleProp,
         questions:
@@ -135,19 +159,19 @@ export default function WpmTest({
     const permitted = pool.filter(
       (item) => item.sample.id !== excludedContentId
     );
-    const eligible = permitted.filter(
-      (item) =>
-        item.sample.id !== previousSampleIdRef.current
-    );
-    const available = eligible.length > 0 ? eligible : permitted;
-    return (
-      available[
-        Math.min(
-          available.length - 1,
-          Math.floor(Math.random() * available.length)
-        )
-      ] ?? initialItem
-    );
+    const deckKey = `${difficulty}:${excludedContentId ?? ''}`;
+    if (
+      contentDeckRef.current.length === 0 ||
+      contentDeckKeyRef.current !== deckKey
+    ) {
+      contentDeckRef.current = buildWpmReadingDeck(
+        permitted,
+        previousSampleIdRef.current,
+        random
+      );
+      contentDeckKeyRef.current = deckKey;
+    }
+    return contentDeckRef.current.shift() ?? permitted[0] ?? initialItem;
   }
 
   function start() {

@@ -96,7 +96,7 @@ const MEDIUM_WORDS: readonly WordSpec[] = [
   { word: 'obsolete', definition: 'no longer useful because something newer replaced it', scenario: 'The factory kept a punch-card reader after all orders moved online', contrast: 'the current scanner used by every department', effect: 'technicians could no longer obtain replacement parts', morphology: 'obsolescence is the noun for becoming outdated.', domain: 'technology history', genre: 'history' },
   { word: 'tentative', definition: 'not final or fully certain', scenario: 'Researchers announced an early explanation based on a small sample', contrast: 'a confirmed conclusion supported by repeated trials', effect: 'the team asked others to test the idea before accepting it', morphology: 'Related to tentatively; the suffix -ive forms an adjective.', domain: 'research', genre: 'science' },
   { word: 'impartial', definition: 'not favoring one side over another', scenario: 'The judge had no connection to either team and used the same criteria', contrast: 'a reviewer who coached one competitor', effect: 'both groups accepted the scoring process', morphology: 'im- means not; partial can mean favoring one part or side.', domain: 'competition rules', genre: 'argument' },
-  { word: 'mitigate', definition: 'reduce the severity or harmful effect of something', scenario: 'Shade cloth was added above the seedlings during the heat wave', contrast: 'leaving every plant exposed at midday', effect: 'leaf damage was reduced but not eliminated', morphology: 'Mitigation is the related noun for reducing harm.', domain: 'horticulture', genre: 'science' },
+  { word: 'mitigate', definition: 'reduce the severity or harmful effect of something', partOfSpeech: 'verb', scenario: 'Shade cloth was added above the seedlings during the heat wave', contrast: 'leaving every plant exposed at midday', effect: 'leaf damage was reduced but not eliminated', morphology: 'Mitigation is the related noun for reducing harm.', domain: 'horticulture', genre: 'science' },
   { word: 'concise', definition: 'brief while still expressing what is necessary', scenario: 'The revised notice kept the deadline, address, and eligibility rule in four lines', contrast: 'a long notice repeating the same background', effect: 'residents found the required action quickly', morphology: 'A whole-word adjective often used for clear, economical language.', domain: 'public communication', genre: 'practical' },
   { word: 'versatile', definition: 'able to serve several different purposes', scenario: 'The folding cart carried books, became a display, and formed a small desk', contrast: 'a fixed shelf designed for one corner', effect: 'the mobile library adapted to several rooms', morphology: 'Versatility is the noun describing this flexibility.', domain: 'library design', genre: 'practical' },
   { word: 'ambiguous', definition: 'open to more than one reasonable interpretation', scenario: 'The sign said visitors could enter after guides arrived', contrast: 'a notice naming the exact opening time', effect: 'some people waited while others walked inside', morphology: 'ambi- suggests both; ambiguity is the related noun.', domain: 'wayfinding', genre: 'argument' },
@@ -128,8 +128,8 @@ const HARD_WORDS: readonly WordSpec[] = [
   { word: 'intransigent', definition: 'unwilling to change a position or compromise', scenario: 'The negotiator rejected every revision before reading its details', contrast: 'participants who adjusted their demands', effect: 'talks stopped despite several workable proposals', morphology: 'in- can mean not; the word describes resistance to agreement.', domain: 'negotiation', genre: 'narrative' },
   { word: 'nuanced', definition: 'showing subtle distinctions rather than a simple either-or view', scenario: 'The review praised the policy’s reach while identifying unequal local effects', contrast: 'a verdict calling it entirely good or entirely bad', effect: 'readers could see both the benefit and the tradeoff', morphology: 'nuance is a fine distinction; -ed forms the adjective.', domain: 'policy review', genre: 'argument' },
   { word: 'ephemeral', definition: 'lasting for only a short time', scenario: 'The desert pool appeared after rain and vanished within days', contrast: 'a spring that flows throughout the year', effect: 'insects completed rapid life stages before the water disappeared', morphology: 'Related to ephemera, things that are short-lived.', domain: 'desert ecology', genre: 'science' },
-  { word: 'corroborate', definition: 'confirm a claim with additional independent evidence', scenario: 'A second diary described the same storm from another village', contrast: 'repeating the first author’s unsupported rumor', effect: 'the date became more credible to historians', morphology: 'corroboration is independent supporting evidence.', domain: 'historical method', genre: 'history' },
-  { word: 'ameliorate', definition: 'make an undesirable condition better', scenario: 'The new shade reduced afternoon heat on the platform', contrast: 'a claim that all summer discomfort disappeared', effect: 'waiting became more comfortable although hot days remained', morphology: 'amelioration is the noun for an improvement in conditions.', domain: 'public transport', genre: 'practical' },
+  { word: 'corroborate', definition: 'confirm a claim with additional independent evidence', partOfSpeech: 'verb', scenario: 'A second diary described the same storm from another village', contrast: 'repeating the first author’s unsupported rumor', effect: 'the date became more credible to historians', morphology: 'corroboration is independent supporting evidence.', domain: 'historical method', genre: 'history' },
+  { word: 'ameliorate', definition: 'make an undesirable condition better', partOfSpeech: 'verb', scenario: 'The new shade reduced afternoon heat on the platform', contrast: 'a claim that all summer discomfort disappeared', effect: 'waiting became more comfortable although hot days remained', morphology: 'amelioration is the noun for an improvement in conditions.', domain: 'public transport', genre: 'practical' },
   { word: 'contingent', definition: 'dependent on a condition that may or may not occur', scenario: 'The field survey would proceed only if river levels fell below the safety mark', contrast: 'a survey scheduled regardless of weather or water level', effect: 'the final date remained uncertain until the condition was met', morphology: 'A contingency is a possible condition or event that affects a plan.', domain: 'field safety', genre: 'practical' },
   { word: 'idiosyncratic', definition: 'distinctive to one person or system rather than generally shared', scenario: 'One archive filed letters by paper color instead of date or author', contrast: 'the standard cataloging method used by neighboring collections', effect: 'new researchers needed special instructions for that archive alone', morphology: 'idiosyncrasy is a distinctive personal or system-specific feature.', domain: 'archives', genre: 'history' },
   { word: 'pervasive', definition: 'spreading widely throughout an area or system', scenario: 'Fine dust appeared inside homes, schools, vehicles, and sealed storage rooms', contrast: 'a stain limited to one workshop corner', effect: 'cleanup required action across the entire district', morphology: 'pervade is the related verb meaning to spread throughout.', domain: 'environmental health', genre: 'science' },
@@ -221,31 +221,94 @@ const MEANING_DISTRACTORS: Readonly<
   inadvertently: ['deliberately and with full awareness', 'reluctantly while understanding the consequence', 'indirectly but still as part of an intentional plan'],
 };
 
+/**
+ * Easy targets use the vocabulary naturally and define it in the same
+ * sentence. This keeps the direct-clue level grammatical for verbs, nouns,
+ * and adverbs instead of forcing every word into an adjective frame.
+ */
+const EASY_TARGET_SENTENCES: Readonly<Record<string, string>> = {
+  meticulous: 'Mara was meticulous—very careful about small details—while checking every label and date.',
+  dormant: 'The winter buds were dormant—temporarily inactive but still able to grow again.',
+  translucent: 'The panel was translucent, letting some light through without showing a clear image.',
+  resilient: 'The garden was resilient, able to recover after the storm damaged its leaves.',
+  frugal: 'Niko was frugal, using money and materials carefully during the renovation.',
+  abundant: 'Flowers were abundant, present in a large amount across the hillside.',
+  reluctant: 'Lea was reluctant, or hesitant and unwilling, to begin speaking.',
+  vivid: 'The memoir was vivid, producing a strong and clear impression through sensory detail.',
+  portable: 'The scanner was portable, which meant it was easy to carry between clinics.',
+  gradual: 'The climb was gradual, happening in small stages rather than in one steep rise.',
+  scarce: 'Water was scarce, available only in a small and insufficient amount.',
+  courteous: 'The driver was courteous, treating passengers politely and considerately.',
+  precise: 'The recipe was precise, giving exact and clearly stated measurements.',
+  stable: 'The platform was stable, unlikely to shift or fail suddenly under the equipment.',
+  flexible: 'The schedule was flexible, able to adjust when families’ needs changed.',
+  cautious: 'The hikers were cautious, taking care to avoid unnecessary risk.',
+  verify: 'The editor used the recording to verify each quotation—to check that it was accurate.',
+  retain: 'The bottle could retain heat, meaning to keep it instead of losing it quickly.',
+  adapt: 'The library had to adapt, or change its services in response to the repairs.',
+  contrast: 'The report revealed a contrast, a noticeable difference between the two districts.',
+  priority: 'Restoring the water line was the team’s priority, the task considered more important than the others.',
+  evidence: 'The photographs, measurements, and field notes were evidence—information that could support or challenge the claim.',
+  routine: 'Sam’s nightly backup became a routine, a regular way of doing the same important tasks.',
+  steadily: 'The reservoir rose steadily, at a consistent rate without sudden changes.',
+};
+
+/**
+ * Medium targets are genuine, definition-free uses. The neighboring contrast
+ * and consequence provide two independently defensible routes to meaning.
+ */
+const MEDIUM_TARGET_SENTENCES: Readonly<Record<string, string>> = {
+  pragmatic: 'The committee described its chosen repair as pragmatic.',
+  sporadic: 'The report characterized the month’s rainfall as sporadic.',
+  obsolete: 'Engineers marked the punch-card reader as obsolete.',
+  tentative: 'The researchers treated their small-sample explanation as tentative.',
+  impartial: 'Both teams described the judge as impartial.',
+  mitigate: 'The team hoped the shade cloth would mitigate the problem.',
+  concise: 'Editors approved the concise version of the notice.',
+  versatile: 'The library selected the versatile cart.',
+  ambiguous: 'Reviewers marked the instruction as ambiguous.',
+  diligent: 'Omar remained diligent throughout the field study.',
+  feasible: 'The planners judged the route feasible.',
+  skeptical: 'Residents remained skeptical during the presentation.',
+  coherent: 'Reviewers described the final report as coherent.',
+  plausible: 'The team considered the explanation plausible.',
+  explicit: 'The editor asked whether the notice was explicit enough.',
+  provisional: 'The committee approved the route as provisional.',
+  allocate: 'The council voted to allocate the grant that evening.',
+  synthesize: 'The reviewer had one afternoon to synthesize the material.',
+  infer: 'The students were asked to infer the answer.',
+  constraint: 'The bridge height became the central constraint in the route discussion.',
+  consensus: 'The chair recorded a consensus before closing the meeting.',
+  inference: 'The observers labeled the conclusion an inference.',
+  subsequently: 'The pipe was subsequently replaced.',
+  predominantly: 'The survey described the station’s riders as predominantly local.',
+};
+
 const HARD_TARGET_SENTENCES: Readonly<Record<string, string>> = {
-  equivocal: 'Because one survey favored the change while another showed no difference, the evidence remained equivocal.',
-  nascent: 'The recently formed workshop network was still nascent, with routines that had not settled.',
-  parsimonious: 'Researchers called the two-factor model parsimonious because it explained the pattern without unsupported causes.',
-  anomalous: 'The lone winter-heat reading was anomalous beside the frost reported by every nearby sensor.',
-  salient: 'The table containing the safety threshold was the most salient part of the report for the decision.',
-  tenuous: 'Historians described the claimed connection as tenuous because it rested on one much-later memory.',
-  ubiquitous: 'Charging ports had become ubiquitous, appearing in homes, buses, cafés, and offices.',
-  intransigent: 'The negotiator remained intransigent, rejecting every revision before considering its details.',
-  nuanced: 'The review was nuanced: it recognized broad reach while distinguishing unequal local effects.',
-  ephemeral: 'The rain-fed desert pool was ephemeral, disappearing only days after it formed.',
-  corroborate: 'The independent diary could corroborate the reported storm date because it described the same event from another village.',
-  ameliorate: 'The new shade could ameliorate the platform heat, although it could not remove every hot-day discomfort.',
-  contingent: 'The field survey remained contingent on river levels falling below the safety mark.',
-  idiosyncratic: 'The archive’s color-based filing system was idiosyncratic, unlike the standard methods used elsewhere.',
-  pervasive: 'The dust problem was pervasive, reaching homes, schools, vehicles, and sealed storage rooms.',
-  orthogonal: 'The building’s paint color was orthogonal to the water-quality question under review.',
-  disambiguate: 'Adding the station name could disambiguate “bank” by identifying the intended riverbank sense.',
-  extrapolate: 'Analysts used five years of measurements to extrapolate demand beyond the observed period.',
-  substantiate: 'Dated receipts and independent letters could substantiate the historian’s claim.',
-  reconcile: 'Correcting for the time-zone difference helped researchers reconcile the two apparently conflicting logs.',
-  convergence: 'The convergence of independent model estimates increased confidence in the revised forecast.',
-  dichotomy: 'Treating every proposal as total success or complete failure created a false dichotomy.',
-  ostensibly: 'The rule was ostensibly about safety, although internal notes emphasized staffing costs.',
-  inadvertently: 'The analyst inadvertently separated names from addresses while sorting the spreadsheet.',
+  equivocal: 'After reviewing both surveys, the panel classified the evidence as equivocal.',
+  nascent: 'The workshop network was still nascent when the grant review began.',
+  parsimonious: 'The reviewers selected the parsimonious model for the next analysis.',
+  anomalous: 'Technicians marked the winter-heat reading as anomalous.',
+  salient: 'During the decision meeting, the safety table became the most salient section.',
+  tenuous: 'Historians classified the proposed connection as tenuous.',
+  ubiquitous: 'Within a decade, the charging port had become ubiquitous.',
+  intransigent: 'The lead negotiator remained intransigent through the final session.',
+  nuanced: 'The committee described its final assessment as nuanced.',
+  ephemeral: 'Ecologists classified the rain-fed pool as ephemeral.',
+  corroborate: 'The historian asked whether the second diary could corroborate the reported date.',
+  ameliorate: 'Planners hoped the new shade would ameliorate conditions on the platform.',
+  contingent: 'The field survey remained contingent when the provisional date was announced.',
+  idiosyncratic: 'Researchers recorded the archive’s filing system as idiosyncratic.',
+  pervasive: 'The district review classified the dust problem as pervasive.',
+  orthogonal: 'Reviewers judged the paint-color proposal orthogonal to the water-quality analysis.',
+  disambiguate: 'The editor added a station name to disambiguate the disputed word.',
+  extrapolate: 'Analysts were asked to extrapolate cautiously in the final forecast.',
+  substantiate: 'The historian needed to substantiate the claim before publication.',
+  reconcile: 'Researchers met to reconcile the two logs.',
+  convergence: 'The final report noted a convergence in the revised estimates.',
+  dichotomy: 'The moderator challenged the proposed dichotomy during the debate.',
+  ostensibly: 'The rule was ostensibly introduced for safety.',
+  inadvertently: 'The analyst inadvertently altered the address column during the sort.',
 };
 
 function placeMeaning(
@@ -281,33 +344,114 @@ function placeClue(
   return { options, correctId: options[answerIndex]!.id };
 }
 
+function requireTargetSentence(
+  sentences: Readonly<Record<string, string>>,
+  spec: WordSpec,
+  difficulty: Difficulty
+): string {
+  const sentence = sentences[spec.word];
+  if (!sentence) {
+    throw new Error(
+      `Missing ${difficulty} target-use sentence for “${spec.word}”`
+    );
+  }
+  return sentence;
+}
+
+function buildContextSentenceFrame(
+  spec: WordSpec,
+  difficulty: Difficulty,
+  index: number
+): readonly [string, string, string, string] {
+  const family = index % 4;
+
+  if (difficulty === 'easy') {
+    const situations = [
+      `One example is as follows: ${spec.scenario}.`,
+      `Consider this situation: ${spec.scenario}.`,
+      `A practical example follows: ${spec.scenario}.`,
+      `One report notes the following: ${spec.scenario}.`,
+    ] as const;
+    const contrasts = [
+      `This differs from ${spec.contrast}.`,
+      `The contrasting case is ${spec.contrast}.`,
+      `The opposite kind of case involves ${spec.contrast}.`,
+      `This should not be confused with ${spec.contrast}.`,
+    ] as const;
+    const effects = [
+      `As a result, ${spec.effect}.`,
+      `The outcome was that ${spec.effect}.`,
+      `This mattered because ${spec.effect}.`,
+      `The later result made the meaning clear: ${spec.effect}.`,
+    ] as const;
+    return [
+      situations[family]!,
+      requireTargetSentence(EASY_TARGET_SENTENCES, spec, difficulty),
+      contrasts[family]!,
+      effects[family]!,
+    ];
+  }
+
+  if (difficulty === 'medium') {
+    const situations = [
+      `The first case is as follows: ${spec.scenario}.`,
+      `The account begins with this situation: ${spec.scenario}.`,
+      `A field note records the following: ${spec.scenario}.`,
+      `One example in the report is this: ${spec.scenario}.`,
+    ] as const;
+    const contrasts = [
+      `Unlike ${spec.contrast}, the chosen response fit the situation described.`,
+      `The account contrasts it with ${spec.contrast}.`,
+      `A different result would be expected from ${spec.contrast}.`,
+      `The comparison case—${spec.contrast}—points toward another meaning.`,
+    ] as const;
+    const effects = [
+      `The consequence was clear: ${spec.effect}.`,
+      `What followed was equally informative: ${spec.effect}.`,
+      `The later outcome helped narrow the meaning because ${spec.effect}.`,
+      `The effect supplied the final clue: ${spec.effect}.`,
+    ] as const;
+    return [
+      situations[family]!,
+      requireTargetSentence(MEDIUM_TARGET_SENTENCES, spec, difficulty),
+      contrasts[family]!,
+      effects[family]!,
+    ];
+  }
+
+  const contrasts = [
+    `A contrasting case involved ${spec.contrast}, and it produced a very different pattern.`,
+    `For comparison, the account considers ${spec.contrast}.`,
+    `The report first presents an opposing case: ${spec.contrast}.`,
+    `Against the main example, the author sets ${spec.contrast}.`,
+  ] as const;
+  const consequences = [
+    `The later result—${spec.effect}—narrows which sense of the word can fit.`,
+    `The effect rules out the most obvious alternative meaning: ${spec.effect}.`,
+    `A later observation adds a second clue: ${spec.effect}.`,
+    `The outcome supplies another constraint on meaning: ${spec.effect}.`,
+  ] as const;
+  const integrations = [
+    `The interpretation depends on combining the contrast with the consequence, not on the target word’s sound alone.`,
+    `Neither clue is decisive alone; together they identify the intended sense.`,
+    `The meaning becomes defensible only when both pieces of context are kept in view.`,
+    `Reading the comparison and outcome together removes the remaining ambiguity.`,
+  ] as const;
+  return [
+    contrasts[family]!,
+    requireTargetSentence(HARD_TARGET_SENTENCES, spec, difficulty),
+    consequences[family]!,
+    integrations[family]!,
+  ];
+}
+
 function buildRound(
   spec: WordSpec,
   difficulty: Difficulty,
   index: number
 ): ContextBuilderRound {
   const id = `context-${difficulty}-${spec.word}`;
-  const sentenceTexts =
-    difficulty === 'easy'
-      ? [
-          `The account describes ${spec.scenario}.`,
-          `The writer calls this response ${spec.word}, meaning ${spec.definition}.`,
-          `This was unlike ${spec.contrast}.`,
-          `As a result, ${spec.effect}.`,
-        ]
-      : difficulty === 'medium'
-        ? [
-            `The account describes ${spec.scenario}.`,
-            `The writer uses “${spec.word}” for this response without defining the term directly.`,
-            `Unlike ${spec.contrast}, the chosen response fit the situation described.`,
-            `The consequence was clear: ${spec.effect}.`,
-          ]
-        : [
-            `A contrasting case involved ${spec.contrast}, and it produced a very different pattern.`,
-            HARD_TARGET_SENTENCES[spec.word]!,
-            `The later result—${spec.effect}—narrows which sense of the word can fit.`,
-            `The interpretation depends on combining the contrast with the consequence, not on the target word’s sound alone.`,
-          ];
+  const sentenceTexts = buildContextSentenceFrame(spec, difficulty, index);
   const sentences = sentenceTexts.map((text, sentenceIndex) => ({
     id: `${id}-s${sentenceIndex + 1}`,
     text,
@@ -373,6 +517,15 @@ function buildRound(
     clueAnswerIndex,
     id
   );
+  const acceptedClueIds =
+    difficulty === 'medium'
+      ? clueOptions
+          .filter(
+            (option) =>
+              option.role === 'contrast' || option.role === 'consequence'
+          )
+          .map((option) => option.id)
+      : [correctClueId];
 
   return {
     id,
@@ -388,18 +541,12 @@ function buildRound(
     targetSentenceId: `${id}-s2`,
     targetAccessibilityLabel: `${spec.word}, target vocabulary word`,
     definition: spec.definition,
-    partOfSpeech:
-      spec.partOfSpeech ??
-      (spec.word === 'mitigate' ||
-      spec.word === 'corroborate' ||
-      spec.word === 'ameliorate'
-        ? 'verb'
-        : 'adjective'),
+    partOfSpeech: spec.partOfSpeech ?? 'adjective',
     sentences,
     meaningOptions,
     correctMeaningOptionId,
     clueOptions,
-    acceptedClueIds: [correctClueId],
+    acceptedClueIds,
     clueType:
       difficulty === 'easy'
         ? 'definition'
@@ -423,7 +570,7 @@ function buildRound(
       difficulty === 'easy'
         ? 'The paragraph gives a direct definition after the target.'
         : difficulty === 'medium'
-          ? 'The contrast and consequence narrow the word to the keyed meaning.'
+          ? 'Either the contrast or the consequence independently supports the keyed meaning.'
           : 'The word’s meaning follows only when the contrasting case and later consequence are integrated.',
     accessibilityNotes:
       'The target is announced as a target word in text; all meaning and clue choices are full-size buttons.',
@@ -435,6 +582,8 @@ export const CONTEXT_BUILDER_ROUNDS: readonly ContextBuilderRound[] = [
   ...MEDIUM_WORDS.map((spec, index) => buildRound(spec, 'medium', index)),
   ...HARD_WORDS.map((spec, index) => buildRound(spec, 'hard', index)),
 ];
+
+export const CONTEXT_BUILDER_ROUNDS_PER_DIFFICULTY = 24;
 
 export function getContextBuilderRounds(difficulty: Difficulty): ContextBuilderRound[] {
   return CONTEXT_BUILDER_ROUNDS.filter((round) => round.difficulty === difficulty);
@@ -504,14 +653,27 @@ export function validateContextBuilderContent(
     const acceptedClues = round.clueOptions.filter((option) =>
       round.acceptedClueIds.includes(option.id)
     );
+    const expectedAcceptedClueCount =
+      round.difficulty === 'medium' ? 2 : 1;
+    if (
+      round.acceptedClueIds.length !== expectedAcceptedClueCount ||
+      acceptedClues.length !== expectedAcceptedClueCount
+    ) {
+      errors.push(
+        `${round.id}: expected ${expectedAcceptedClueCount} defensible clue key(s)`
+      );
+    }
+    const acceptedRoles = new Set(
+      acceptedClues.map((option) => option.role)
+    );
     if (
       (round.difficulty === 'easy' &&
-        acceptedClues.some((option) => option.role !== 'definition')) ||
+        (acceptedClues.some((option) => option.role !== 'definition') ||
+          acceptedRoles.size !== 1)) ||
       (round.difficulty === 'medium' &&
-        acceptedClues.some(
-          (option) =>
-            option.role !== 'contrast' && option.role !== 'consequence'
-        )) ||
+        (acceptedRoles.size !== 2 ||
+          !acceptedRoles.has('contrast') ||
+          !acceptedRoles.has('consequence'))) ||
       (round.difficulty === 'hard' &&
         acceptedClues.some(
           (option) =>
@@ -530,8 +692,10 @@ export function validateContextBuilderContent(
 
   for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     const levelRounds = rounds.filter((round) => round.difficulty === difficulty);
-    if (levelRounds.length < 12) {
-      errors.push(`${difficulty}: at least 12 reviewed rounds required`);
+    if (levelRounds.length !== CONTEXT_BUILDER_ROUNDS_PER_DIFFICULTY) {
+      errors.push(
+        `${difficulty}: exactly ${CONTEXT_BUILDER_ROUNDS_PER_DIFFICULTY} reviewed rounds required`
+      );
     }
     const positions = [0, 0, 0, 0];
     levelRounds.forEach((round) => {
@@ -543,12 +707,21 @@ export function validateContextBuilderContent(
     if (positions.some((count) => count === 0)) {
       errors.push(`${difficulty}: correct meanings must rotate across positions`);
     }
+    const openingFamilies = new Set(
+      levelRounds.map((round) =>
+        round.sentences[0]!.text.split(/\s+/u).slice(0, 2).join(' ')
+      )
+    );
+    if (openingFamilies.size < 4) {
+      errors.push(`${difficulty}: at least four sentence-frame families required`);
+    }
     const cluePositions = [0, 0, 0, 0];
     levelRounds.forEach((round) => {
-      const index = round.clueOptions.findIndex((option) =>
-        round.acceptedClueIds.includes(option.id)
-      );
-      if (index >= 0) cluePositions[index] += 1;
+      round.clueOptions.forEach((option, index) => {
+        if (round.acceptedClueIds.includes(option.id)) {
+          cluePositions[index] += 1;
+        }
+      });
     });
     if (cluePositions.some((count) => count === 0)) {
       errors.push(`${difficulty}: accepted clues must rotate across positions`);

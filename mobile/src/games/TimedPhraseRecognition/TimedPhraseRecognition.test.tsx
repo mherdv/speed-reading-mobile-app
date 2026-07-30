@@ -46,6 +46,8 @@ describe('TimedPhraseRecognition', () => {
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('phrase-flash')).toBeTruthy();
+    expect(getByTestId('phrase-mask')).toBeTruthy();
+    expect(getByTestId('phrase')).toHaveProp('numberOfLines', 3);
   });
 
   it('transitions to choice phase after display timeout', () => {
@@ -160,5 +162,44 @@ describe('TimedPhraseRecognition', () => {
         }),
       })
     );
+  });
+
+  it('continues the no-replacement phrase deck across replays', () => {
+    const phrases = [
+      'Careful readers compare clear evidence',
+      'Focused learners notice subtle changes',
+      'Patient reviewers trace useful signals',
+    ];
+    const view = render(
+      <TimedPhraseRecognition
+        phrases={phrases}
+        displayMs={10}
+        totalRounds={1}
+        random={() => 0}
+      />
+    );
+    const shownPhrases: string[] = [];
+
+    for (let session = 0; session < 4; session += 1) {
+      fireEvent.press(
+        view.getByTestId(session === 0 ? 'start-button' : 'play-again')
+      );
+      if (session > 0) {
+        act(() => jest.advanceTimersByTime(51));
+      }
+      const shown = view.getByTestId('phrase').props.children as string;
+      shownPhrases.push(shown);
+      act(() => jest.advanceTimersByTime(11));
+      fireEvent.press(view.getByLabelText(shown));
+      act(() =>
+        jest.advanceTimersByTime(getRecallFeedbackDurationMs(shown, true) + 1)
+      );
+      expect(view.getByTestId('end')).toBeTruthy();
+    }
+
+    expect(new Set(shownPhrases.slice(0, phrases.length)).size).toBe(
+      phrases.length
+    );
+    expect(shownPhrases[3]).not.toBe(shownPhrases[2]);
   });
 });

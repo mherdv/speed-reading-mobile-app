@@ -77,6 +77,27 @@ describe('Evidence Hunt', () => {
     expect(report).toHaveBeenCalledTimes(1);
   });
 
+  it('starts from the persisted fresh-content window after remount', async () => {
+    const rounds = getEvidenceHuntRounds('easy').slice(0, 6);
+    await AsyncStorage.setItem(
+      'speed-reading:progress:v1',
+      JSON.stringify({
+        EvidenceHunt: { level: 1, streak: 0, totalPlays: 1 },
+      })
+    );
+    const view = render(
+      <EvidenceHunt
+        rounds={rounds}
+        roundCount={2}
+        random={() => 0.999}
+      />
+    );
+    await settle();
+
+    fireEvent.press(view.getByTestId('start-button'));
+    expect(view.getByText(rounds[2]!.title)).toBeTruthy();
+  });
+
   it('supports an optional timer without reporting after active unmount', async () => {
     const report = jest.fn();
     const view = render(
