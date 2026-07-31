@@ -12,6 +12,7 @@ import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
 import { BriefStimulus } from '../../ui/BriefStimulus';
+import { FlashChallengeStatus } from '../../ui/FlashChallengeStatus';
 import { FlashPaceControl } from '../../ui/FlashPaceControl';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
@@ -30,7 +31,12 @@ import {
   type FlashPaceBounds,
   type FlashPaceState,
 } from '../flashPacing';
+import {
+  getProgressiveFlashContent,
+  resumeWpmForFlashChallenge,
+} from '../flashChallenge';
 import { getRecallFeedbackDurationMs } from '../recallFeedback';
+import { useFlashChallenge } from '../useFlashChallenge';
 
 const GAME_ID = 'FlashReading';
 const CORRECT_ANSWERS_TO_INCREASE = 4;
@@ -94,7 +100,17 @@ export default function FlashReading({
   onReportResult,
 }: Props) {
   const config = getConfig(difficulty);
-  const wordPool = useMemo(() => {
+  const flashChallenge = useFlashChallenge(
+    GAME_ID,
+    difficulty,
+    CORRECT_ANSWERS_TO_INCREASE,
+    MAX_CONSECUTIVE_FLASH_FAILURES,
+    {
+      masteryEligible:
+        wordsProp == null && displayMsProp == null,
+    }
+  );
+  const masterWordPool = useMemo(() => {
     const customPool = uniqueStrings(wordsProp ?? []);
     return customPool.length > 0
       ? customPool
@@ -124,11 +140,16 @@ export default function FlashReading({
   const roundRef = useRef(0);
   const correctRef = useRef(0);
   const currentRef = useRef('');
-  const deckStateRef = useRef(createPersistentVariedDeckState());
+  const deckStatesRef = useRef(
+    new Map<number, ReturnType<typeof createPersistentVariedDeckState>>()
+  );
   const paceRef = useRef<FlashPaceState>(
     createFlashPaceState(defaultWpm)
   );
   const initialWpmRef = useRef(defaultWpm);
+  const initialChallengeLevelRef = useRef(1);
+  const maxChallengeLevelRef = useRef(1);
+  const startingWpmRef = useRef(defaultWpm);
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(() => {
@@ -137,9 +158,33 @@ export default function FlashReading({
       displayMsProp == null
         ? nextConfig.baseWpm
         : wpmForDisplayDuration(displayMsProp);
+    startingWpmRef.current = nextWpm;
     setStartingWpm(nextWpm);
     setLiveWpm(nextWpm);
   }, [difficulty, displayMsProp]);
+
+  useEffect(() => {
+    if (
+      displayMsProp == null &&
+      flashChallenge.loaded
+    ) {
+      const nextWpm = resumeWpmForFlashChallenge(
+        config.baseWpm,
+        flashChallenge.resumeLevel,
+        flashChallenge.resumeWpm,
+        config.maxWpm
+      );
+      startingWpmRef.current = nextWpm;
+      setStartingWpm(nextWpm);
+    }
+  }, [
+    config.baseWpm,
+    config.maxWpm,
+    displayMsProp,
+    flashChallenge.loaded,
+    flashChallenge.resumeLevel,
+    flashChallenge.resumeWpm,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -148,9 +193,20 @@ export default function FlashReading({
   }, []);
 
   function takeNextWord() {
+    const challengeLevel = flashChallenge.getCurrentLevel();
+    let deckState = deckStatesRef.current.get(challengeLevel);
+    if (!deckState) {
+      deckState = createPersistentVariedDeckState();
+      deckState.previous = currentRef.current;
+      deckStatesRef.current.set(challengeLevel, deckState);
+    }
+    const wordPool = getProgressiveFlashContent(
+      masterWordPool,
+      challengeLevel
+    );
     return (
       takeNextPersistentVariedItem(
-        deckStateRef.current,
+        deckState,
         wordPool,
         random
       ) ??
@@ -175,25 +231,34 @@ export default function FlashReading({
   }
 
   function start() {
-    if (phase !== 'idle' && phase !== 'ended') return;
+    if (
+      !flashChallenge.loaded ||
+      (phase !== 'idle' && phase !== 'ended')
+    ) {
+      return;
+    }
     clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
     scoreRef.current = 0;
     roundRef.current = 0;
     correctRef.current = 0;
-    initialWpmRef.current = startingWpm;
-    paceRef.current = createFlashPaceState(startingWpm);
+    const initialChallengeLevel = flashChallenge.beginSession();
+    const sessionWpm = startingWpmRef.current;
+    initialChallengeLevelRef.current = initialChallengeLevel;
+    maxChallengeLevelRef.current = initialChallengeLevel;
+    initialWpmRef.current = sessionWpm;
+    paceRef.current = createFlashPaceState(sessionWpm);
     setScore(0);
     setRound(0);
     setCorrectStreak(0);
     setMissStreak(0);
-    setLiveWpm(startingWpm);
+    setLiveWpm(sessionWpm);
     startRef.current = Date.now();
     showRound();
   }
 
-  useAutoStart(autoStart, phase, true, start);
+  useAutoStart(autoStart, phase, flashChallenge.loaded, start);
 
   function submit() {
     if (phase !== 'recall') return;
@@ -210,12 +275,33 @@ export default function FlashReading({
       setFeedback('wrong');
     }
 
-    paceRef.current = updateFlashPace(paceRef.current, correct, {
+    const previousPace = paceRef.current;
+    const completedCorrectRun =
+      correct &&
+      previousPace.correctStreak + 1 >=
+        CORRECT_ANSWERS_TO_INCREASE;
+    paceRef.current = updateFlashPace(previousPace, correct, {
       ...config,
       step: displayMsProp == null ? config.step : 0,
       correctAnswersToIncrease: CORRECT_ANSWERS_TO_INCREASE,
-      missesToDecrease: null,
+      missesToDecrease: 1,
     });
+    const challengeOutcome = flashChallenge.recordOutcome(correct);
+    if (displayMsProp == null) {
+      if (completedCorrectRun) {
+        flashChallenge.recordQualifiedWpm(paceRef.current.wpm);
+      } else if (
+        !correct &&
+        paceRef.current.missStreak ===
+          MAX_CONSECUTIVE_FLASH_FAILURES
+      ) {
+        flashChallenge.recordRollbackWpm(paceRef.current.wpm);
+      }
+    }
+    maxChallengeLevelRef.current = Math.max(
+      maxChallengeLevelRef.current,
+      challengeOutcome.state.level
+    );
     setLiveWpm(paceRef.current.wpm);
     setCorrectStreak(paceRef.current.correctStreak);
     setMissStreak(paceRef.current.missStreak);
@@ -273,6 +359,12 @@ export default function FlashReading({
         finalWpm: paceRef.current.wpm,
         paceChanges: paceRef.current.changes,
         adaptivePacing: displayMsProp == null,
+        initialChallengeLevel: initialChallengeLevelRef.current,
+        finalChallengeLevel: flashChallenge.getCurrentLevel(),
+        highestChallengeLevel: maxChallengeLevelRef.current,
+        savedBestChallengeLevel: flashChallenge.getHighestLevel(),
+        savedResumeWpm: flashChallenge.getResumeWpm() ?? null,
+        savedBestWpm: flashChallenge.getHighestWpm() ?? null,
       },
     });
   }
@@ -329,21 +421,29 @@ export default function FlashReading({
         <SimpleIdlePanel
           description={GAME_DESCRIPTIONS[GAME_ID]}
           onStart={start}
+          startDisabled={!flashChallenge.loaded}
           containerStyle={styles.idleContent}
         >
           <Text style={styles.sessionHint}>
             +25 WPM after {CORRECT_ANSWERS_TO_INCREASE} correct · 3 misses end
           </Text>
           <Text style={styles.maskHint}>
-            Easy is clear · Medium hides the lower edge · Hard hides more
+            Content grows first; the opaque marker begins at level 10
           </Text>
+          <FlashChallengeStatus
+            level={flashChallenge.resumeLevel}
+            highestLevel={flashChallenge.highestLevel}
+          />
           <FlashPaceControl
             wpm={startingWpm}
             minWpm={config.minWpm}
             maxWpm={config.maxWpm}
             disabled={displayMsProp != null}
             correctAnswersToIncrease={CORRECT_ANSWERS_TO_INCREASE}
-            onChange={setStartingWpm}
+            onChange={(nextWpm) => {
+              startingWpmRef.current = nextWpm;
+              setStartingWpm(nextWpm);
+            }}
           />
         </SimpleIdlePanel>
       )}
@@ -351,6 +451,11 @@ export default function FlashReading({
       {phase === 'flash' && (
         <View style={styles.gameArea}>
           {stats}
+          <FlashChallengeStatus
+            compact
+            level={flashChallenge.level}
+            highestLevel={flashChallenge.highestLevel}
+          />
           <View style={styles.flashCard}>
             <BriefStimulus
               value={current}
@@ -360,6 +465,7 @@ export default function FlashReading({
               backgroundColor={colors.background}
               maxFontSize={44}
               minFontSize={14}
+              maskFraction={flashChallenge.profile.maskFraction}
             />
           </View>
         </View>

@@ -6,7 +6,7 @@ import {
   within,
 } from '@testing-library/react-native';
 import { getRecallFeedbackDurationMs } from '../recallFeedback';
-import MemoryRecall from './MemoryRecall';
+import MemoryRecall, { getMemorySequenceLength } from './MemoryRecall';
 
 type MemoryRecallView = ReturnType<typeof render>;
 
@@ -53,19 +53,25 @@ describe('MemoryRecall', () => {
     jest.useRealTimers();
   });
 
+  it('maps each saved challenge stage to one deterministic digit span', () => {
+    expect(getMemorySequenceLength(4, 1)).toBe(4);
+    expect(getMemorySequenceLength(4, 5)).toBe(8);
+    expect(getMemorySequenceLength(4, 5, true)).toBe(4);
+  });
+
   it('starts in idle phase and shows start button', () => {
     const { getByTestId } = render(<MemoryRecall />);
     expect(getByTestId('start-button')).toBeTruthy();
   });
 
   it('shows sequence after pressing start', () => {
-    const { getByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <MemoryRecall startingLength={3} displayMs={500} difficulty="hard" />
     );
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('sequence-display')).toBeTruthy();
-    expect(getByTestId('sequence-mask')).toBeTruthy();
+    expect(queryByTestId('sequence-mask')).toBeNull();
     expect(getByTestId('sequence')).toHaveProp('numberOfLines', 1);
   });
 
@@ -124,24 +130,29 @@ describe('MemoryRecall', () => {
     expect(queryByTestId('input-display')).toBeTruthy();
   });
 
-  it('subtracts 10 points, reduces sequence length, and continues after a miss', () => {
+  it('grows only after mastery, then subtracts points and rolls back after a miss', () => {
     const view = render(
-      <MemoryRecall startingLength={2} displayMs={30} />
+      <MemoryRecall difficulty="easy" displayMs={30} />
     );
 
     fireEvent.press(view.getByTestId('start-button'));
-    const correctSequence = submitCurrentSequence(view, 30, true);
+    let correctSequence = submitCurrentSequence(view, 30, true);
 
-    expect(view.getByTestId('memory-score')).toHaveTextContent('20');
+    expect(view.getByTestId('memory-score')).toHaveTextContent('30');
     expect(view.getByTestId('memory-level')).toHaveTextContent('3');
     expect(view.getByTestId('memory-strikes')).toHaveTextContent('0/3');
+    advanceReview(correctSequence, true);
+
+    correctSequence = submitCurrentSequence(view, 30, true);
+    expect(view.getByTestId('memory-score')).toHaveTextContent('60');
+    expect(view.getByTestId('memory-level')).toHaveTextContent('4');
     advanceReview(correctSequence, true);
 
     const missedSequence = submitCurrentSequence(view, 30, false);
 
     expect(view.queryByTestId('end')).toBeNull();
-    expect(view.getByTestId('memory-score')).toHaveTextContent('10');
-    expect(view.getByTestId('memory-level')).toHaveTextContent('2');
+    expect(view.getByTestId('memory-score')).toHaveTextContent('50');
+    expect(view.getByTestId('memory-level')).toHaveTextContent('3');
     expect(view.getByTestId('memory-strikes')).toHaveTextContent('1/3');
     expect(view.getByTestId('memory-correct-answer')).toHaveTextContent(
       missedSequence.join(' ')
@@ -154,6 +165,23 @@ describe('MemoryRecall', () => {
     expect(view.getByTestId('memory-feedback')).toBeTruthy();
     act(() => jest.advanceTimersByTime(2));
     expect(view.getByTestId('sequence-display')).toBeTruthy();
+  });
+
+  it('keeps an explicit sequence-length override fixed while challenge timing advances', () => {
+    const view = render(
+      <MemoryRecall startingLength={2} displayMs={30} />
+    );
+
+    fireEvent.press(view.getByTestId('start-button'));
+    let shown = submitCurrentSequence(view, 30, true);
+    expect(view.getByTestId('memory-level')).toHaveTextContent('2');
+    advanceReview(shown, true);
+
+    shown = submitCurrentSequence(view, 30, true);
+    expect(view.getByTestId('memory-level')).toHaveTextContent('2');
+    expect(
+      view.getByText(/fixed-length practice continues/i)
+    ).toBeTruthy();
   });
 
   it('resets the consecutive-failure streak after a correct sequence', () => {
@@ -209,6 +237,11 @@ describe('MemoryRecall', () => {
           failures: 3,
           endingFailureStreak: 3,
           failurePenalty: 10,
+          finalSequenceLength: 2,
+          initialDisplayMs: 30,
+          finalDisplayMs: 30,
+          fixedSequenceLength: true,
+          fixedDisplayMs: true,
         }),
       })
     );

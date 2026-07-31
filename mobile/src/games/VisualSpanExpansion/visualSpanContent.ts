@@ -86,6 +86,16 @@ const POSITION_IDS_BY_SPAN: Record<number, VisualSpanPositionId[]> = {
     'center-left',
     'upper-left',
   ],
+  8: [
+    'upper-center',
+    'upper-right',
+    'center-right',
+    'lower-right',
+    'lower-center',
+    'lower-left',
+    'center-left',
+    'upper-left',
+  ],
 };
 
 const REVIEWED_VISUAL_SPAN_SEEDS: Record<Difficulty, readonly string[]> = {
@@ -234,19 +244,36 @@ export function getVisualSpanConfig(
   return VISUAL_SPAN_CONFIGS[difficulty];
 }
 
+/**
+ * Visual-span sessions begin with short, quickly recognizable words, then
+ * introduce longer vocabulary before the shared challenge ladder adds marker
+ * masking. The selected game difficulty still controls spatial spread,
+ * starting span, option count, and base exposure.
+ */
+export function getVisualSpanContentDifficulty(
+  challengeLevel: number
+): Difficulty {
+  const safeLevel = Math.max(1, Math.round(challengeLevel));
+  if (safeLevel <= 3) return 'easy';
+  if (safeLevel <= 8) return 'medium';
+  return 'hard';
+}
+
 export function createVisualSpanTrial(
   difficulty: Difficulty,
   requestedSpan = getVisualSpanConfig(difficulty).spanSize,
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  maximumSpan = getVisualSpanConfig(difficulty).spanSize,
+  contentDifficulty: Difficulty = difficulty
 ): VisualSpanTrial {
   const config = getVisualSpanConfig(difficulty);
   const spanSize = Math.max(
     config.minimumSpan,
-    Math.min(config.spanSize, Math.round(requestedSpan))
+    Math.min(Math.max(config.spanSize, maximumSpan), Math.round(requestedSpan))
   );
   const positionIds =
     POSITION_IDS_BY_SPAN[spanSize] ?? POSITION_IDS_BY_SPAN[config.minimumSpan]!;
-  const wordPool = getVisualSpanWordPool(difficulty);
+  const wordPool = getVisualSpanWordPool(contentDifficulty);
   const words = shuffleItems(wordPool, random).slice(0, positionIds.length);
   const items = positionIds.map((positionId, index) => ({
     positionId,

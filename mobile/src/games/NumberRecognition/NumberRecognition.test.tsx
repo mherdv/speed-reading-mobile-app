@@ -1,9 +1,15 @@
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  waitFor,
+} from '@testing-library/react-native';
 import * as progressStore from '../../data/progressStore';
 import NumberRecognition, {
   generateNumberRecognitionStream,
   getNumberRecognitionChallenge,
+  getNumberRecognitionStageChallenge,
 } from './NumberRecognition';
 
 function seededRandom(seed: number) {
@@ -27,13 +33,13 @@ describe('NumberRecognition (TDD from spec)', () => {
   });
 
   it('AC-2: preserves and evaluates a custom stream in its exact order', () => {
-    const { getByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <NumberRecognition target={37} stream={[37, 73]} durationMs={500} />
     );
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('current-number')).toHaveTextContent('37');
-    expect(getByTestId('current-number-mask')).toBeTruthy();
+    expect(queryByTestId('current-number-mask')).toBeNull();
     expect(getByTestId('current-number')).toHaveProp('numberOfLines', 1);
 
     fireEvent.press(getByTestId('match'));
@@ -94,7 +100,106 @@ describe('NumberRecognition (TDD from spec)', () => {
     }
   );
 
-  it('keeps the timed playable prefix balanced so always-No cannot pass', () => {
+  it('keeps level-one defaults, then grows similarity and digit length by stage', () => {
+    DIFFICULTIES.forEach((difficulty) => {
+      expect(
+        getNumberRecognitionStageChallenge(difficulty, 1)
+      ).toEqual(getNumberRecognitionChallenge(difficulty));
+    });
+
+    expect(
+      getNumberRecognitionStageChallenge('easy', 4)
+    ).toMatchObject({
+      digitCount: 1,
+      distractorSimilarity: 'medium',
+    });
+    expect(
+      getNumberRecognitionStageChallenge('easy', 5)
+    ).toMatchObject({
+      digitCount: 2,
+      distractorSimilarity: 'medium',
+    });
+    expect(
+      getNumberRecognitionStageChallenge('easy', 7)
+    ).toMatchObject({
+      digitCount: 2,
+      distractorSimilarity: 'high',
+    });
+    expect(
+      getNumberRecognitionStageChallenge('hard', 15)
+    ).toMatchObject({
+      digitCount: 6,
+      distractorSimilarity: 'high',
+    });
+  });
+
+  it('regenerates an unoverridden session with longer numbers after stage growth', async () => {
+    const { getByTestId } = render(
+      <NumberRecognition
+        difficulty="easy"
+        durationMs={60_000}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        getByTestId('start-button').props.accessibilityState.disabled
+      ).toBe(false);
+    });
+    fireEvent.press(getByTestId('start-button'));
+    for (let trial = 0; trial < 32; trial += 1) {
+      const target = String(
+        getByTestId('recognition-target').props.children
+      );
+      const current = String(
+        getByTestId('current-number').props.children
+      );
+      fireEvent.press(
+        getByTestId(current === target ? 'match' : 'no')
+      );
+    }
+
+    expect(getByTestId('flash-challenge-status')).toHaveTextContent(
+      /Stage 5\/15/
+    );
+    expect(
+      String(getByTestId('recognition-target').props.children)
+    ).toHaveLength(2);
+    expect(
+      String(getByTestId('current-number').props.children)
+    ).toHaveLength(2);
+  });
+
+  it('keeps explicit target and stream unchanged across a flash stage boundary', () => {
+    const { getByTestId } = render(
+      <NumberRecognition
+        target={37}
+        stream={[37, 73]}
+        durationMs={60_000}
+        difficulty="medium"
+      />
+    );
+
+    fireEvent.press(getByTestId('start-button'));
+    for (let trial = 0; trial < 24; trial += 1) {
+      const current = String(
+        getByTestId('current-number').props.children
+      );
+      fireEvent.press(
+        getByTestId(current === '37' ? 'match' : 'no')
+      );
+    }
+
+    expect(getByTestId('flash-challenge-status')).toHaveTextContent(
+      /Stage 4\/15/
+    );
+    expect(getByTestId('recognition-target')).toHaveTextContent('37');
+    expect(['37', '73']).toContain(
+      String(getByTestId('current-number').props.children)
+    );
+  });
+
+  it('keeps the timed playable prefix balanced so always-No cannot pass', async () => {
     const challenge = getNumberRecognitionChallenge('medium');
     const onReportResult = jest.fn();
     const updateProgress = jest.spyOn(progressStore, 'updateProgress');
@@ -106,6 +211,11 @@ describe('NumberRecognition (TDD from spec)', () => {
       />
     );
 
+    await waitFor(() => {
+      expect(
+        getByTestId('start-button').props.accessibilityState.disabled
+      ).toBe(false);
+    });
     fireEvent.press(getByTestId('start-button'));
     for (let trial = 0; trial < 6; trial += 1) {
       fireEvent.press(getByTestId('no'));

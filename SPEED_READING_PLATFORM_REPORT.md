@@ -1,6 +1,6 @@
 # SpeedRead exercise, competitor, and game-design report
 
-Date: 2026-07-29
+Date: 2026-07-31
 Scope: mobile speed-reading practice, comprehension, scanning, recognition, and screen comfort
 
 ## Revision record
@@ -20,6 +20,8 @@ Scope: mobile speed-reading practice, comprehension, scanning, recognition, and 
 | V20 | Complete | Added session coaching, continuous Today-plan navigation, replay-safe adaptive progression, balanced calibration trials, monotonic reading timers, and serialized result navigation. |
 | V21 | Complete | Expanded undersized connected-text and lexical banks, semantically audited the retained banks, repaired authored-content quality, and added full-cycle, non-overlapping, and answer-remapping safeguards. |
 | V22 | Complete | Standardized responsive brief stimuli, added opaque progressive lower-glyph markers by difficulty, removed unnecessary flash-card framing, and compacted Hard phrase generation for phone legibility. |
+| V23 | Complete | Replaced immediate difficulty-band masking with a persistent 15-level flash ladder: content and exposure grow through nine clear levels, opaque masking begins at level 10, misses lower live load, and demonstrated levels resume in later sessions. |
+| V24 | Complete | Hardened flash progression after two reviewer passes: higher stages now sample genuinely harder content, sustained pace resumes up to 3,000 WPM, number length and spatial/digit span grow deterministically, fixed authored sessions cannot inflate mastery, delayed storage loads cannot erase checkpoints, and result reports use the settings actually played. |
 
 ## Executive decision
 
@@ -1140,3 +1142,83 @@ authoritative V21 inventory above.
   no horizontal overflow and that a Hard analytical phrase wrapped to three
   22 px lines; both used an opaque `rgb(17, 17, 17)` marker at the configured
   38% line depth.
+
+## V23 persistent gradual flash challenge
+
+- V23 supersedes V22's immediate Easy/Medium/Hard masking rule for the ten
+  flash-based drills: Flash Recall, Word Flash, Phrase Flash, Last Word, Words
+  Recall, Sentence Recall, Visual Span, Memory Recall, Number Search, and
+  Number Hunt. The public difficulty still controls the vocabulary or task
+  band, but every band now has its own saved 1–15 flash level.
+- Levels 1–9 prioritize readable progression: short/common items appear first,
+  progressively longer or wider content is opened, and exposure becomes
+  faster. The stimulus stays clear throughout these levels. Levels 10–15 add
+  an opaque near-black lower marker in measured steps from 10% to 38%.
+- Flash Recall and Last Word qualify the next level after four consecutive
+  correct recalls; Word Flash, Phrase Flash, and Number Hunt use eight;
+  two-word recall, sentence recall, number search, and visual span use three;
+  digit Memory Recall uses two correct sequences. A miss resets the promotion
+  run and lowers the live challenge by one. Three-miss games still show their
+  correction before ending.
+- A separately serialized local checkpoint records the safe resume level and
+  the highest demonstrated level per game and public difficulty. A complete
+  promotion run saves immediately. Three consecutive misses make the next
+  session start one level lower without erasing the recorded best. Reset Game
+  Levels clears these checkpoints, and app-data export/import includes them.
+- Fast word/phrase drills still allow an explicit starting flash pace up to
+  3,000 WPM. Their saved level restores the earned 25-WPM steps, while level-15
+  sessions may continue increasing pace without an artificial end. Explicit
+  test/content overrides retain their deterministic values.
+- Last Word begins with unpredictable 3–4-word streams and expands toward
+  6–10 words. Memory Recall resumes a qualified sequence-length offset. Visual
+  Span can expand to eight positions. Number Search grows its grid/range and
+  shortens preview time; Number Hunt shortens its response cadence while
+  retaining balanced target and non-target trials.
+- The implementation reports initial, final, and highest in-session flash
+  levels alongside the existing pace, length, span, and accuracy fields.
+  Pure reducer, persistence, marker, backup, and affected-engine tests protect
+  monotonic progression, clamping, saved resume, safe rollback, and opaque
+  masking.
+
+## V24 flash-mastery integrity and game-specific progression
+
+- V24 keeps a separate saved challenge stage inside each chosen public
+  difficulty. “Manual” therefore continues to hold the public Easy/Medium/Hard
+  band steady, while the explicitly displayed challenge stage adapts inside
+  that band as requested. The idle status labels this checkpoint as saved for
+  the current setting.
+- Text selection now moves through overlapping complexity windows instead of
+  opening an ever-growing prefix that continued to serve the easiest items.
+  Cross-stage deck boundaries retain immediate-repeat protection. Word,
+  phrase, pair, and sentence prompts therefore rise in median and minimum
+  complexity before masking begins.
+- Rapid word and phrase drills save sustained pace separately from the
+  15-stage content ladder. A complete correct run can qualify progressively up
+  to 3,000 WPM even after content stage 15; the next eligible session resumes
+  that pace. The terminal three-miss run saves a safer pace while preserving
+  the fastest demonstrated pace.
+- Number Hunt raises distractor similarity and adds one digit every four
+  challenge stages, regenerating a balanced target/non-target stream at a tier
+  boundary. Number Search opens larger grids and guaranteed longer target
+  bands while shortening preview time; only the first wrong tap can mark one
+  target as a failed adaptive round.
+- Memory Recall maps one saved stage to one deterministic digit span, requiring
+  two correct sequences before adding a digit. Visual Span applies newly
+  earned timing on the very next trial, grows toward eight positions, and
+  stages shorter-to-longer vocabulary. Typed recall uses the same current-stage
+  exposure calculation and remains vertically scrollable above a phone
+  keyboard.
+- Qualifications can never lower a stronger saved checkpoint. Live recovery
+  below a checkpoint remains live-only, and only the third consecutive miss
+  can save one rollback per session. Start remains disabled for the brief
+  checkpoint read, so the first stimulus and starting pace always use the
+  demonstrated level. A resumed WPM is applied through a synchronous session
+  reference and cannot receive the stage bonus twice.
+- Explicit content, timing, target, stream, size, or span overrides remain
+  useful for deterministic practice but are ineligible to inflate persistent
+  mastery and skip the checkpoint wait. Exact replay remains non-calibrating.
+  Storage mutations fail closed if the existing checkpoint cannot be read,
+  and a session using an in-memory fallback cannot replace saved mastery.
+  Result payloads use synchronous getters and actual initial/final per-round
+  settings so a promotion, cadence, span, range, or exposure is not reported
+  one step behind.

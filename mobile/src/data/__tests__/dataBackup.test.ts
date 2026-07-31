@@ -26,6 +26,14 @@ describe('app data backup', () => {
       'speed-reading:reading-display:v1',
       JSON.stringify({ fontScale: 1.1, lineHeightScale: 1.2 })
     );
+    await AsyncStorage.setItem(
+      'speed-reading:flash-challenge-progress:v1',
+      JSON.stringify({
+        FlashReading: {
+          easy: { resumeLevel: 5, highestLevel: 6 },
+        },
+      })
+    );
     await AsyncStorage.setItem('unrelated-key', JSON.stringify('ignore'));
 
     const backup = await createDataBackup(
@@ -40,6 +48,9 @@ describe('app data backup', () => {
     expect(backup.entries['speed-reading:today-plan:v2']).toBeTruthy();
     expect(
       backup.entries['speed-reading:reading-display:v1']
+    ).toBeTruthy();
+    expect(
+      backup.entries['speed-reading:flash-challenge-progress:v1']
     ).toBeTruthy();
     expect(backup.entries['unrelated-key']).toBeUndefined();
 

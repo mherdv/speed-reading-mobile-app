@@ -11,6 +11,7 @@ import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { levelToStars, updateProgress } from '../../data/progressStore';
 import { colors } from '../../theme/colors';
 import { BriefStimulus } from '../../ui/BriefStimulus';
+import { FlashChallengeStatus } from '../../ui/FlashChallengeStatus';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import {
@@ -20,8 +21,11 @@ import {
   type Difficulty,
 } from '../gameHooks';
 import { getRecallFeedbackDurationMs } from '../recallFeedback';
+import { exposureMsForFlashChallengeLevel } from '../flashChallenge';
+import { useFlashChallenge } from '../useFlashChallenge';
 import {
   createVisualSpanTrial,
+  getVisualSpanContentDifficulty,
   getVisualSpanConfig,
   VISUAL_SPAN_FIXATION_CUE_MS,
   type VisualSpanPositionId,
@@ -99,6 +103,7 @@ type SpatialBoardProps = {
   spread: VisualSpanSpread;
   revealWords: boolean;
   difficulty: Difficulty;
+  maskFraction?: number;
   showTarget?: boolean;
   testID?: string;
 };
@@ -108,6 +113,7 @@ function SpatialBoard({
   spread,
   revealWords,
   difficulty,
+  maskFraction,
   showTarget = false,
   testID,
 }: SpatialBoardProps) {
@@ -139,6 +145,7 @@ function SpatialBoard({
                 minFontSize={7}
                 availableWidth={66}
                 style={styles.positionText}
+                maskFraction={maskFraction}
               />
             ) : (
               <Text
@@ -178,6 +185,16 @@ export default function VisualSpanExpansion({
     selectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
+  const flashChallenge = useFlashChallenge(
+    GAME_ID,
+    selectedDifficulty,
+    CORRECT_RUN_TO_RESTORE_SPAN,
+    MAX_CONSECUTIVE_FAILURES,
+    {
+      masteryEligible:
+        itemCountProp == null && displayMsProp == null,
+    }
+  );
   const initialConfig = getVisualSpanConfig(difficulty);
   const [trial, setTrial] = useState<VisualSpanTrial>(() =>
     createVisualSpanTrial(difficulty, itemCountProp, random)
@@ -204,14 +221,31 @@ export default function VisualSpanExpansion({
   const failureStreakRef = useRef(0);
   const spanRef = useRef(itemCountProp ?? initialConfig.spanSize);
   const maxSpanRef = useRef(itemCountProp ?? initialConfig.spanSize);
+  const initialChallengeLevelRef = useRef(1);
+  const maxChallengeLevelRef = useRef(1);
+  const initialDisplayMsRef = useRef(0);
+  const finalDisplayMsRef = useRef(0);
+  const minimumDisplayMsRef = useRef(Number.POSITIVE_INFINITY);
+  const initialContentDifficultyRef = useRef<Difficulty>('easy');
+  const finalContentDifficultyRef = useRef<Difficulty>('easy');
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   const config = getVisualSpanConfig(selectedDifficulty);
-  const maximumSpan = Math.max(
-    config.minimumSpan,
-    Math.min(config.spanSize, itemCountProp ?? config.spanSize)
-  );
-  const displayMs = displayMsProp ?? config.displayMs;
+  function maximumSpanForChallenge(level: number): number {
+    if (itemCountProp != null) {
+      return Math.max(
+        config.minimumSpan,
+        Math.min(8, Math.round(itemCountProp))
+      );
+    }
+    const availableGrowth = 8 - config.spanSize;
+    const earnedGrowth = Math.floor(
+      ((Math.max(1, Math.round(level)) - 1) * availableGrowth) /
+        14
+    );
+    return Math.min(8, config.spanSize + earnedGrowth);
+  }
+  const maximumSpan = maximumSpanForChallenge(flashChallenge.level);
   const totalRounds = totalRoundsProp ?? config.totalRounds;
 
   useEffect(
@@ -224,14 +258,42 @@ export default function VisualSpanExpansion({
     []
   );
 
-  useAutoStart(autoStart, phase, progressLoaded, start);
+  useAutoStart(
+    autoStart,
+    phase,
+    progressLoaded && flashChallenge.loaded,
+    start
+  );
 
   function showRound(nextSpan: number) {
+    const challengeLevel = flashChallenge.getCurrentLevel();
+    const maximumRoundSpan = maximumSpanForChallenge(challengeLevel);
+    const contentDifficulty =
+      getVisualSpanContentDifficulty(challengeLevel);
+    const roundDisplayMs =
+      displayMsProp ??
+      exposureMsForFlashChallengeLevel(
+        config.displayMs,
+        challengeLevel,
+        450
+      );
     const nextTrial = createVisualSpanTrial(
       selectedDifficulty,
       nextSpan,
-      random
+      random,
+      maximumRoundSpan,
+      contentDifficulty
     );
+    if (initialDisplayMsRef.current === 0) {
+      initialDisplayMsRef.current = roundDisplayMs;
+      initialContentDifficultyRef.current = contentDifficulty;
+    }
+    finalDisplayMsRef.current = roundDisplayMs;
+    minimumDisplayMsRef.current = Math.min(
+      minimumDisplayMsRef.current,
+      roundDisplayMs
+    );
+    finalContentDifficultyRef.current = contentDifficulty;
     setTrial(nextTrial);
     setReview(null);
     setPhase('fixate');
@@ -240,12 +302,17 @@ export default function VisualSpanExpansion({
       setPhase('show');
       scheduleTimeout(() => {
         if (!cancelledRef.current) setPhase('recall');
-      }, displayMs);
+      }, roundDisplayMs);
     }, VISUAL_SPAN_FIXATION_CUE_MS);
   }
 
   function start() {
-    if (phase !== 'idle' && phase !== 'ended') return;
+    if (
+      !flashChallenge.loaded ||
+      (phase !== 'idle' && phase !== 'ended')
+    ) {
+      return;
+    }
     clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
@@ -255,16 +322,27 @@ export default function VisualSpanExpansion({
     failuresRef.current = 0;
     correctStreakRef.current = 0;
     failureStreakRef.current = 0;
-    spanRef.current = maximumSpan;
-    maxSpanRef.current = maximumSpan;
+    const initialChallengeLevel = flashChallenge.beginSession();
+    const initialSpan = maximumSpanForChallenge(initialChallengeLevel);
+    initialChallengeLevelRef.current = initialChallengeLevel;
+    maxChallengeLevelRef.current = initialChallengeLevel;
+    initialDisplayMsRef.current = 0;
+    finalDisplayMsRef.current = 0;
+    minimumDisplayMsRef.current = Number.POSITIVE_INFINITY;
+    initialContentDifficultyRef.current =
+      getVisualSpanContentDifficulty(initialChallengeLevel);
+    finalContentDifficultyRef.current =
+      initialContentDifficultyRef.current;
+    spanRef.current = initialSpan;
+    maxSpanRef.current = initialSpan;
     setScore(0);
     setRound(0);
     setCorrectStreak(0);
     setFailureStreak(0);
-    setSpanSize(maximumSpan);
+    setSpanSize(initialSpan);
     setReview(null);
     startRef.current = Date.now();
-    showRound(maximumSpan);
+    showRound(initialSpan);
   }
 
   function chooseAnswer(selectedWord: string) {
@@ -281,13 +359,6 @@ export default function VisualSpanExpansion({
       correctStreakRef.current += 1;
       failureStreakRef.current = 0;
       scoreRef.current += spanRef.current * 10;
-      if (
-        correctStreakRef.current >= CORRECT_RUN_TO_RESTORE_SPAN &&
-        nextSpan < maximumSpan
-      ) {
-        nextSpan += 1;
-        correctStreakRef.current = 0;
-      }
     } else {
       failuresRef.current += 1;
       correctStreakRef.current = 0;
@@ -295,6 +366,23 @@ export default function VisualSpanExpansion({
       scoreRef.current = Math.max(0, scoreRef.current - FAILURE_PENALTY);
       nextSpan = Math.max(config.minimumSpan, nextSpan - 1);
     }
+
+    const challengeOutcome = flashChallenge.recordOutcome(isCorrect);
+    maxChallengeLevelRef.current = Math.max(
+      maxChallengeLevelRef.current,
+      challengeOutcome.state.level
+    );
+    const nextMaximumSpan = maximumSpanForChallenge(
+      challengeOutcome.state.level
+    );
+    if (
+      isCorrect &&
+      correctStreakRef.current >= CORRECT_RUN_TO_RESTORE_SPAN
+    ) {
+      nextSpan = Math.min(nextMaximumSpan, nextSpan + 1);
+      correctStreakRef.current = 0;
+    }
+    nextSpan = Math.min(nextSpan, nextMaximumSpan);
 
     spanRef.current = nextSpan;
     maxSpanRef.current = Math.max(maxSpanRef.current, nextSpan);
@@ -363,14 +451,31 @@ export default function VisualSpanExpansion({
         attempts: attemptsRef.current,
         failures: failuresRef.current,
         endingFailureStreak: failureStreakRef.current,
-        maximumConfiguredSpan: maximumSpan,
+        maximumConfiguredSpan: maximumSpanForChallenge(
+          flashChallenge.getCurrentLevel()
+        ),
         maxSpan: maxSpanRef.current,
         finalSpan: spanRef.current,
-        displayMs,
+        baseDisplayMs: config.displayMs,
+        displayMs: finalDisplayMsRef.current,
+        initialDisplayMs: initialDisplayMsRef.current,
+        finalDisplayMs: finalDisplayMsRef.current,
+        minimumDisplayMs:
+          minimumDisplayMsRef.current === Number.POSITIVE_INFINITY
+            ? (displayMsProp ?? config.displayMs)
+            : minimumDisplayMsRef.current,
+        fixedDisplayMs: displayMsProp != null,
+        initialContentDifficulty:
+          initialContentDifficultyRef.current,
+        finalContentDifficulty: finalContentDifficultyRef.current,
         optionCount: config.optionCount,
         fixationCueMs: VISUAL_SPAN_FIXATION_CUE_MS,
         finishReason: reason,
         difficulty: selectedDifficulty,
+        initialChallengeLevel: initialChallengeLevelRef.current,
+        finalChallengeLevel: flashChallenge.getCurrentLevel(),
+        highestChallengeLevel: maxChallengeLevelRef.current,
+        savedBestChallengeLevel: flashChallenge.getHighestLevel(),
       },
     });
   }
@@ -432,6 +537,7 @@ export default function VisualSpanExpansion({
           stars={levelToStars(gameProgress.level)}
           onStart={start}
           startLabel="Start Training"
+          startDisabled={!flashChallenge.loaded}
           containerStyle={styles.idleContent}
           descriptionStyle={styles.descriptionText}
           progressInfoStyle={styles.progressInfo}
@@ -439,12 +545,22 @@ export default function VisualSpanExpansion({
           starsStyle={styles.starsDisplay}
           buttonStyle={styles.startBtn}
           buttonTextStyle={styles.startBtnText}
-        />
+        >
+          <FlashChallengeStatus
+            level={flashChallenge.resumeLevel}
+            highestLevel={flashChallenge.highestLevel}
+          />
+        </GameIdlePanel>
       )}
 
       {phase === 'show' && (
         <View style={styles.gameArea}>
           {stats}
+          <FlashChallengeStatus
+            compact
+            level={flashChallenge.level}
+            highestLevel={flashChallenge.highestLevel}
+          />
           <Text style={styles.roundLabel}>
             Glance {Math.min(round + 1, totalRounds)} of {totalRounds}
           </Text>
@@ -456,6 +572,7 @@ export default function VisualSpanExpansion({
             spread={config.spread}
             revealWords
             difficulty={selectedDifficulty}
+            maskFraction={flashChallenge.profile.maskFraction}
           />
         </View>
       )}

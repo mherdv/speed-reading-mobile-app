@@ -96,7 +96,9 @@ export function updateFlashPace(
   return {
     wpm,
     correctStreak: 0,
-    missStreak: 0,
+    // Pace can step down while the consecutive-failure run continues. The
+    // owning game still needs the third miss to end the session.
+    missStreak,
     changes: state.changes + (wpm === state.wpm ? 0 : 1),
   };
 }

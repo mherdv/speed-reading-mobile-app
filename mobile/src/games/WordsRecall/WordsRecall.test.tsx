@@ -9,6 +9,7 @@ import {
 } from '../../data/recallContent';
 import { getFlashWordPool } from '../../data/flashPracticeContent';
 import { getRecallFeedbackDurationMs } from '../recallFeedback';
+import { getTypedRecallExposureMs } from '../TypedRecallExercise';
 import WordsRecall from './WordsRecall';
 
 describe('WordsRecall', () => {
@@ -33,9 +34,13 @@ describe('WordsRecall', () => {
       />
     );
     fireEvent.press(view.getByTestId('start-button'));
+    expect(view.getByTestId('typed-recall-scroll')).toHaveProp(
+      'keyboardShouldPersistTaps',
+      'handled'
+    );
     expect(view.getByTestId('recall-word-0')).toHaveTextContent('harbor');
     expect(view.getByTestId('recall-word-1')).toHaveTextContent('lantern');
-    expect(view.getByTestId('recall-prompt-mask')).toBeTruthy();
+    expect(view.queryByTestId('recall-prompt-mask')).toBeNull();
     expect(view.getByTestId('recall-prompt')).toHaveProp('numberOfLines', 2);
     act(() => {
       jest.advanceTimersByTime(20);
@@ -54,8 +59,18 @@ describe('WordsRecall', () => {
       details: {
         activityType: 'two-word-recall',
         wordCountPerPrompt: 2,
+        baseDisplayMs: 10,
+        displayMs: 10,
+        initialDisplayMs: 10,
+        finalDisplayMs: 10,
+        fixedDisplayMs: true,
       },
     });
+  });
+
+  it('keeps explicit timing fixed while configured timing follows the challenge', () => {
+    expect(getTypedRecallExposureMs(1_200, 8, 350, true)).toBe(1_200);
+    expect(getTypedRecallExposureMs(1_200, 8, 350)).toBeLessThan(1_200);
   });
 
   it('changes only vocabulary/display configuration while keeping eight two-word rounds', () => {

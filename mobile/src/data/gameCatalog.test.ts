@@ -40,15 +40,15 @@ describe('game catalog', () => {
     expect(GAME_CATALOG.NumberRecognition.difficulty).toEqual({
       easy: {
         label: 'Easy',
-        helper: '1 digit · clear · 30-item deck · 1.6s response window',
+        helper: '1 digit · 30-item deck · 1.6s base response window',
       },
       medium: {
         label: 'Medium',
-        helper: '2 digits · black lower-edge marker · 50-item deck · 1.1s response window',
+        helper: '2 digits · 50-item deck · 1.1s base response window',
       },
       hard: {
         label: 'Hard',
-        helper: '3 similar digits · deeper black marker · 70-item deck · 0.7s response window',
+        helper: '3 similar digits · 70-item deck · 0.7s base response window',
       },
     });
     expect(GAME_CATALOG.SymbolRecognition.difficulty).toEqual({

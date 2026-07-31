@@ -1,5 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { GAME_DESCRIPTIONS } from '../data/gameDescriptions';
 import {
@@ -12,10 +21,16 @@ import { normalizeRecallAnswer } from '../data/recallContent';
 import { updateProgress } from '../data/progressStore';
 import { colors } from '../theme/colors';
 import { BriefStimulus } from '../ui/BriefStimulus';
+import { FlashChallengeStatus } from '../ui/FlashChallengeStatus';
 import { SimpleIdlePanel } from '../ui/SimpleIdlePanel';
 import { StatsRow } from '../ui/StatsRow';
 import { useAutoStart, useTrackedTimeouts, type Difficulty } from './gameHooks';
+import {
+  exposureMsForFlashChallengeLevel,
+  getProgressiveFlashContent,
+} from './flashChallenge';
 import { getRecallFeedbackDurationMs } from './recallFeedback';
+import { useFlashChallenge } from './useFlashChallenge';
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -33,6 +48,8 @@ type Props = {
   inputPlaceholder: string;
   prompts: readonly string[];
   displayMs: number;
+  fixedDisplayMs?: boolean;
+  masteryEligible?: boolean;
   totalRounds: number;
   difficulty: Difficulty;
   autoStart?: boolean;
@@ -42,6 +59,22 @@ type Props = {
 };
 
 type Phase = 'idle' | 'display' | 'recall' | 'feedback' | 'ended';
+const CORRECT_ANSWERS_TO_ADVANCE = 3;
+const MISSES_TO_ROLL_BACK = 3;
+
+export function getTypedRecallExposureMs(
+  baseDisplayMs: number,
+  challengeLevel: number,
+  minimumDisplayMs: number,
+  fixedDisplayMs = false
+): number {
+  if (fixedDisplayMs) return Math.max(1, Math.round(baseDisplayMs));
+  return exposureMsForFlashChallengeLevel(
+    baseDisplayMs,
+    challengeLevel,
+    minimumDisplayMs
+  );
+}
 
 export function TypedRecallExercise({
   gameId,
@@ -50,6 +83,8 @@ export function TypedRecallExercise({
   inputPlaceholder,
   prompts,
   displayMs,
+  fixedDisplayMs = false,
+  masteryEligible = true,
   totalRounds,
   difficulty,
   autoStart = false,
@@ -63,14 +98,29 @@ export function TypedRecallExercise({
   const [round, setRound] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [currentDisplayMs, setCurrentDisplayMs] = useState(displayMs);
+  const flashChallenge = useFlashChallenge(
+    gameId,
+    difficulty,
+    CORRECT_ANSWERS_TO_ADVANCE,
+    MISSES_TO_ROLL_BACK,
+    { masteryEligible }
+  );
 
   const startedAtRef = useRef(0);
   const roundRef = useRef(0);
   const correctRef = useRef(0);
   const promptRef = useRef('');
-  const deckStateRef = useRef(createPersistentVariedDeckState());
+  const deckStatesRef = useRef(
+    new Map<number, ReturnType<typeof createPersistentVariedDeckState>>()
+  );
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const initialChallengeLevelRef = useRef(1);
+  const maxChallengeLevelRef = useRef(1);
+  const initialDisplayMsRef = useRef(0);
+  const finalDisplayMsRef = useRef(0);
+  const minimumDisplayMsRef = useRef(Number.POSITIVE_INFINITY);
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(
@@ -83,14 +133,25 @@ export function TypedRecallExercise({
     []
   );
 
-  function takePrompt(): string {
+  function takePrompt(challengeLevel: number): string {
+    const progressivePrompts = getProgressiveFlashContent(
+      prompts,
+      challengeLevel,
+      6
+    );
+    let deckState = deckStatesRef.current.get(challengeLevel);
+    if (!deckState) {
+      deckState = createPersistentVariedDeckState();
+      deckState.previous = promptRef.current;
+      deckStatesRef.current.set(challengeLevel, deckState);
+    }
     return (
       takeNextPersistentVariedItem(
-        deckStateRef.current,
-        prompts,
+        deckState,
+        progressivePrompts,
         random
       ) ??
-      prompts[0] ??
+      progressivePrompts[0] ??
       (twoWordLayout
         ? 'quiet focus'
         : 'Quiet readers notice the central idea.')
@@ -98,31 +159,58 @@ export function TypedRecallExercise({
   }
 
   function showRound() {
-    const next = takePrompt();
+    const challengeLevel = flashChallenge.getCurrentLevel();
+    const roundDisplayMs = getTypedRecallExposureMs(
+      displayMs,
+      challengeLevel,
+      twoWordLayout ? 350 : 550,
+      fixedDisplayMs
+    );
+    const next = takePrompt(challengeLevel);
     promptRef.current = next;
     setPrompt(next);
     setInput('');
     setFeedback(null);
+    setCurrentDisplayMs(roundDisplayMs);
+    if (initialDisplayMsRef.current === 0) {
+      initialDisplayMsRef.current = roundDisplayMs;
+    }
+    finalDisplayMsRef.current = roundDisplayMs;
+    minimumDisplayMsRef.current = Math.min(
+      minimumDisplayMsRef.current,
+      roundDisplayMs
+    );
     setPhase('display');
     scheduleTimeout(() => {
       if (!cancelledRef.current) setPhase('recall');
-    }, displayMs);
+    }, roundDisplayMs);
   }
 
   function start() {
-    if (phase !== 'idle' && phase !== 'ended') return;
+    if (
+      !flashChallenge.loaded ||
+      (phase !== 'idle' && phase !== 'ended')
+    ) {
+      return;
+    }
     clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
     roundRef.current = 0;
     correctRef.current = 0;
+    const initialChallengeLevel = flashChallenge.beginSession();
+    initialChallengeLevelRef.current = initialChallengeLevel;
+    maxChallengeLevelRef.current = initialChallengeLevel;
+    initialDisplayMsRef.current = 0;
+    finalDisplayMsRef.current = 0;
+    minimumDisplayMsRef.current = Number.POSITIVE_INFINITY;
     setRound(0);
     setCorrect(0);
     startedAtRef.current = Date.now();
     showRound();
   }
 
-  useAutoStart(autoStart, phase, true, start);
+  useAutoStart(autoStart, phase, flashChallenge.loaded, start);
 
   function finish() {
     if (cancelledRef.current || reportedRef.current) return;
@@ -146,11 +234,23 @@ export function TypedRecallExercise({
           gameId === 'WordsRecall' ? 'two-word-recall' : 'sentence-recall',
         correct: correctRef.current,
         rounds: roundRef.current,
-        displayMs,
+        baseDisplayMs: displayMs,
+        displayMs: finalDisplayMsRef.current,
+        initialDisplayMs: initialDisplayMsRef.current,
+        finalDisplayMs: finalDisplayMsRef.current,
+        minimumDisplayMs:
+          minimumDisplayMsRef.current === Number.POSITIVE_INFINITY
+            ? displayMs
+            : minimumDisplayMsRef.current,
+        fixedDisplayMs,
         difficulty,
         promptPoolSize: prompts.length,
         comparisonNormalization: 'case-whitespace-punctuation-insensitive',
         wordCountPerPrompt: twoWordLayout ? 2 : null,
+        initialChallengeLevel: initialChallengeLevelRef.current,
+        finalChallengeLevel: flashChallenge.getCurrentLevel(),
+        highestChallengeLevel: maxChallengeLevelRef.current,
+        savedBestChallengeLevel: flashChallenge.getHighestLevel(),
       },
     });
   }
@@ -168,6 +268,11 @@ export function TypedRecallExercise({
     } else {
       setFeedback('wrong');
     }
+    const challengeOutcome = flashChallenge.recordOutcome(isCorrect);
+    maxChallengeLevelRef.current = Math.max(
+      maxChallengeLevelRef.current,
+      challengeOutcome.state.level
+    );
     setPhase('feedback');
     scheduleTimeout(() => {
       if (cancelledRef.current) return;
@@ -187,117 +292,146 @@ export function TypedRecallExercise({
         <SimpleIdlePanel
           description={GAME_DESCRIPTIONS[gameId]}
           onStart={start}
+          startDisabled={!flashChallenge.loaded}
           containerStyle={styles.idle}
           buttonStyle={styles.primaryButton}
           buttonTextStyle={styles.primaryButtonText}
-        />
+        >
+          <FlashChallengeStatus
+            level={flashChallenge.resumeLevel}
+            highestLevel={flashChallenge.highestLevel}
+          />
+        </SimpleIdlePanel>
       )}
 
       {phase !== 'idle' && phase !== 'ended' && (
-        <View style={styles.gameArea}>
-          <StatsRow
-            items={[
-              { key: 'round', value: `${Math.min(round + 1, totalRounds)}/${totalRounds}`, label: 'Round' },
-              { key: 'correct', value: correct, label: 'Correct' },
-              { key: 'display', value: `${displayMs / 1000}s`, label: 'Display' },
-            ]}
-          />
-
-          {phase === 'display' && (
-            <View testID="recall-display" style={styles.promptCard}>
-              <BriefStimulus
-                value={prompt}
-                difficulty={difficulty}
-                testID={
-                  twoWordLayout ? 'recall-prompt' : 'recall-sentence'
-                }
-                color={
-                  twoWordLayout
-                    ? colors.interactivePrimary
-                    : colors.textPrimary
-                }
-                backgroundColor={colors.background}
-                maxFontSize={twoWordLayout ? 34 : 24}
-                minFontSize={12}
-                allowWrap
-                maxLines={twoWordLayout ? 2 : 3}
-                style={twoWordLayout ? undefined : styles.sentence}
-              >
-                {twoWordLayout ? (
-                  <>
-                    <Text testID="recall-word-0">{displayedWords[0]}</Text>
-                    {' '}
-                    <Text testID="recall-word-1">{displayedWords[1]}</Text>
-                  </>
-                ) : (
-                  prompt
-                )}
-              </BriefStimulus>
-            </View>
-          )}
-
-          {(phase === 'recall' || phase === 'feedback') && (
-            <View
-              testID="recall-entry"
-              style={[
-                styles.entryCard,
-                feedback === 'correct' && styles.correctCard,
-                feedback === 'wrong' && styles.wrongCard,
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={12}
+          style={styles.keyboardArea}
+        >
+          <ScrollView
+            automaticallyAdjustKeyboardInsets
+            contentContainerStyle={styles.gameArea}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            style={styles.gameScroll}
+            testID="typed-recall-scroll"
+          >
+            <FlashChallengeStatus
+              compact
+              level={flashChallenge.level}
+              highestLevel={flashChallenge.highestLevel}
+            />
+            <StatsRow
+              items={[
+                { key: 'round', value: `${Math.min(round + 1, totalRounds)}/${totalRounds}`, label: 'Round' },
+                { key: 'correct', value: correct, label: 'Correct' },
+                {
+                  key: 'display',
+                  value: `${(currentDisplayMs / 1000).toFixed(2)}s`,
+                  label: 'Display',
+                },
               ]}
-            >
-              <Text style={styles.entryLabel}>Type exactly what you remember</Text>
-              <TextInput
-                testID="recall-input"
-                value={input}
-                onChangeText={setInput}
-                editable={phase === 'recall'}
-                autoCapitalize="sentences"
-                autoCorrect={false}
-                autoFocus
-                multiline={!twoWordLayout}
-                placeholder={inputPlaceholder}
-                placeholderTextColor={colors.textMuted}
-                onSubmitEditing={twoWordLayout ? submit : undefined}
-                style={[styles.input, !twoWordLayout && styles.multilineInput]}
-              />
-              {phase === 'recall' && (
-                <Pressable
-                  accessibilityRole="button"
-                  testID="submit-recall"
-                  onPress={submit}
-                  style={styles.primaryButton}
+            />
+
+            {phase === 'display' && (
+              <View testID="recall-display" style={styles.promptCard}>
+                <BriefStimulus
+                  value={prompt}
+                  difficulty={difficulty}
+                  testID={
+                    twoWordLayout ? 'recall-prompt' : 'recall-sentence'
+                  }
+                  color={
+                    twoWordLayout
+                      ? colors.interactivePrimary
+                      : colors.textPrimary
+                  }
+                  backgroundColor={colors.background}
+                  maxFontSize={twoWordLayout ? 34 : 24}
+                  minFontSize={12}
+                  allowWrap
+                  maxLines={twoWordLayout ? 2 : 3}
+                  style={twoWordLayout ? undefined : styles.sentence}
+                  maskFraction={flashChallenge.profile.maskFraction}
                 >
-                  <Text style={styles.primaryButtonText}>Check recall</Text>
-                </Pressable>
-              )}
-              {phase === 'feedback' && (
-                <View
-                  accessibilityLiveRegion="polite"
-                  testID="recall-feedback"
-                  style={styles.feedbackReview}
-                >
-                  {feedback === 'correct' ? (
-                    <Text style={styles.correctText}>Correct</Text>
-                  ) : (
+                  {twoWordLayout ? (
                     <>
-                      <Text style={styles.wrongText}>Review this answer</Text>
-                      <Text style={styles.answerLabel}>Correct answer</Text>
-                      <Text
-                        testID="recall-correct-answer"
-                        style={styles.correctAnswer}
-                      >
-                        {promptRef.current}
-                      </Text>
-                      <Text style={styles.reviewHint}>
-                        Compare it with what you typed above before the next round.
-                      </Text>
+                      <Text testID="recall-word-0">{displayedWords[0]}</Text>
+                      {' '}
+                      <Text testID="recall-word-1">{displayedWords[1]}</Text>
                     </>
+                  ) : (
+                    prompt
                   )}
-                </View>
-              )}
-            </View>
-          )}
-        </View>
+                </BriefStimulus>
+              </View>
+            )}
+
+            {(phase === 'recall' || phase === 'feedback') && (
+              <View
+                testID="recall-entry"
+                style={[
+                  styles.entryCard,
+                  feedback === 'correct' && styles.correctCard,
+                  feedback === 'wrong' && styles.wrongCard,
+                ]}
+              >
+                <Text style={styles.entryLabel}>Type exactly what you remember</Text>
+                <TextInput
+                  testID="recall-input"
+                  value={input}
+                  onChangeText={setInput}
+                  editable={phase === 'recall'}
+                  autoCapitalize="sentences"
+                  autoCorrect={false}
+                  autoFocus
+                  multiline={!twoWordLayout}
+                  placeholder={inputPlaceholder}
+                  placeholderTextColor={colors.textMuted}
+                  onSubmitEditing={twoWordLayout ? submit : undefined}
+                  style={[styles.input, !twoWordLayout && styles.multilineInput]}
+                />
+                {phase === 'recall' && (
+                  <Pressable
+                    accessibilityRole="button"
+                    testID="submit-recall"
+                    onPress={submit}
+                    style={styles.primaryButton}
+                  >
+                    <Text style={styles.primaryButtonText}>Check recall</Text>
+                  </Pressable>
+                )}
+                {phase === 'feedback' && (
+                  <View
+                    accessibilityLiveRegion="polite"
+                    testID="recall-feedback"
+                    style={styles.feedbackReview}
+                  >
+                    {feedback === 'correct' ? (
+                      <Text style={styles.correctText}>Correct</Text>
+                    ) : (
+                      <>
+                        <Text style={styles.wrongText}>Review this answer</Text>
+                        <Text style={styles.answerLabel}>Correct answer</Text>
+                        <Text
+                          testID="recall-correct-answer"
+                          style={styles.correctAnswer}
+                        >
+                          {promptRef.current}
+                        </Text>
+                        <Text style={styles.reviewHint}>
+                          Compare it with what you typed above before the next round.
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
       )}
 
       {phase === 'ended' && (
@@ -326,12 +460,19 @@ const styles = StyleSheet.create({
   title: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
   subtitle: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 2 },
   idle: { flex: 1 },
-  gameArea: { flex: 1, gap: 14, paddingTop: 14 },
+  keyboardArea: { flex: 1 },
+  gameScroll: { flex: 1 },
+  gameArea: {
+    flexGrow: 1,
+    gap: 14,
+    paddingBottom: 24,
+    paddingTop: 14,
+  },
   promptCard: {
     alignItems: 'center',
     backgroundColor: colors.background,
     borderWidth: 0,
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     margin: 0,
     minHeight: 180,

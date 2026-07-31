@@ -97,6 +97,8 @@ type Props = {
   availableWidth?: number;
   allowWrap?: boolean;
   maxLines?: number;
+  /** Overrides the preset mask so flash ladders can introduce it gradually. */
+  maskFraction?: number;
   style?: StyleProp<TextStyle>;
   containerStyle?: StyleProp<ViewStyle>;
 };
@@ -114,6 +116,7 @@ export function BriefStimulus({
   availableWidth,
   allowWrap = false,
   maxLines = 3,
+  maskFraction: maskFractionProp,
   style,
   containerStyle,
 }: Props) {
@@ -139,7 +142,10 @@ export function BriefStimulus({
         letterSpacing
       )
     : 1;
-  const maskFraction = getBriefStimulusMaskFraction(difficulty);
+  const maskFraction =
+    maskFractionProp == null
+      ? getBriefStimulusMaskFraction(difficulty)
+      : Math.min(0.5, Math.max(0, maskFractionProp));
 
   return (
     <View

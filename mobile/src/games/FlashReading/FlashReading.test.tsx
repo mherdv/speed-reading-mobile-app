@@ -1,5 +1,15 @@
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  act,
+  fireEvent,
+  render,
+  waitFor,
+} from '@testing-library/react-native';
+import {
+  qualifyFlashChallengeWpm,
+  waitForFlashChallengeUpdates,
+} from '../../data/flashChallengeProgress';
 import { getRecallFeedbackDurationMs } from '../recallFeedback';
 import FlashReading from './FlashReading';
 
@@ -27,13 +37,13 @@ describe('FlashReading', () => {
     expect(getByTestId('flash-word')).toBeTruthy();
   });
 
-  it('obscures the lower word area at Hard difficulty', () => {
+  it('starts clear even at Hard while preserving one-line fitting', () => {
     const view = render(
       <FlashReading words={['pattern']} displayMs={100} difficulty="hard" />
     );
 
     fireEvent.press(view.getByTestId('start-button'));
-    expect(view.getByTestId('flash-word-mask')).toBeTruthy();
+    expect(view.queryByTestId('flash-word-mask')).toBeNull();
     expect(view.getByTestId('flash-word')).toHaveProp('numberOfLines', 1);
   });
 
@@ -169,5 +179,57 @@ describe('FlashReading', () => {
 
     expect(new Set(shownWords.slice(0, words.length)).size).toBe(words.length);
     expect(shownWords[3]).not.toBe(shownWords[2]);
+  });
+
+  it('auto-starts at the saved sustained WPM without a base-pace frame', async () => {
+    await waitForFlashChallengeUpdates();
+    await AsyncStorage.clear();
+    await qualifyFlashChallengeWpm('FlashReading', 'medium', 2_775);
+    const view = render(
+      <FlashReading autoStart difficulty="medium" totalRounds={1} />
+    );
+
+    await waitFor(() => {
+      expect(view.getByTestId('flash-word')).toBeTruthy();
+      expect(view.getByText('2775')).toBeTruthy();
+    });
+
+    view.unmount();
+    await waitForFlashChallengeUpdates();
+    await AsyncStorage.clear();
+  });
+
+  it('keeps manual Start disabled until the saved checkpoint is ready', async () => {
+    await waitForFlashChallengeUpdates();
+    await AsyncStorage.clear();
+    let resolveLoad: ((value: string | null) => void) | undefined;
+    jest.mocked(AsyncStorage.getItem).mockImplementationOnce(
+      () =>
+        new Promise<string | null>((resolve) => {
+          resolveLoad = resolve;
+        })
+    );
+    const view = render(<FlashReading />);
+    const startButton = view.getByTestId('start-button');
+
+    expect(startButton.props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(startButton);
+    expect(view.queryByTestId('flash-word')).toBeNull();
+
+    await act(async () => {
+      resolveLoad?.(null);
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(
+        view.getByTestId('start-button').props.accessibilityState.disabled
+      ).toBe(false);
+    });
+    fireEvent.press(view.getByTestId('start-button'));
+    expect(view.getByTestId('flash-word')).toBeTruthy();
+
+    view.unmount();
+    await waitForFlashChallengeUpdates();
+    await AsyncStorage.clear();
   });
 });

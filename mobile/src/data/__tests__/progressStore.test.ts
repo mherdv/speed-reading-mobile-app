@@ -15,6 +15,11 @@ import {
   type GameProgress,
 } from '../progressStore';
 import { saveDifficultyPreference } from '../difficultyPreferences';
+import {
+  FLASH_CHALLENGE_STORAGE_KEY,
+  loadFlashChallengeProgress,
+  qualifyFlashChallengeLevel,
+} from '../flashChallengeProgress';
 
 describe('progressStore', () => {
   async function enableAdaptive(gameId: string) {
@@ -532,6 +537,51 @@ describe('progressStore', () => {
           bestScore: 20,
         })
       );
+    });
+
+    it('keeps a flash qualification invoked after clearProgress', async () => {
+      const originalRemoveItem = (
+        AsyncStorage.removeItem as jest.MockedFunction<
+          typeof AsyncStorage.removeItem
+        >
+      ).getMockImplementation();
+      if (!originalRemoveItem) {
+        throw new Error('AsyncStorage test mock must provide removeItem');
+      }
+      let releaseClear: (() => void) | undefined;
+      let signalClear: (() => void) | undefined;
+      const clearStarted = new Promise<void>((resolve) => {
+        signalClear = resolve;
+      });
+      jest.spyOn(AsyncStorage, 'removeItem').mockImplementation(
+        async (key) => {
+          if (key === FLASH_CHALLENGE_STORAGE_KEY) {
+            signalClear?.();
+            await new Promise<void>((resolve) => {
+              releaseClear = resolve;
+            });
+          }
+          await originalRemoveItem(key);
+        }
+      );
+
+      await qualifyFlashChallengeLevel('FlashReading', 'easy', 6);
+      const clear = clearProgress();
+      await clearStarted;
+      const afterClear = qualifyFlashChallengeLevel(
+        'FlashReading',
+        'easy',
+        9
+      );
+      releaseClear?.();
+      await Promise.all([clear, afterClear]);
+
+      await expect(
+        loadFlashChallengeProgress('FlashReading', 'easy')
+      ).resolves.toMatchObject({
+        resumeLevel: 9,
+        highestLevel: 9,
+      });
     });
   });
 });

@@ -5,6 +5,10 @@ import {
   loadDifficultyPreference,
   type Difficulty,
 } from './difficultyPreferences';
+import {
+  clearFlashChallengeProgress,
+  waitForFlashChallengeUpdates,
+} from './flashChallengeProgress';
 
 const STORAGE_KEY = 'speed-reading:progress:v1';
 
@@ -199,7 +203,7 @@ export function updateProgress(
 }> {
   const normalizedId = normalizeGameId(gameId);
   const calibrateAdaptive =
-    (nonCalibratingSessionCounts.get(normalizedId) ?? 0) === 0;
+    isProgressCalibrationEnabled(normalizedId);
   return enqueueProgressMutation(() =>
     performProgressUpdate(
       normalizedId,
@@ -208,6 +212,13 @@ export function updateProgress(
       playedDifficulty,
       calibrateAdaptive
     )
+  );
+}
+
+/** Shared guard for granular challenge stores used by exact result replays. */
+export function isProgressCalibrationEnabled(gameId: string): boolean {
+  return (
+    (nonCalibratingSessionCounts.get(normalizeGameId(gameId)) ?? 0) === 0
   );
 }
 
@@ -244,7 +255,10 @@ export function beginNonCalibratingProgressSession(
 export async function waitForProgressUpdates(
   timeoutMs = PROGRESS_WAIT_TIMEOUT_MS
 ): Promise<void> {
-  const pendingAtCall = progressUpdateQueue.catch(() => undefined);
+  const pendingAtCall = Promise.all([
+    progressUpdateQueue.catch(() => undefined),
+    waitForFlashChallengeUpdates(),
+  ]);
   await new Promise<void>((resolve) => {
     const timeout = setTimeout(resolve, Math.max(0, timeoutMs));
     void pendingAtCall.finally(() => {
@@ -278,7 +292,15 @@ export async function updateTwoSessionDifficultySuggestion(
 }
 
 export function clearProgress(): Promise<void> {
-  return enqueueProgressMutation(() => AsyncStorage.removeItem(STORAGE_KEY));
+  // Reserve the flash-queue position at call time so a later qualification
+  // cannot overtake this clear and then be erased by it.
+  const flashClear = clearFlashChallengeProgress();
+  return enqueueProgressMutation(async () => {
+    await Promise.all([
+      AsyncStorage.removeItem(STORAGE_KEY),
+      flashClear,
+    ]);
+  });
 }
 
 /**

@@ -28,7 +28,7 @@ describe('SentenceRecall', () => {
     expect(view.getByTestId('recall-sentence')).toHaveTextContent(
       'Careful readers compare the strongest evidence.'
     );
-    expect(view.getByTestId('recall-sentence-mask')).toBeTruthy();
+    expect(view.queryByTestId('recall-sentence-mask')).toBeNull();
     expect(view.getByTestId('recall-sentence')).toHaveProp('numberOfLines', 3);
     act(() => jest.advanceTimersByTime(20));
     fireEvent.changeText(

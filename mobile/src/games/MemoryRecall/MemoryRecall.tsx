@@ -4,15 +4,19 @@ import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
 import { useAutoStart, useTrackedTimeouts, type Difficulty } from '../gameHooks';
 import { BriefStimulus } from '../../ui/BriefStimulus';
+import { FlashChallengeStatus } from '../../ui/FlashChallengeStatus';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { colors } from '../../theme/colors';
 import { getRecallFeedbackDurationMs } from '../recallFeedback';
+import { exposureMsForFlashChallengeLevel } from '../flashChallenge';
+import { useFlashChallenge } from '../useFlashChallenge';
 
 const GAME_ID = 'MemoryRecall';
 const FAILURE_PENALTY = 10;
 const MAX_CONSECUTIVE_FAILURES = 3;
 const MIN_SEQUENCE_LENGTH = 1;
+const CORRECT_SEQUENCES_TO_ADVANCE = 2;
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -37,12 +41,25 @@ type MemoryReview = {
   submitted: number[];
   expected: number[];
   correct: boolean;
-  nextLevel: number;
+  nextSequenceLength: number;
   shouldFinish: boolean;
 };
 
 function generateSequence(length: number): number[] {
   return Array.from({ length }, () => Math.floor(Math.random() * 10));
+}
+
+export function getMemorySequenceLength(
+  baseLength: number,
+  challengeLevel: number,
+  fixedLength = false
+): number {
+  const safeBaseLength = Math.max(
+    MIN_SEQUENCE_LENGTH,
+    Math.round(baseLength)
+  );
+  if (fixedLength) return safeBaseLength;
+  return safeBaseLength + Math.max(0, Math.round(challengeLevel) - 1);
 }
 
 export default function MemoryRecall({
@@ -56,6 +73,16 @@ export default function MemoryRecall({
     startingLengthProp ?? (difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5);
   const displayMs =
     displayMsProp ?? (difficulty === 'easy' ? 1500 : difficulty === 'medium' ? 1100 : 800);
+  const flashChallenge = useFlashChallenge(
+    GAME_ID,
+    difficulty,
+    CORRECT_SEQUENCES_TO_ADVANCE,
+    MAX_CONSECUTIVE_FAILURES,
+    {
+      masteryEligible:
+        startingLengthProp == null && displayMsProp == null,
+    }
+  );
   const [phase, setPhase] = useState<Phase>('idle');
   const [level, setLevel] = useState(startingLength);
   const [sequence, setSequence] = useState<number[]>([]);
@@ -74,6 +101,11 @@ export default function MemoryRecall({
   const consecutiveFailuresRef = useRef(0);
   const levelRef = useRef(startingLength);
   const maxLevelRef = useRef(startingLength);
+  const initialChallengeLevelRef = useRef(1);
+  const maxChallengeLevelRef = useRef(1);
+  const initialDisplayMsRef = useRef(0);
+  const finalDisplayMsRef = useRef(0);
+  const minimumDisplayMsRef = useRef(Number.POSITIVE_INFINITY);
   const sequenceRef = useRef<number[]>([]);
   const showTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
@@ -85,44 +117,85 @@ export default function MemoryRecall({
     };
   }, []);
 
-  useAutoStart(autoStart, phase, true, start);
+  useAutoStart(autoStart, phase, flashChallenge.loaded, start);
 
-  function showSequence(nextLevel: number) {
-    levelRef.current = nextLevel;
-    maxLevelRef.current = Math.max(maxLevelRef.current, nextLevel);
-    setLevel(nextLevel);
+  function sequenceLengthForChallenge(challengeLevel: number): number {
+    return getMemorySequenceLength(
+      startingLength,
+      challengeLevel,
+      startingLengthProp != null
+    );
+  }
+
+  function showSequence(nextSequenceLength: number) {
+    levelRef.current = nextSequenceLength;
+    maxLevelRef.current = Math.max(
+      maxLevelRef.current,
+      nextSequenceLength
+    );
+    setLevel(nextSequenceLength);
     setInput([]);
     setFeedback(null);
     setReview(null);
 
-    const nextSequence = generateSequence(nextLevel);
+    const nextSequence = generateSequence(nextSequenceLength);
     sequenceRef.current = nextSequence;
     setSequence(nextSequence);
     setPhase('show');
 
+    const roundDisplayMs =
+      displayMsProp ??
+      exposureMsForFlashChallengeLevel(
+        displayMs,
+        flashChallenge.getCurrentLevel(),
+        350
+      );
+    if (initialDisplayMsRef.current === 0) {
+      initialDisplayMsRef.current = roundDisplayMs;
+    }
+    finalDisplayMsRef.current = roundDisplayMs;
+    minimumDisplayMsRef.current = Math.min(
+      minimumDisplayMsRef.current,
+      roundDisplayMs
+    );
+    if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
     showTimeoutRef.current = setTimeout(() => {
       if (cancelledRef.current) return;
       setPhase('recall');
-    }, displayMs);
+    }, roundDisplayMs);
   }
 
   function start() {
+    if (
+      !flashChallenge.loaded ||
+      (phase !== 'idle' && phase !== 'ended')
+    ) {
+      return;
+    }
     clearTrackedTimeouts();
     cancelledRef.current = false;
-    if (phase !== 'idle' && phase !== 'ended') return;
     reportedRef.current = false;
     scoreRef.current = 0;
     correctSequencesRef.current = 0;
     failuresRef.current = 0;
     consecutiveFailuresRef.current = 0;
-    levelRef.current = startingLength;
-    maxLevelRef.current = startingLength;
+    const initialChallengeLevel = flashChallenge.beginSession();
+    const challengeStartingLength = sequenceLengthForChallenge(
+      initialChallengeLevel
+    );
+    initialChallengeLevelRef.current = initialChallengeLevel;
+    maxChallengeLevelRef.current = initialChallengeLevel;
+    initialDisplayMsRef.current = 0;
+    finalDisplayMsRef.current = 0;
+    minimumDisplayMsRef.current = Number.POSITIVE_INFINITY;
+    levelRef.current = challengeStartingLength;
+    maxLevelRef.current = challengeStartingLength;
     setScore(0);
     setFailureStreak(0);
     setReview(null);
     startRef.current = Date.now();
 
-    showSequence(startingLength);
+    showSequence(challengeStartingLength);
   }
 
   function pressDigit(digit: number) {
@@ -134,7 +207,6 @@ export default function MemoryRecall({
     if (newInput.length === sequenceRef.current.length) {
       const correct = newInput.every((d, i) => d === sequenceRef.current[i]);
       const expected = [...sequenceRef.current];
-      let nextLevel = levelRef.current;
       let shouldFinish = false;
 
       if (correct) {
@@ -143,7 +215,6 @@ export default function MemoryRecall({
         setFailureStreak(0);
         scoreRef.current += levelRef.current * 10;
         setScore(scoreRef.current);
-        nextLevel = levelRef.current + 1;
       } else {
         failuresRef.current += 1;
         consecutiveFailuresRef.current += 1;
@@ -153,21 +224,29 @@ export default function MemoryRecall({
 
         shouldFinish =
           consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES;
-        nextLevel = Math.max(
-          MIN_SEQUENCE_LENGTH,
-          levelRef.current - 1
-        );
       }
 
-      levelRef.current = nextLevel;
-      maxLevelRef.current = Math.max(maxLevelRef.current, nextLevel);
-      setLevel(nextLevel);
+      const challengeOutcome =
+        flashChallenge.recordOutcome(correct);
+      maxChallengeLevelRef.current = Math.max(
+        maxChallengeLevelRef.current,
+        challengeOutcome.state.level
+      );
+      const nextSequenceLength = sequenceLengthForChallenge(
+        challengeOutcome.state.level
+      );
+      levelRef.current = nextSequenceLength;
+      maxLevelRef.current = Math.max(
+        maxLevelRef.current,
+        nextSequenceLength
+      );
+      setLevel(nextSequenceLength);
       setFeedback(correct ? 'correct' : 'wrong');
       setReview({
         submitted: newInput,
         expected,
         correct,
-        nextLevel,
+        nextSequenceLength,
         shouldFinish,
       });
       setPhase('feedback');
@@ -178,7 +257,7 @@ export default function MemoryRecall({
           finish();
           return;
         }
-        showSequence(nextLevel);
+        showSequence(nextSequenceLength);
       }, getRecallFeedbackDurationMs(expected.join(' '), correct));
     }
   }
@@ -206,11 +285,27 @@ export default function MemoryRecall({
       details: {
         maxLevel: maxLevelRef.current,
         finalLevel: levelRef.current,
+        maxSequenceLength: maxLevelRef.current,
+        finalSequenceLength: levelRef.current,
         correctSequences: correctSequencesRef.current,
         failures: failuresRef.current,
         endingFailureStreak: consecutiveFailuresRef.current,
         failurePenalty: FAILURE_PENALTY,
         difficulty,
+        baseDisplayMs: displayMs,
+        displayMs: finalDisplayMsRef.current,
+        initialDisplayMs: initialDisplayMsRef.current,
+        finalDisplayMs: finalDisplayMsRef.current,
+        minimumDisplayMs:
+          minimumDisplayMsRef.current === Number.POSITIVE_INFINITY
+            ? displayMs
+            : minimumDisplayMsRef.current,
+        fixedSequenceLength: startingLengthProp != null,
+        fixedDisplayMs: displayMsProp != null,
+        initialChallengeLevel: initialChallengeLevelRef.current,
+        finalChallengeLevel: flashChallenge.getCurrentLevel(),
+        highestChallengeLevel: maxChallengeLevelRef.current,
+        savedBestChallengeLevel: flashChallenge.getHighestLevel(),
       },
     });
     setPhase('ended');
@@ -239,15 +334,26 @@ export default function MemoryRecall({
         <SimpleIdlePanel
           description={GAME_DESCRIPTIONS[GAME_ID]}
           onStart={start}
+          startDisabled={!flashChallenge.loaded}
           containerStyle={styles.idleContent}
           descriptionStyle={styles.descriptionText}
           buttonStyle={styles.startBtn}
           buttonTextStyle={styles.startBtnText}
-        />
+        >
+          <FlashChallengeStatus
+            level={flashChallenge.resumeLevel}
+            highestLevel={flashChallenge.highestLevel}
+          />
+        </SimpleIdlePanel>
       )}
 
       {phase === 'show' && (
         <View style={styles.gameArea}>
+          <FlashChallengeStatus
+            compact
+            level={flashChallenge.level}
+            highestLevel={flashChallenge.highestLevel}
+          />
           <StatsRow
             style={styles.statsRow}
             items={[
@@ -263,7 +369,7 @@ export default function MemoryRecall({
               {
                 key: 'level',
                 value: level,
-                label: 'Level',
+                label: 'Digits',
                 testID: 'memory-level',
                 containerStyle: [styles.statBox, styles.levelBox],
                 valueStyle: styles.statValue,
@@ -291,6 +397,7 @@ export default function MemoryRecall({
               maxFontSize={40}
               minFontSize={9}
               letterSpacing={5}
+              maskFraction={flashChallenge.profile.maskFraction}
             />
           </View>
 
@@ -315,7 +422,7 @@ export default function MemoryRecall({
               {
                 key: 'level',
                 value: level,
-                label: 'Level',
+                label: 'Digits',
                 testID: 'memory-level',
                 containerStyle: [styles.statBox, styles.levelBox],
                 valueStyle: styles.statValue,
@@ -445,7 +552,7 @@ export default function MemoryRecall({
               {
                 key: 'level',
                 value: level,
-                label: 'Next level',
+                label: 'Next digits',
                 testID: 'memory-level',
                 containerStyle: [styles.statBox, styles.levelBox],
                 valueStyle: styles.statValue,
@@ -493,7 +600,7 @@ export default function MemoryRecall({
                 </Text>
                 <Text style={styles.reviewHint}>
                   −{FAILURE_PENALTY} points ·{' '}
-                  {review.nextLevel < review.expected.length
+                  {review.nextSequenceLength < review.expected.length
                     ? 'difficulty reduced by one'
                     : 'difficulty remains at the minimum'}
                   {review.shouldFinish
@@ -504,7 +611,11 @@ export default function MemoryRecall({
             )}
             {review.correct && (
               <Text style={styles.reviewHint}>
-                Streak reset · next sequence is one digit longer
+                {review.nextSequenceLength > review.expected.length
+                  ? 'Span mastered · next sequence is one digit longer'
+                  : startingLengthProp != null
+                    ? 'Correct · fixed-length practice continues'
+                    : 'Correct · repeat this span to confirm mastery'}
               </Text>
             )}
           </View>
@@ -516,7 +627,9 @@ export default function MemoryRecall({
           <Text style={styles.endEmoji}>🧠</Text>
           <Text style={styles.endTitle}>Game Over!</Text>
           <Text style={styles.endScore}>{score}</Text>
-          <Text style={styles.endMeta}>Max Level: {level} digits</Text>
+          <Text style={styles.endMeta}>
+            Widest span: {maxLevelRef.current} digits
+          </Text>
           <Pressable accessibilityRole="button" testID="play-again" style={styles.playAgainBtn} onPress={playAgain}>
             <Text style={styles.playAgainText}>Play Again</Text>
           </Pressable>

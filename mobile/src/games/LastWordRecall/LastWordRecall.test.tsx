@@ -17,7 +17,7 @@ describe('LastWordRecall', () => {
   });
 
   it('starts, flashes a complete stream, and offers four answers', () => {
-    const { getByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <LastWordRecall
         words={WORDS}
         wordDisplayMs={20}
@@ -29,7 +29,7 @@ describe('LastWordRecall', () => {
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('stream-word')).toBeTruthy();
-    expect(getByTestId('stream-word-mask')).toBeTruthy();
+    expect(queryByTestId('stream-word-mask')).toBeNull();
     expect(getByTestId('stream-word')).toHaveProp('numberOfLines', 1);
 
     act(() => {
@@ -49,7 +49,7 @@ describe('LastWordRecall', () => {
     }
   });
 
-  it('stops unpredictably after a random 3–10 words', () => {
+  it('starts with unpredictable 3–4 word streams before later levels grow them', () => {
     const onReportResult = jest.fn();
     const randomValues = [0, 0.999999];
     let randomIndex = 0;
@@ -77,12 +77,15 @@ describe('LastWordRecall', () => {
     fireEvent.press(view.getByLabelText(firstAnswer));
     expect(view.getByTestId('last-word-feedback')).toBeTruthy();
     act(() => {
-      jest.advanceTimersByTime(681);
+      jest.advanceTimersByTime(501);
+    });
+    act(() => {
+      jest.advanceTimersByTime(65);
     });
     const secondAnswer = view.getByTestId('stream-word').props
       .children as string;
     act(() => {
-      jest.advanceTimersByTime(25);
+      jest.advanceTimersByTime(20);
     });
     expect(view.getByTestId('last-word-options')).toBeTruthy();
 
@@ -94,8 +97,8 @@ describe('LastWordRecall', () => {
       expect.objectContaining({
         details: expect.objectContaining({
           sequenceLength: null,
-          streamLengths: [3, 10],
-          streamLengthRange: { min: 3, max: 10 },
+          streamLengths: [3, 4],
+          streamLengthRange: { min: 3, max: 4 },
         }),
       })
     );
@@ -182,7 +185,7 @@ describe('LastWordRecall', () => {
       });
       const answer = view.getByTestId('stream-word').props.children as string;
       act(() => {
-        jest.advanceTimersByTime(400);
+        jest.advanceTimersByTime(650);
       });
       fireEvent.press(view.getByLabelText(answer));
       expect(view.getByTestId('last-word-feedback')).toBeTruthy();
@@ -194,7 +197,7 @@ describe('LastWordRecall', () => {
 
     for (let miss = 0; miss < 3; miss += 1) {
       act(() => {
-        jest.advanceTimersByTime(700);
+        jest.advanceTimersByTime(800);
       });
       const answer = view.getByTestId('stream-word').props.children as string;
       act(() => {
@@ -229,7 +232,7 @@ describe('LastWordRecall', () => {
       expect.objectContaining({
         details: expect.objectContaining({
           rounds: 7,
-          finalWpm: 205,
+          finalWpm: 130,
           endingFailureStreak: 3,
           finishReason: 'three-misses',
         }),

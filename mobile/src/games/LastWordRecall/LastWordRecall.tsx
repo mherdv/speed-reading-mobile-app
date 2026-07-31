@@ -15,6 +15,7 @@ import { colors } from '../../theme/colors';
 import { BriefStimulus } from '../../ui/BriefStimulus';
 import { ChoiceAnswerFeedback } from '../../ui/ChoiceAnswerFeedback';
 import { FlashPaceControl } from '../../ui/FlashPaceControl';
+import { FlashChallengeStatus } from '../../ui/FlashChallengeStatus';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import {
@@ -32,7 +33,13 @@ import {
   type FlashPaceBounds,
   type FlashPaceState,
 } from '../flashPacing';
+import {
+  getFlashChallengeStreamRange,
+  getProgressiveFlashContent,
+  resumeWpmForFlashChallenge,
+} from '../flashChallenge';
 import { getRecallFeedbackDurationMs } from '../recallFeedback';
+import { useFlashChallenge } from '../useFlashChallenge';
 
 const GAME_ID = 'LastWordRecall';
 const CORRECT_ANSWERS_TO_INCREASE = 4;
@@ -97,14 +104,17 @@ function clampStreamLength(length: number): number {
   );
 }
 
-function createRandomStreamLength(random: RandomSource): number {
+function createRandomStreamLength(
+  random: RandomSource,
+  min = MIN_STREAM_WORDS,
+  max = MAX_STREAM_WORDS
+): number {
   const sample = random();
   const value = Number.isFinite(sample)
     ? Math.min(0.999999999, Math.max(0, sample))
     : 0;
   return (
-    MIN_STREAM_WORDS +
-    Math.floor(value * (MAX_STREAM_WORDS - MIN_STREAM_WORDS + 1))
+    min + Math.floor(value * (max - min + 1))
   );
 }
 
@@ -120,6 +130,18 @@ export default function LastWordRecall({
   onReportResult,
 }: Props) {
   const config = getConfig(difficulty);
+  const flashChallenge = useFlashChallenge(
+    GAME_ID,
+    difficulty,
+    CORRECT_ANSWERS_TO_INCREASE,
+    MAX_CONSECUTIVE_FLASH_FAILURES,
+    {
+      masteryEligible:
+        wordsProp == null &&
+        wordDisplayMs == null &&
+        sequenceLengthProp == null,
+    }
+  );
   const fixedSequenceLength =
     sequenceLengthProp == null
       ? null
@@ -128,13 +150,13 @@ export default function LastWordRecall({
     () => getFlashWordPool(difficulty),
     [difficulty]
   );
-  const wordPool = useMemo(() => {
+  const masterWordPool = useMemo(() => {
     const customPool = uniqueStrings(wordsProp ?? []);
     return customPool.length > 0 ? customPool : defaultPool;
   }, [defaultPool, wordsProp]);
   const optionPool = useMemo(
-    () => uniqueStrings([...wordPool, ...defaultPool]),
-    [defaultPool, wordPool]
+    () => uniqueStrings([...masterWordPool, ...defaultPool]),
+    [defaultPool, masterWordPool]
   );
   const defaultWpm =
     wordDisplayMs == null
@@ -163,12 +185,17 @@ export default function LastWordRecall({
   const sequenceRef = useRef<string[]>([]);
   const shownIndexRef = useRef(0);
   const answerRef = useRef('');
-  const deckStateRef = useRef(createPersistentVariedDeckState());
+  const deckStatesRef = useRef(
+    new Map<number, ReturnType<typeof createPersistentVariedDeckState>>()
+  );
   const streamLengthsRef = useRef<number[]>([]);
   const paceRef = useRef<FlashPaceState>(
     createFlashPaceState(defaultWpm)
   );
   const initialWpmRef = useRef(defaultWpm);
+  const initialChallengeLevelRef = useRef(1);
+  const maxChallengeLevelRef = useRef(1);
+  const startingWpmRef = useRef(defaultWpm);
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(() => {
@@ -177,9 +204,33 @@ export default function LastWordRecall({
       wordDisplayMs == null
         ? nextConfig.baseWpm
         : wpmForDisplayDuration(wordDisplayMs);
+    startingWpmRef.current = nextWpm;
     setStartingWpm(nextWpm);
     setLiveWpm(nextWpm);
   }, [difficulty, wordDisplayMs]);
+
+  useEffect(() => {
+    if (
+      wordDisplayMs == null &&
+      flashChallenge.loaded
+    ) {
+      const nextWpm = resumeWpmForFlashChallenge(
+        config.baseWpm,
+        flashChallenge.resumeLevel,
+        flashChallenge.resumeWpm,
+        config.maxWpm
+      );
+      startingWpmRef.current = nextWpm;
+      setStartingWpm(nextWpm);
+    }
+  }, [
+    config.baseWpm,
+    config.maxWpm,
+    flashChallenge.loaded,
+    flashChallenge.resumeLevel,
+    flashChallenge.resumeWpm,
+    wordDisplayMs,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -189,7 +240,7 @@ export default function LastWordRecall({
 
   function createLastWordOptions(sequence: readonly string[]): string[] {
     const answer =
-      sequence[sequence.length - 1] ?? wordPool[0] ?? 'focus';
+      sequence[sequence.length - 1] ?? masterWordPool[0] ?? 'focus';
     return createRecognitionOptions(
       answer,
       uniqueStrings([...sequence.slice(0, -1), ...optionPool]),
@@ -215,11 +266,28 @@ export default function LastWordRecall({
   }
 
   function startRound() {
+    const challengeLevel = flashChallenge.getCurrentLevel();
+    const streamRange = getFlashChallengeStreamRange(challengeLevel);
     const sequenceLength =
-      fixedSequenceLength ?? createRandomStreamLength(random);
+      fixedSequenceLength ??
+      createRandomStreamLength(
+        random,
+        streamRange.min,
+        streamRange.max
+      );
+    const wordPool = getProgressiveFlashContent(
+      masterWordPool,
+      challengeLevel
+    );
+    let deckState = deckStatesRef.current.get(challengeLevel);
+    if (!deckState) {
+      deckState = createPersistentVariedDeckState();
+      deckState.previous = answerRef.current;
+      deckStatesRef.current.set(challengeLevel, deckState);
+    }
     const sequence = Array.from({ length: sequenceLength }, () =>
       takeNextPersistentVariedItem(
-        deckStateRef.current,
+        deckState,
         wordPool,
         contentRandom
       ) ?? wordPool[0] ?? 'focus'
@@ -227,7 +295,8 @@ export default function LastWordRecall({
     streamLengthsRef.current.push(sequenceLength);
     sequenceRef.current = sequence;
     shownIndexRef.current = 0;
-    const answer = sequence[sequence.length - 1] ?? wordPool[0] ?? 'focus';
+    const answer =
+      sequence[sequence.length - 1] ?? wordPool[0] ?? 'focus';
     answerRef.current = answer;
     setOptions(createLastWordOptions(sequence));
     setShownIndex(0);
@@ -241,7 +310,12 @@ export default function LastWordRecall({
   }
 
   function start() {
-    if (phase !== 'idle' && phase !== 'ended') return;
+    if (
+      !flashChallenge.loaded ||
+      (phase !== 'idle' && phase !== 'ended')
+    ) {
+      return;
+    }
     clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
@@ -249,19 +323,23 @@ export default function LastWordRecall({
     correctRef.current = 0;
     roundRef.current = 0;
     streamLengthsRef.current = [];
-    initialWpmRef.current = startingWpm;
-    paceRef.current = createFlashPaceState(startingWpm);
+    const initialChallengeLevel = flashChallenge.beginSession();
+    const sessionWpm = startingWpmRef.current;
+    initialChallengeLevelRef.current = initialChallengeLevel;
+    maxChallengeLevelRef.current = initialChallengeLevel;
+    initialWpmRef.current = sessionWpm;
+    paceRef.current = createFlashPaceState(sessionWpm);
     setRound(0);
     setScore(0);
     setCorrectStreak(0);
     setMissStreak(0);
     setAnswerReview(null);
-    setLiveWpm(startingWpm);
+    setLiveWpm(sessionWpm);
     startRef.current = Date.now();
     startRound();
   }
 
-  useAutoStart(autoStart, phase, true, start);
+  useAutoStart(autoStart, phase, flashChallenge.loaded, start);
 
   function choose(index: number) {
     if (phase !== 'choose') return;
@@ -273,12 +351,33 @@ export default function LastWordRecall({
       setScore(scoreRef.current);
     }
 
-    paceRef.current = updateFlashPace(paceRef.current, correct, {
+    const previousPace = paceRef.current;
+    const completedCorrectRun =
+      correct &&
+      previousPace.correctStreak + 1 >=
+        CORRECT_ANSWERS_TO_INCREASE;
+    paceRef.current = updateFlashPace(previousPace, correct, {
       ...config,
       step: wordDisplayMs == null ? config.step : 0,
       correctAnswersToIncrease: CORRECT_ANSWERS_TO_INCREASE,
-      missesToDecrease: null,
+      missesToDecrease: 1,
     });
+    const challengeOutcome = flashChallenge.recordOutcome(correct);
+    if (wordDisplayMs == null) {
+      if (completedCorrectRun) {
+        flashChallenge.recordQualifiedWpm(paceRef.current.wpm);
+      } else if (
+        !correct &&
+        paceRef.current.missStreak ===
+          MAX_CONSECUTIVE_FLASH_FAILURES
+      ) {
+        flashChallenge.recordRollbackWpm(paceRef.current.wpm);
+      }
+    }
+    maxChallengeLevelRef.current = Math.max(
+      maxChallengeLevelRef.current,
+      challengeOutcome.state.level
+    );
     setLiveWpm(paceRef.current.wpm);
     setCorrectStreak(paceRef.current.correctStreak);
     setMissStreak(paceRef.current.missStreak);
@@ -312,6 +411,9 @@ export default function LastWordRecall({
     const elapsedMs = now - startRef.current;
     const attempts = roundRef.current;
     const accuracy = attempts > 0 ? correctRef.current / attempts : 0;
+    const initialStreamRange = getFlashChallengeStreamRange(
+      initialChallengeLevelRef.current
+    );
     setFinishReason(reason);
     setPhase('ended');
     void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
@@ -334,13 +436,28 @@ export default function LastWordRecall({
         sequenceLength: fixedSequenceLength,
         streamLengths: [...streamLengthsRef.current],
         streamLengthRange: {
-          min: fixedSequenceLength ?? MIN_STREAM_WORDS,
-          max: fixedSequenceLength ?? MAX_STREAM_WORDS,
+          min: fixedSequenceLength ?? initialStreamRange.min,
+          max: fixedSequenceLength ?? initialStreamRange.max,
         },
+        finalStreamLengthRange:
+          fixedSequenceLength == null
+            ? getFlashChallengeStreamRange(
+                flashChallenge.getCurrentLevel()
+              )
+            : {
+                min: fixedSequenceLength,
+                max: fixedSequenceLength,
+              },
         initialWpm: initialWpmRef.current,
         finalWpm: paceRef.current.wpm,
         paceChanges: paceRef.current.changes,
         adaptivePacing: wordDisplayMs == null,
+        initialChallengeLevel: initialChallengeLevelRef.current,
+        finalChallengeLevel: flashChallenge.getCurrentLevel(),
+        highestChallengeLevel: maxChallengeLevelRef.current,
+        savedBestChallengeLevel: flashChallenge.getHighestLevel(),
+        savedResumeWpm: flashChallenge.getResumeWpm() ?? null,
+        savedBestWpm: flashChallenge.getHighestWpm() ?? null,
       },
     });
   }
@@ -399,22 +516,30 @@ export default function LastWordRecall({
         <SimpleIdlePanel
           description={GAME_DESCRIPTIONS[GAME_ID]}
           onStart={start}
+          startDisabled={!flashChallenge.loaded}
           containerStyle={styles.idleContent}
         >
           <Text style={styles.sequenceHint}>
             {fixedSequenceLength == null
-              ? 'Stops unpredictably after 3–10 words'
+              ? 'Stops unpredictably; the stream grows with your level'
               : `${fixedSequenceLength} words per stream`}{' '}
             · +25 WPM after{' '}
             {CORRECT_ANSWERS_TO_INCREASE} correct · 3 misses end
           </Text>
+          <FlashChallengeStatus
+            level={flashChallenge.resumeLevel}
+            highestLevel={flashChallenge.highestLevel}
+          />
           <FlashPaceControl
             wpm={startingWpm}
             minWpm={config.minWpm}
             maxWpm={config.maxWpm}
             disabled={wordDisplayMs != null}
             correctAnswersToIncrease={CORRECT_ANSWERS_TO_INCREASE}
-            onChange={setStartingWpm}
+            onChange={(nextWpm) => {
+              startingWpmRef.current = nextWpm;
+              setStartingWpm(nextWpm);
+            }}
           />
         </SimpleIdlePanel>
       )}
@@ -422,6 +547,11 @@ export default function LastWordRecall({
       {phase === 'flashing' && (
         <View style={styles.gameArea}>
           {stats}
+          <FlashChallengeStatus
+            compact
+            level={flashChallenge.level}
+            highestLevel={flashChallenge.highestLevel}
+          />
           <View testID="word-stream" style={styles.wordCard}>
             <Text style={styles.streamCounter}>
               Word {shownIndex + 1}
@@ -434,6 +564,7 @@ export default function LastWordRecall({
               backgroundColor={colors.background}
               maxFontSize={46}
               minFontSize={14}
+              maskFraction={flashChallenge.profile.maskFraction}
             />
           </View>
           <Text style={styles.instruction}>Keep following—do not tap yet</Text>

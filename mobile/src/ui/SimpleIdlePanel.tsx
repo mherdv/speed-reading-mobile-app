@@ -17,6 +17,7 @@ type Props = {
   description: string;
   onStart: () => void;
   startLabel?: string;
+  startDisabled?: boolean;
   testID?: string;
   containerStyle?: StyleProp<ViewStyle>;
   descriptionStyle?: StyleProp<TextStyle>;
@@ -29,6 +30,7 @@ export function SimpleIdlePanel({
   description,
   onStart,
   startLabel = 'Start Game',
+  startDisabled = false,
   testID = 'start-button',
   containerStyle,
   descriptionStyle,
@@ -53,11 +55,14 @@ export function SimpleIdlePanel({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={startLabel}
+          accessibilityState={{ disabled: startDisabled }}
+          disabled={startDisabled}
           testID={testID}
           style={({ pressed }) => [
             styles.startButton,
             buttonStyle,
-            pressed && styles.pressed,
+            startDisabled && styles.disabled,
+            pressed && !startDisabled && styles.pressed,
           ]}
           onPress={onStart}
         >
@@ -128,5 +133,8 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.78,
     transform: [{ scale: 0.98 }],
+  },
+  disabled: {
+    opacity: 0.48,
   },
 });

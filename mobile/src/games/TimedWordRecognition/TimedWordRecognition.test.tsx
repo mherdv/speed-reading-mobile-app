@@ -47,7 +47,7 @@ describe('TimedWordRecognition', () => {
     expect(getByTestId('option-3')).toBeTruthy();
   });
 
-  it('uses the Hard lower-word mask without allowing a line break', () => {
+  it('starts the Hard vocabulary band clear without allowing a line break', () => {
     const view = render(
       <TimedWordRecognition
         words={['observation']}
@@ -57,7 +57,7 @@ describe('TimedWordRecognition', () => {
     );
 
     fireEvent.press(view.getByTestId('start-button'));
-    expect(view.getByTestId('word-mask')).toBeTruthy();
+    expect(view.queryByTestId('word-mask')).toBeNull();
     expect(view.getByTestId('word')).toHaveProp('numberOfLines', 1);
   });
 

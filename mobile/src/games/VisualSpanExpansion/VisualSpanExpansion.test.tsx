@@ -5,9 +5,11 @@ import {
   CORRECT_RECALL_FEEDBACK_MS,
   getRecallFeedbackDurationMs,
 } from '../recallFeedback';
+import { exposureMsForFlashChallengeLevel } from '../flashChallenge';
 import VisualSpanExpansion from './VisualSpanExpansion';
 import {
   createVisualSpanTrial,
+  getVisualSpanContentDifficulty,
   getVisualSpanConfig,
   getVisualSpanWordPool,
   VISUAL_SPAN_FIXATION_CUE_MS,
@@ -74,6 +76,22 @@ describe('VisualSpanExpansion', () => {
         ]).size
       ).toBe(1);
     }
+
+    expect(getVisualSpanContentDifficulty(1)).toBe('easy');
+    expect(getVisualSpanContentDifficulty(3)).toBe('easy');
+    expect(getVisualSpanContentDifficulty(4)).toBe('medium');
+    expect(getVisualSpanContentDifficulty(8)).toBe('medium');
+    expect(getVisualSpanContentDifficulty(9)).toBe('hard');
+    const advancedVocabularyTrial = createVisualSpanTrial(
+      'easy',
+      3,
+      random,
+      3,
+      'hard'
+    );
+    expect(
+      advancedVocabularyTrial.items.every((item) => item.word.length === 6)
+    ).toBe(true);
   });
 
   it('centers the eyes before flashing words around the fixation point', async () => {
@@ -93,7 +111,7 @@ describe('VisualSpanExpansion', () => {
     expect(view.queryByTestId('span-board')).toBeNull();
     act(() => jest.advanceTimersByTime(VISUAL_SPAN_FIXATION_CUE_MS));
 
-    const trial = createVisualSpanTrial('hard', 3, random);
+    const trial = createVisualSpanTrial('hard', 3, random, 3, 'easy');
     expect(view.getByTestId('span-board')).toBeTruthy();
     expect(view.getByTestId('span-fixation')).toBeTruthy();
     for (const item of trial.items) {
@@ -101,8 +119,8 @@ describe('VisualSpanExpansion', () => {
         view.getByTestId(`span-item-${item.positionId}`)
       ).toHaveTextContent(item.word);
       expect(
-        view.getByTestId(`span-item-${item.positionId}-mask`)
-      ).toBeTruthy();
+        view.queryByTestId(`span-item-${item.positionId}-mask`)
+      ).toBeNull();
     }
     expect(view.queryByTestId('recall-input')).toBeNull();
   });
@@ -143,7 +161,13 @@ describe('VisualSpanExpansion', () => {
       />
     );
     await flushAsyncEffects();
-    const trial = createVisualSpanTrial('medium', 5, random);
+    const trial = createVisualSpanTrial(
+      'medium',
+      5,
+      random,
+      5,
+      'easy'
+    );
     const wrongIndex = trial.options.findIndex(
       (option) => option !== trial.correctWord
     );
@@ -170,7 +194,13 @@ describe('VisualSpanExpansion', () => {
     expect(view.getByTestId('span-fixation-cue')).toBeTruthy();
     act(() => jest.advanceTimersByTime(VISUAL_SPAN_FIXATION_CUE_MS));
     expect(view.getByTestId('span-board')).toBeTruthy();
-    const reducedTrial = createVisualSpanTrial('medium', 4, random);
+    const reducedTrial = createVisualSpanTrial(
+      'medium',
+      4,
+      random,
+      5,
+      'easy'
+    );
     for (const item of reducedTrial.items) {
       expect(
         view.getByTestId(`span-item-${item.positionId}`)
@@ -247,8 +277,64 @@ describe('VisualSpanExpansion', () => {
 
     expect(view.getByTestId('end')).toBeTruthy();
     expect(onReportResult).toHaveBeenCalledWith(
-      expect.objectContaining({ accuracy: 1, score: 30 })
+      expect.objectContaining({
+        accuracy: 1,
+        score: 30,
+        details: expect.objectContaining({
+          displayMs: 10,
+          initialDisplayMs: 10,
+          finalDisplayMs: 10,
+          fixedDisplayMs: true,
+          initialContentDifficulty: 'easy',
+          finalContentDifficulty: 'easy',
+        }),
+      })
     );
     await flushAsyncEffects();
+  });
+
+  it('uses the newly earned challenge timing on the very next round', async () => {
+    const view = render(
+      <VisualSpanExpansion
+        difficulty="easy"
+        totalRounds={4}
+        random={random}
+      />
+    );
+    await flushAsyncEffects();
+    const trial = createVisualSpanTrial(
+      'easy',
+      3,
+      random,
+      3,
+      'easy'
+    );
+    const correctIndex = trial.options.indexOf(trial.correctWord);
+    const baseDisplayMs = getVisualSpanConfig('easy').displayMs;
+
+    fireEvent.press(view.getByTestId('start-button'));
+    for (let answer = 0; answer < 3; answer += 1) {
+      act(() =>
+        jest.advanceTimersByTime(
+          VISUAL_SPAN_FIXATION_CUE_MS + baseDisplayMs
+        )
+      );
+      fireEvent.press(view.getByTestId(`span-option-${correctIndex}`));
+      act(() => jest.advanceTimersByTime(CORRECT_RECALL_FEEDBACK_MS));
+    }
+
+    expect(view.getByTestId('span-fixation-cue')).toBeTruthy();
+    act(() => jest.advanceTimersByTime(VISUAL_SPAN_FIXATION_CUE_MS));
+    expect(view.getByTestId('span-board')).toBeTruthy();
+
+    const earnedDisplayMs = exposureMsForFlashChallengeLevel(
+      baseDisplayMs,
+      2,
+      450
+    );
+    act(() => jest.advanceTimersByTime(earnedDisplayMs - 1));
+    expect(view.queryByTestId('span-recall')).toBeNull();
+    act(() => jest.advanceTimersByTime(1));
+    expect(view.getByTestId('span-recall')).toBeTruthy();
   });
 });

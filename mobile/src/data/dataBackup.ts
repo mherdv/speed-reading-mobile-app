@@ -7,6 +7,7 @@ export const BACKUP_APP_ID = 'speed-reading-mobile-app';
 export const BACKED_UP_STORAGE_KEYS = [
   'speed-reading:results:v1',
   'speed-reading:progress:v1',
+  'speed-reading:flash-challenge-progress:v1',
   'speed-reading:difficulty-preferences:v1',
   'speed-reading:game-pins:v1',
   'speed-reading:today-plan:v2',

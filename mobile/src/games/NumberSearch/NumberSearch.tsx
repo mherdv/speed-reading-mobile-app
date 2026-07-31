@@ -3,14 +3,24 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
 import { updateProgress } from '../../data/progressStore';
+import {
+  randomIndex,
+  shuffleItems,
+  type RandomSource,
+} from '../../data/randomization';
 import { formatDuration } from '../../domain/results';
 import { colors } from '../../theme/colors';
 import { BriefStimulus } from '../../ui/BriefStimulus';
+import { FlashChallengeStatus } from '../../ui/FlashChallengeStatus';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { useAutoStart, useTrackedTimeouts, type Difficulty } from '../gameHooks';
+import { exposureMsForFlashChallengeLevel } from '../flashChallenge';
+import { useFlashChallenge } from '../useFlashChallenge';
 
 const GAME_ID = 'NumberSearch';
+const CORRECT_TARGETS_TO_ADVANCE = 3;
+const MISSES_TO_ROLL_BACK = 3;
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -46,6 +56,13 @@ type DifficultyConfig = {
   durationMs: number;
 };
 
+type NumberSearchStageSettings = Pick<
+  DifficultyConfig,
+  'gridSize' | 'numberRange' | 'previewMs'
+> & {
+  numberMinimum: number;
+};
+
 export function getNumberSearchConfig(difficulty: Difficulty): DifficultyConfig {
   switch (difficulty) {
     case 'easy':
@@ -57,17 +74,37 @@ export function getNumberSearchConfig(difficulty: Difficulty): DifficultyConfig 
   }
 }
 
-function randomNumber(maxExclusive: number): number {
-  return Math.floor(Math.random() * maxExclusive);
-}
-
-export function buildNumberSearchGrid(size: number, numberRange: number): GridData {
+export function buildNumberSearchGrid(
+  size: number,
+  numberRange: number,
+  numberMinimum = 0,
+  random: RandomSource = Math.random
+): GridData {
   const count = size * size;
-  const effectiveRange = Math.max(numberRange, count + 1);
-  const values = new Set<number>();
-  while (values.size < count) values.add(randomNumber(effectiveRange));
-  const flat = [...values];
-  const targetIndex = randomNumber(flat.length);
+  const safeMinimum = Math.max(0, Math.round(numberMinimum));
+  const effectiveRange = Math.max(
+    numberRange,
+    safeMinimum + count + 1
+  );
+  const availableCount = effectiveRange - safeMinimum;
+  const sampledOffsets = new Set<number>();
+  // Floyd's bounded sampling produces exactly `count` unique values even
+  // when an injected random source repeatedly returns the same boundary.
+  for (
+    let candidate = availableCount - count;
+    candidate < availableCount;
+    candidate += 1
+  ) {
+    const sampled = randomIndex(candidate + 1, random);
+    sampledOffsets.add(
+      sampledOffsets.has(sampled) ? candidate : sampled
+    );
+  }
+  const flat = shuffleItems(
+    [...sampledOffsets].map((value) => safeMinimum + value),
+    random
+  );
+  const targetIndex = randomIndex(flat.length, random);
   const target = flat[targetIndex];
   return {
     grid: Array.from({ length: size }, (_, row) =>
@@ -95,6 +132,18 @@ export default function NumberSearch({
   const previewMs = previewMsProp ?? config.previewMs;
   const gridSize = gridSizeProp ?? config.gridSize;
   const numberRange = numberRangeProp ?? config.numberRange;
+  const flashChallenge = useFlashChallenge(
+    GAME_ID,
+    difficulty,
+    CORRECT_TARGETS_TO_ADVANCE,
+    MISSES_TO_ROLL_BACK,
+    {
+      masteryEligible:
+        previewMsProp == null &&
+        gridSizeProp == null &&
+        numberRangeProp == null,
+    }
+  );
   const [phase, setPhase] = useState<Phase>('idle');
   const [gridData, setGridData] = useState<GridData>(() =>
     buildNumberSearchGrid(gridSize, numberRange)
@@ -109,8 +158,29 @@ export default function NumberSearch({
   const scoreRef = useRef(0);
   const attemptsRef = useRef(0);
   const roundLockedRef = useRef(true);
+  const roundAdaptiveOutcomeRef = useRef<'correct' | 'miss' | null>(null);
   const reportedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const initialChallengeLevelRef = useRef(1);
+  const maxChallengeLevelRef = useRef(1);
+  const activeSettingsRef = useRef<NumberSearchStageSettings>({
+    gridSize,
+    numberRange,
+    numberMinimum: 0,
+    previewMs,
+  });
+  const initialSettingsRef = useRef<NumberSearchStageSettings>({
+    gridSize,
+    numberRange,
+    numberMinimum: 0,
+    previewMs,
+  });
+  const hardestSettingsRef = useRef<NumberSearchStageSettings>({
+    gridSize,
+    numberRange,
+    numberMinimum: 0,
+    previewMs,
+  });
   const { scheduleTimeout, clearTrackedTimeouts } = useTrackedTimeouts();
 
   useEffect(() => {
@@ -143,9 +213,86 @@ export default function NumberSearch({
     []
   );
 
-  useAutoStart(autoStart, phase, true, start);
+  useAutoStart(autoStart, phase, flashChallenge.loaded, start);
 
-  function beginPreview(nextGrid: GridData) {
+  function gridSettingsForChallenge(
+    level: number
+  ): NumberSearchStageSettings {
+    const extraDigitTiers =
+      numberRangeProp == null
+        ? Math.floor((Math.max(1, level) - 1) / 5)
+        : 0;
+    const baseDigits = String(
+      Math.max(0, Math.round(numberRange) - 1)
+    ).length;
+    const numberMinimum =
+      extraDigitTiers === 0
+        ? 0
+        : 10 ** (baseDigits + extraDigitTiers - 1);
+    const scaledRange =
+      numberRangeProp ??
+      Math.min(
+        100_000,
+        Math.round(
+          numberRange *
+            (1 + Math.floor((level - 1) / 3) * 0.75)
+        )
+      );
+    return {
+      gridSize:
+        gridSizeProp ??
+        Math.min(6, gridSize + Math.floor((level - 1) / 5)),
+      numberRange: Math.max(
+        scaledRange,
+        numberMinimum > 0 ? numberMinimum * 10 : 0
+      ),
+      numberMinimum,
+      previewMs:
+        previewMsProp ??
+        exposureMsForFlashChallengeLevel(
+          previewMs,
+          level,
+          350
+        ),
+    };
+  }
+
+  function buildNextGrid(level = flashChallenge.getCurrentLevel()) {
+    const settings = gridSettingsForChallenge(level);
+    return {
+      gridData: buildNumberSearchGrid(
+        settings.gridSize,
+        settings.numberRange,
+        settings.numberMinimum
+      ),
+      settings,
+    };
+  }
+
+  function beginPreview({
+    gridData: nextGrid,
+    settings,
+  }: ReturnType<typeof buildNextGrid>) {
+    activeSettingsRef.current = settings;
+    hardestSettingsRef.current = {
+      gridSize: Math.max(
+        hardestSettingsRef.current.gridSize,
+        settings.gridSize
+      ),
+      numberRange: Math.max(
+        hardestSettingsRef.current.numberRange,
+        settings.numberRange
+      ),
+      numberMinimum: Math.max(
+        hardestSettingsRef.current.numberMinimum,
+        settings.numberMinimum
+      ),
+      previewMs: Math.min(
+        hardestSettingsRef.current.previewMs,
+        settings.previewMs
+      ),
+    };
+    roundAdaptiveOutcomeRef.current = null;
     setGridData(nextGrid);
     setFeedback(null);
     setPhase('preview');
@@ -158,11 +305,17 @@ export default function NumberSearch({
       }
       roundLockedRef.current = false;
       setPhase('searching');
-    }, previewMs);
+    }, settings.previewMs);
   }
 
   function start() {
-    if (phase === 'searching' || phase === 'preview') return;
+    if (
+      !flashChallenge.loaded ||
+      phase === 'searching' ||
+      phase === 'preview'
+    ) {
+      return;
+    }
     clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
@@ -171,10 +324,17 @@ export default function NumberSearch({
     roundLockedRef.current = true;
     startedAtRef.current = 0;
     sessionEndsAtRef.current = 0;
+    const initialChallengeLevel = flashChallenge.beginSession();
+    initialChallengeLevelRef.current = initialChallengeLevel;
+    maxChallengeLevelRef.current = initialChallengeLevel;
+    const initialGrid = buildNextGrid(initialChallengeLevel);
+    initialSettingsRef.current = initialGrid.settings;
+    activeSettingsRef.current = initialGrid.settings;
+    hardestSettingsRef.current = initialGrid.settings;
     setScore(0);
     setAttempts(0);
     setTimeLeftMs(durationMs);
-    beginPreview(buildNumberSearchGrid(gridSize, numberRange));
+    beginPreview(initialGrid);
   }
 
   function finish(now = Date.now()) {
@@ -183,6 +343,9 @@ export default function NumberSearch({
     clearTrackedTimeouts();
     const accuracy =
       attemptsRef.current > 0 ? scoreRef.current / attemptsRef.current : 0;
+    const initialSettings = initialSettingsRef.current;
+    const finalSettings = activeSettingsRef.current;
+    const hardestSettings = hardestSettingsRef.current;
     setPhase('ended');
     void updateProgress(GAME_ID, accuracy >= 0.7, scoreRef.current).catch(
       () => undefined
@@ -197,10 +360,27 @@ export default function NumberSearch({
         rounds: attemptsRef.current,
         correct: scoreRef.current,
         difficulty,
-        gridSize,
-        numberRange,
-        previewMs,
+        gridSize: finalSettings.gridSize,
+        numberRange: finalSettings.numberRange,
+        numberMinimum: finalSettings.numberMinimum,
+        previewMs: finalSettings.previewMs,
+        initialGridSize: initialSettings.gridSize,
+        finalGridSize: finalSettings.gridSize,
+        maximumGridSize: hardestSettings.gridSize,
+        initialNumberRange: initialSettings.numberRange,
+        initialNumberMinimum: initialSettings.numberMinimum,
+        finalNumberRange: finalSettings.numberRange,
+        finalNumberMinimum: finalSettings.numberMinimum,
+        maximumNumberRange: hardestSettings.numberRange,
+        maximumNumberMinimum: hardestSettings.numberMinimum,
+        initialPreviewMs: initialSettings.previewMs,
+        finalPreviewMs: finalSettings.previewMs,
+        minimumPreviewMs: hardestSettings.previewMs,
         durationMs,
+        initialChallengeLevel: initialChallengeLevelRef.current,
+        finalChallengeLevel: flashChallenge.getCurrentLevel(),
+        highestChallengeLevel: maxChallengeLevelRef.current,
+        savedBestChallengeLevel: flashChallenge.getHighestLevel(),
       },
     });
   }
@@ -215,17 +395,33 @@ export default function NumberSearch({
     attemptsRef.current += 1;
     setAttempts(attemptsRef.current);
     if (!isCorrect) {
+      if (roundAdaptiveOutcomeRef.current === null) {
+        roundAdaptiveOutcomeRef.current = 'miss';
+        const challengeOutcome = flashChallenge.recordOutcome(false);
+        maxChallengeLevelRef.current = Math.max(
+          maxChallengeLevelRef.current,
+          challengeOutcome.state.level
+        );
+      }
       setFeedback('wrong');
       scheduleTimeout(() => setFeedback(null), 220);
       return;
     }
 
     scoreRef.current += 1;
+    if (roundAdaptiveOutcomeRef.current === null) {
+      roundAdaptiveOutcomeRef.current = 'correct';
+      const challengeOutcome = flashChallenge.recordOutcome(true);
+      maxChallengeLevelRef.current = Math.max(
+        maxChallengeLevelRef.current,
+        challengeOutcome.state.level
+      );
+    }
     setScore(scoreRef.current);
     setFeedback('correct');
     clearTrackedTimeouts();
     scheduleTimeout(
-      () => beginPreview(buildNumberSearchGrid(gridSize, numberRange)),
+      () => beginPreview(buildNextGrid()),
       260
     );
   }
@@ -239,15 +435,26 @@ export default function NumberSearch({
         <SimpleIdlePanel
           description={GAME_DESCRIPTIONS[GAME_ID]}
           onStart={start}
+          startDisabled={!flashChallenge.loaded}
           containerStyle={styles.idle}
           descriptionStyle={styles.description}
           buttonStyle={styles.primaryButton}
           buttonTextStyle={styles.primaryButtonText}
-        />
+        >
+          <FlashChallengeStatus
+            level={flashChallenge.resumeLevel}
+            highestLevel={flashChallenge.highestLevel}
+          />
+        </SimpleIdlePanel>
       )}
 
       {phase === 'preview' && (
         <View testID="target-preview" style={styles.previewArea}>
+          <FlashChallengeStatus
+            compact
+            level={flashChallenge.level}
+            highestLevel={flashChallenge.highestLevel}
+          />
           <Text style={styles.previewLabel}>Remember this number</Text>
           <BriefStimulus
             value={String(gridData.target)}
@@ -258,6 +465,7 @@ export default function NumberSearch({
             maxFontSize={68}
             minFontSize={18}
             containerStyle={styles.previewStimulus}
+            maskFraction={flashChallenge.profile.maskFraction}
           />
           <Text style={styles.previewHint}>It will hide before the grid appears.</Text>
         </View>

@@ -65,6 +65,27 @@ describe('BriefStimulus', () => {
     });
   });
 
+  it('accepts a gradual opaque marker override from the flash ladder', () => {
+    const view = render(
+      <BriefStimulus
+        value="focus"
+        difficulty="hard"
+        testID="ladder-stimulus"
+        maskFraction={0.1}
+      />
+    );
+
+    expect(
+      StyleSheet.flatten(
+        view.getByTestId('ladder-stimulus-mask').props.style
+      )
+    ).toMatchObject({
+      backgroundColor: BRIEF_STIMULUS_MARKER_COLOR,
+      height: '10%',
+      opacity: 1,
+    });
+  });
+
   it('allows phrases to wrap while keeping single words in strict one-line mode', () => {
     const view = render(
       <>

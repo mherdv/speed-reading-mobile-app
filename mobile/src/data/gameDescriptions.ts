@@ -37,25 +37,25 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Take a short visual-comfort break with gentle blinking and distance focus. This routine may help you pause during screen use, but it does not improve eyesight, diagnose eye health, or measure reading speed.',
 
   VisualSpanExpansion:
-    'Keep your eyes near a central fixation mark while equal-length words flash at several surrounding positions. Every word remains on one fitted line; Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. After they disappear, select the word that occupied one prompted position. A miss shows both choices, costs 5 points, and temporarily narrows the next glance. Treat its score as spatial word-recall performance, not proof of faster connected-text reading.',
+    'Keep your eyes near a central fixation mark while equal-length words flash at surrounding positions. The selected difficulty sets the word band, while a saved 15-level flash ladder expands the span, shortens exposure, and introduces an opaque lower marker only after the clear stages are mastered. A miss shows both choices, costs 5 points, and narrows the next glance. Treat its score as spatial word-recall performance, not proof of faster connected-text reading.',
 
   FlashReading:
-    'Type a briefly displayed word from memory and track response accuracy. The word remains on one fitted line; Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. Play again resumes the remaining shuffled vocabulary deck, so every word appears before the deck refills. Set or adapt the flash pace anywhere up to 3,000 WPM. A miss keeps your entry and the correct word visible before continuing. This challenge does not by itself demonstrate faster connected-text reading.',
+    'Type a briefly displayed fitted word from memory. The selected difficulty sets the vocabulary band; a saved 15-level challenge begins with shorter clear words, then adds length, pace, and finally an opaque lower marker from stage 10. Play again resumes both the shuffled deck and the fastest pace sustained by a full correct run, up to 3,000 WPM. A miss keeps the correction visible and makes the next flash easier. This task does not by itself demonstrate faster connected-text reading.',
 
   WordsRecall:
-    'View exactly two English words that may wrap onto two readable lines, then type both from memory after they disappear. Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. Each play has eight prompts, and Play again resumes the remaining shuffled pair deck so the full vocabulary is covered before refill. A miss pauses on your entry and the correct pair. Difficulty also changes vocabulary and display time; comparison ignores case, punctuation, and extra whitespace.',
+    'View exactly two English words, then type both from memory after they disappear. The selected difficulty sets vocabulary and base exposure; a saved 15-level ladder begins with shorter clear pairs, then adds length, speed, and an opaque lower marker after clear stages. Each play has eight prompts and replay resumes the remaining shuffled deck. Comparison ignores case, punctuation, and extra whitespace.',
 
   SentenceRecall:
-    'Read one natural English sentence that may wrap onto three readable lines, then reconstruct it after it disappears. Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. Each play has eight prompts, and Play again resumes the remaining position in a 240-sentence shuffled working deck. A miss keeps both versions visible longer for comparison, and comparison ignores case, punctuation, and extra whitespace.',
+    'Read one natural sentence, then reconstruct it after it disappears. The selected difficulty sets the language band and base exposure; a saved 15-level ladder opens progressively longer sentences, shortens exposure, and introduces an opaque lower marker after nine clear levels. Each play has eight prompts and replay resumes the 240-sentence shuffled working deck. Comparison ignores case, punctuation, and extra whitespace.',
 
   ComprehensionTest:
     'Follow a moving chunk highlight through a connected passage, pause or finish safely, then answer passage-dependent questions. The selected WPM is a configured pacing target, not a measured reading speed.',
 
   MemoryRecall:
-    'Recall short number sequences on a phone-style keypad. The sequence remains on one fitted line; Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. A miss pauses on your entry and the correct sequence before difficulty drops or the session ends. Its accuracy describes this task only; it is not a reading-retention score.',
+    'Recall number sequences on a phone-style keypad. The selected difficulty sets the base length and exposure; a saved 15-level ladder resumes demonstrated sequence length, shortens the flash, and adds an opaque lower marker only at later levels. A miss pauses on both sequences before difficulty drops or the session ends. Its accuracy describes this task only; it is not a reading-retention score.',
 
   NumberRecognition:
-    'Identify target numbers in a balanced, unpredictably shuffled Match/No Match stream, so repeating one response cannot pass. Each number remains on one fitted line; Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. This optional challenge measures number-recognition accuracy rather than reading skill.',
+    'Identify target numbers in a balanced, unpredictably shuffled Match/No Match stream, so repeating one response cannot pass. The selected difficulty sets the starting digit count; a saved 15-level challenge progressively adds similar distractors and longer numbers, shortens the response window, and introduces an opaque lower marker only after clear stages. This optional challenge measures number-recognition accuracy rather than reading skill.',
 
   SymbolRecognition:
     'Identify target symbols in a balanced, unpredictably shuffled Match/No Match stream, so repeating one response cannot pass. This optional visual challenge reports a task-specific score.',
@@ -64,13 +64,13 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Locate matching patterns in a grid and compare speed with accuracy. Use it as an optional visual-search warm-up rather than a reading measure.',
 
   TimedPhraseRecognition:
-    'Identify briefly displayed phrases from a 240-item shuffled working deck among options with similar word counts and visible lengths. A phrase may wrap onto three readable lines; Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. Play again resumes the remaining deck instead of generating another replay pool. Set or adapt the word-based flash pace up to 3,000 WPM; longer phrases receive proportionally more display time. A miss pauses on your choice and the exact phrase for careful comparison. Results apply to the drill and should not be read as connected-text comprehension.',
+    'Identify briefly displayed phrases from a 240-item shuffled deck among similarly shaped options. The selected difficulty sets the language band; a saved 15-level challenge begins with shorter clear phrases, then adds length, pace, and an opaque lower marker from stage 10. Replay resumes the deck and the fastest pace sustained by a full correct run, up to 3,000 WPM. A miss shows both choices and makes the next flash easier. Results apply to the drill, not connected-text comprehension.',
 
   TimedWordRecognition:
-    'Choose a briefly displayed word from close-length, similar-looking options so exact recall matters more than button shape. The word remains on one fitted line; Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. Play again resumes the remaining shuffled vocabulary deck, and refill occurs only after every word has appeared. Set or adapt the flash pace anywhere up to 3,000 WPM. A miss pauses on your choice and the correct word before continuing. This optional task records recognition speed and accuracy without making claims about subvocalization.',
+    'Choose a briefly displayed fitted word from similar-looking options. The selected difficulty sets the vocabulary band; a saved 15-level challenge starts with shorter clear words, then adds length, pace, and an opaque lower marker from stage 10. Replay resumes the shuffled deck and the fastest pace sustained by a full correct run, up to 3,000 WPM. A miss shows the correction and makes the next flash easier. This task records recognition accuracy without making claims about subvocalization.',
 
   LastWordRecall:
-    'Follow a paced stream up to 3,000 WPM that stops unpredictably after 3–10 words, then identify the final word among close-length, similar-looking options. Every word remains on one fitted line; Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. Stream words come from one continuous shuffled vocabulary deck across rounds and Play again; the deck refills only after a full cycle. A miss pauses on your choice and the true last word before continuing. This trains attention to serial position and reports drill accuracy; it does not measure passage comprehension.',
+    'Follow a fitted word stream that stops unpredictably, then identify its final word among similarly shaped options. A saved 15-level challenge starts with clear 3–4-word streams and grows toward 6–10 words before introducing an opaque lower marker; the fastest pace sustained by a full correct run also resumes, up to 3,000 WPM. Stream words use persistent shuffled decks, and a miss shows the answer and makes the next stream easier. This reports drill accuracy, not passage comprehension.',
 
   WordMismatchGrid:
     'Compare same-or-different word pairs and find every mismatch. A tap on a matching pair costs time immediately, so guesses cannot be removed without consequence. This is an optional visual-discrimination task, not a comprehension exercise.',
@@ -94,7 +94,7 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Find hidden words in a letter grid to practice orthographic recognition and systematic visual search. Its score describes word-search performance; use measured passages to evaluate reading transfer.',
 
   NumberSearch:
-    'Memorize a briefly shown target number, then find it after the target hides and the grid appears. The target remains on one fitted line; Easy is clear, Medium adds an opaque black lower-edge marker, and Hard adds a deeper marker. This optional visual-search and recall drill is not used as a reading result.',
+    'Memorize a briefly shown fitted number, then find it after the target hides and the grid appears. The selected difficulty sets the starting grid and range; a saved 15-level challenge grows the grid and target digit length, shortens the preview, and introduces an opaque lower marker after clear stages. The first wrong tap marks that target as one adaptive miss; extra taps cannot multiply the penalty or change the clock. This visual-search drill is not used as a reading result.',
 
   EvenNumbers:
     'Scan rows and columns to select every even number in a grid. Larger grids, wider ranges, and shorter sessions raise the difficulty; its score is specific to this numerical search task.',

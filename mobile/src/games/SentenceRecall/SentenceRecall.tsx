@@ -41,6 +41,8 @@ export default function SentenceRecall({
       inputPlaceholder="Type the sentence"
       prompts={pool}
       displayMs={displayMs ?? config.displayMs}
+      fixedDisplayMs={displayMs != null}
+      masteryEligible={prompts == null && displayMs == null}
       totalRounds={totalRounds ?? config.roundCount}
       difficulty={difficulty}
       autoStart={autoStart}

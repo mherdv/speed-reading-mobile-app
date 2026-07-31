@@ -55,4 +55,23 @@ describe('flash pacing', () => {
     expect(state.wpm).toBe(225);
     expect(state.missStreak).toBe(3);
   });
+
+  it('lowers pace on each miss without losing the three-miss run', () => {
+    let state = createFlashPaceState(200);
+    state = updateFlashPace(state, false, {
+      ...bounds,
+      missesToDecrease: 1,
+    });
+    expect(state).toMatchObject({ wpm: 175, missStreak: 1 });
+    state = updateFlashPace(state, false, {
+      ...bounds,
+      missesToDecrease: 1,
+    });
+    expect(state).toMatchObject({ wpm: 150, missStreak: 2 });
+    state = updateFlashPace(state, false, {
+      ...bounds,
+      missesToDecrease: 1,
+    });
+    expect(state).toMatchObject({ wpm: 125, missStreak: 3 });
+  });
 });

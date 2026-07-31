@@ -40,13 +40,13 @@ describe('TimedPhraseRecognition', () => {
   });
 
   it('shows phrase flash after pressing start', () => {
-    const { getByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <TimedPhraseRecognition phrases={['The quick fox']} displayMs={500} totalRounds={3} />
     );
 
     fireEvent.press(getByTestId('start-button'));
     expect(getByTestId('phrase-flash')).toBeTruthy();
-    expect(getByTestId('phrase-mask')).toBeTruthy();
+    expect(queryByTestId('phrase-mask')).toBeNull();
     expect(getByTestId('phrase')).toHaveProp('numberOfLines', 3);
   });
 

@@ -7,14 +7,22 @@ import { useAutoStart, type Difficulty } from '../gameHooks';
 import { SimpleIdlePanel } from '../../ui/SimpleIdlePanel';
 import { StatsRow } from '../../ui/StatsRow';
 import { BriefStimulus } from '../../ui/BriefStimulus';
+import { FlashChallengeStatus } from '../../ui/FlashChallengeStatus';
 import { colors } from '../../theme/colors';
 import {
   interleaveBalancedTrials,
   randomIndex,
   type RandomSource,
 } from '../../data/randomization';
+import {
+  FLASH_CHALLENGE_MAX_LEVEL,
+  exposureMsForFlashChallengeLevel,
+} from '../flashChallenge';
+import { useFlashChallenge } from '../useFlashChallenge';
 
 const GAME_ID = 'NumberRecognition';
+const CORRECT_TRIALS_TO_ADVANCE = 8;
+const MISSES_TO_ROLL_BACK = 3;
 
 type GameReportPayload = {
   elapsedMs?: number;
@@ -36,10 +44,13 @@ type Props = {
 
 type Phase = 'idle' | 'running' | 'ended';
 
-type NumberRecognitionChallenge = {
+type NumberRecognitionDigitCount = 1 | 2 | 3 | 4 | 5 | 6;
+type NumberRecognitionSimilarity = 'low' | 'medium' | 'high';
+
+export type NumberRecognitionChallenge = {
   durationMs: number;
-  digitCount: 1 | 2 | 3;
-  distractorSimilarity: 'low' | 'medium' | 'high';
+  digitCount: NumberRecognitionDigitCount;
+  distractorSimilarity: NumberRecognitionSimilarity;
   stimulusCount: number;
   displayCadenceMs: number;
   defaultTarget: number;
@@ -81,8 +92,64 @@ export function getNumberRecognitionChallenge(
   return NUMBER_RECOGNITION_CHALLENGES[difficulty];
 }
 
+const SIMILARITY_ORDER: readonly NumberRecognitionSimilarity[] = [
+  'low',
+  'medium',
+  'high',
+];
+
+function targetWithDigitCount(
+  target: number,
+  digitCount: NumberRecognitionDigitCount
+): number {
+  if (String(Math.abs(target)).length === digitCount) return target;
+  if (digitCount === 1) return Math.abs(target) % 10;
+  const minimum = 10 ** (digitCount - 1);
+  const range = 9 * minimum;
+  return minimum + (Math.abs(target) % range);
+}
+
+/**
+ * Keeps each public difficulty's level-one behavior intact, then increases
+ * visual similarity before adding another digit every four flash stages.
+ */
+export function getNumberRecognitionStageChallenge(
+  difficulty: Difficulty,
+  level: number
+): NumberRecognitionChallenge {
+  const base = getNumberRecognitionChallenge(difficulty);
+  const roundedLevel = Number.isFinite(level)
+    ? Math.round(level)
+    : 1;
+  const safeLevel = Math.min(
+    FLASH_CHALLENGE_MAX_LEVEL,
+    Math.max(1, roundedLevel)
+  );
+  const digitCount = Math.min(
+    6,
+    base.digitCount + Math.floor((safeLevel - 1) / 4)
+  ) as NumberRecognitionDigitCount;
+  const baseSimilarityIndex = SIMILARITY_ORDER.indexOf(
+    base.distractorSimilarity
+  );
+  const distractorSimilarity =
+    SIMILARITY_ORDER[
+      Math.min(
+        SIMILARITY_ORDER.length - 1,
+        baseSimilarityIndex + Math.floor((safeLevel - 1) / 3)
+      )
+    ]!;
+
+  return {
+    ...base,
+    digitCount,
+    distractorSimilarity,
+    defaultTarget: targetWithDigitCount(base.defaultTarget, digitCount),
+  };
+}
+
 function randomNumberWithDigits(
-  digitCount: number,
+  digitCount: NumberRecognitionDigitCount,
   random: RandomSource
 ): number {
   if (digitCount === 1) return randomIndex(10, random);
@@ -90,16 +157,22 @@ function randomNumberWithDigits(
   return minimum + randomIndex(9 * minimum, random);
 }
 
-function similarNumber(target: number, random: RandomSource): number {
+function similarNumber(
+  target: number,
+  random: RandomSource,
+  maximumDigitDelta: 1 | 2
+): number {
   const digits = String(target).split('');
   const index = randomIndex(digits.length, random);
   const original = Number(digits[index]);
   const direction = randomIndex(2, random) === 0 ? 1 : -1;
-  let replacement = (original + direction + 10) % 10;
+  const magnitude = 1 + randomIndex(maximumDigitDelta, random);
+  let replacement =
+    (original + direction * magnitude + 10) % 10;
 
-  // Keep multi-digit distractors at the configured length.
   if (index === 0 && digits.length > 1 && replacement === 0) {
-    replacement = (original - direction + 10) % 10;
+    replacement =
+      (original - direction * magnitude + 10) % 10;
   }
 
   digits[index] = String(replacement);
@@ -112,7 +185,10 @@ function randomDistractor(
   random: RandomSource
 ): number {
   if (challenge.distractorSimilarity === 'high') {
-    return similarNumber(target, random);
+    return similarNumber(target, random, 1);
+  }
+  if (challenge.distractorSimilarity === 'medium') {
+    return similarNumber(target, random, 2);
   }
 
   const candidate = randomNumberWithDigits(challenge.digitCount, random);
@@ -154,12 +230,24 @@ export default function NumberRecognition({
   autoStart = false,
   onReportResult,
 }: Props) {
-  const challenge = getNumberRecognitionChallenge(difficulty);
-  const currentTarget = targetProp ?? challenge.defaultTarget;
-  const durationMs = durationMsProp ?? challenge.durationMs;
+  const baseChallenge = getNumberRecognitionChallenge(difficulty);
+  const progressionEnabled = targetProp == null && stream == null;
+  const defaultTarget = targetProp ?? baseChallenge.defaultTarget;
+  const durationMs = durationMsProp ?? baseChallenge.durationMs;
+  const flashChallenge = useFlashChallenge(
+    GAME_ID,
+    difficulty,
+    CORRECT_TRIALS_TO_ADVANCE,
+    MISSES_TO_ROLL_BACK,
+    { masteryEligible: progressionEnabled }
+  );
   const [phase, setPhase] = useState<Phase>('idle');
+  const [activeChallenge, setActiveChallenge] =
+    useState<NumberRecognitionChallenge>(baseChallenge);
+  const [currentTarget, setCurrentTarget] = useState(defaultTarget);
   const [seq, setSeq] = useState<number[]>(() =>
-    stream ?? generateNumberRecognitionStream(currentTarget, challenge)
+    stream ??
+    generateNumberRecognitionStream(defaultTarget, baseChallenge)
   );
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -179,6 +267,19 @@ export default function NumberRecognition({
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cadenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialChallengeLevelRef = useRef(1);
+  const maxChallengeLevelRef = useRef(1);
+  const activeChallengeRef =
+    useRef<NumberRecognitionChallenge>(baseChallenge);
+  const initialStageChallengeRef =
+    useRef<NumberRecognitionChallenge>(baseChallenge);
+  const initialDisplayCadenceMsRef = useRef(
+    baseChallenge.displayCadenceMs
+  );
+  const maxDigitCountRef =
+    useRef<NumberRecognitionDigitCount>(baseChallenge.digitCount);
+  const currentTargetRef = useRef(defaultTarget);
+  const sequenceRef = useRef(seq);
 
   useEffect(() => {
     return () => {
@@ -190,7 +291,7 @@ export default function NumberRecognition({
     };
   }, []);
 
-  useAutoStart(autoStart, phase, true, start);
+  useAutoStart(autoStart, phase, flashChallenge.loaded, start);
 
   const current = seq[Math.min(index, seq.length - 1)] ?? 0;
   const stimulusBackground =
@@ -199,22 +300,99 @@ export default function NumberRecognition({
       : feedback === 'wrong'
         ? '#FEE2E2'
         : '#FFFBEB';
+  const liveCadenceMs = exposureMsForFlashChallengeLevel(
+    baseChallenge.displayCadenceMs,
+    flashChallenge.level,
+    250
+  );
 
   useEffect(() => {
     if (phase !== 'running') return;
     if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
     cadenceTimeoutRef.current = setTimeout(
       handleStimulusTimeout,
-      challenge.displayCadenceMs
+      liveCadenceMs
     );
     return () => {
       if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
     };
-  }, [challenge.displayCadenceMs, index, phase]);
+  }, [index, liveCadenceMs, phase]);
+
+  function buildStageSession(
+    level: number,
+    useStageDefaultTarget: boolean
+  ) {
+    const stageChallenge = progressionEnabled
+      ? getNumberRecognitionStageChallenge(difficulty, level)
+      : baseChallenge;
+    const stageTarget =
+      targetProp ??
+      (progressionEnabled && !useStageDefaultTarget
+        ? randomNumberWithDigits(stageChallenge.digitCount, Math.random)
+        : stageChallenge.defaultTarget);
+    const stageSequence =
+      stream ??
+      generateNumberRecognitionStream(stageTarget, stageChallenge);
+    return {
+      challenge: stageChallenge,
+      sequence: stageSequence,
+      target: stageTarget,
+    };
+  }
+
+  function applyStageSession(
+    stage: ReturnType<typeof buildStageSession>
+  ) {
+    activeChallengeRef.current = stage.challenge;
+    maxDigitCountRef.current = Math.max(
+      maxDigitCountRef.current,
+      stage.challenge.digitCount
+    ) as NumberRecognitionDigitCount;
+    currentTargetRef.current = stage.target;
+    sequenceRef.current = stage.sequence;
+    setActiveChallenge(stage.challenge);
+    setCurrentTarget(stage.target);
+    setSeq(stage.sequence);
+    setIndex(0);
+  }
+
+  function advanceAfterOutcome(
+    nextChallengeLevel: number
+  ) {
+    if (progressionEnabled) {
+      const nextChallenge = getNumberRecognitionStageChallenge(
+        difficulty,
+        nextChallengeLevel
+      );
+      const currentChallenge = activeChallengeRef.current;
+      const contentChanged =
+        nextChallenge.digitCount !== currentChallenge.digitCount ||
+        nextChallenge.distractorSimilarity !==
+          currentChallenge.distractorSimilarity;
+
+      if (contentChanged) {
+        applyStageSession(
+          buildStageSession(nextChallengeLevel, false)
+        );
+        return;
+      }
+    }
+
+    setIndex(
+      (currentIndex) =>
+        (currentIndex + 1) %
+        Math.max(1, sequenceRef.current.length)
+    );
+  }
 
   function start() {
+    if (
+      !flashChallenge.loaded ||
+      (phase !== 'idle' && phase !== 'ended')
+    ) {
+      return;
+    }
     cancelledRef.current = false;
-    if (phase !== 'idle' && phase !== 'ended') return;
     reportedRef.current = false;
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
     if (cadenceTimeoutRef.current) clearTimeout(cadenceTimeoutRef.current);
@@ -224,13 +402,24 @@ export default function NumberRecognition({
     timedOutRef.current = 0;
     targetTrialsRef.current = 0;
     nonTargetTrialsRef.current = 0;
-    // Generate fresh stream
-    setSeq(
-      stream ?? generateNumberRecognitionStream(currentTarget, challenge)
+    const initialChallengeLevel = flashChallenge.beginSession();
+    initialChallengeLevelRef.current = initialChallengeLevel;
+    maxChallengeLevelRef.current = initialChallengeLevel;
+    const initialStage = buildStageSession(
+      initialChallengeLevel,
+      true
     );
+    initialStageChallengeRef.current = initialStage.challenge;
+    initialDisplayCadenceMsRef.current =
+      exposureMsForFlashChallengeLevel(
+        baseChallenge.displayCadenceMs,
+        initialChallengeLevel,
+        250
+      );
+    maxDigitCountRef.current = initialStage.challenge.digitCount;
+    applyStageSession(initialStage);
     setPhase('running');
     setScore(0);
-    setIndex(0);
     setAttempts(0);
     setTimeLeft(durationMs);
     setFeedback(null);
@@ -260,6 +449,8 @@ export default function NumberRecognition({
       attemptsRef.current >= 4 &&
       targetTrialsRef.current >= 2 &&
       nonTargetTrialsRef.current >= 2;
+    const initialStageChallenge = initialStageChallengeRef.current;
+    const finalStageChallenge = activeChallengeRef.current;
 
     setPhase('ended');
     if (calibrationEligible) {
@@ -274,17 +465,36 @@ export default function NumberRecognition({
       score: scoreRef.current,
       accuracy,
       details: {
-        target: currentTarget,
-        total: seq.length,
+        target: currentTargetRef.current,
+        total: sequenceRef.current.length,
         targetTrials: targetTrialsRef.current,
         nonTargetTrials: nonTargetTrialsRef.current,
         calibrationEligible,
         attempts: attemptsRef.current,
         timedOut: timedOutRef.current,
         difficulty,
-        digitCount: challenge.digitCount,
-        distractorSimilarity: challenge.distractorSimilarity,
-        displayCadenceMs: challenge.displayCadenceMs,
+        digitCount: finalStageChallenge.digitCount,
+        distractorSimilarity:
+          finalStageChallenge.distractorSimilarity,
+        initialDigitCount: initialStageChallenge.digitCount,
+        finalDigitCount: finalStageChallenge.digitCount,
+        maximumDigitCount: maxDigitCountRef.current,
+        initialDistractorSimilarity:
+          initialStageChallenge.distractorSimilarity,
+        finalDistractorSimilarity:
+          finalStageChallenge.distractorSimilarity,
+        baseDisplayCadenceMs: baseChallenge.displayCadenceMs,
+        displayCadenceMs: initialDisplayCadenceMsRef.current,
+        initialDisplayCadenceMs: initialDisplayCadenceMsRef.current,
+        finalDisplayCadenceMs: exposureMsForFlashChallengeLevel(
+          baseChallenge.displayCadenceMs,
+          flashChallenge.getCurrentLevel(),
+          250
+        ),
+        initialChallengeLevel: initialChallengeLevelRef.current,
+        finalChallengeLevel: flashChallenge.getCurrentLevel(),
+        highestChallengeLevel: maxChallengeLevelRef.current,
+        savedBestChallengeLevel: flashChallenge.getHighestLevel(),
       },
     });
   }
@@ -306,10 +516,15 @@ export default function NumberRecognition({
     } else {
       setFeedback('wrong');
     }
+    const challengeOutcome = flashChallenge.recordOutcome(correct);
+    maxChallengeLevelRef.current = Math.max(
+      maxChallengeLevelRef.current,
+      challengeOutcome.state.level
+    );
 
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
     feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 200);
-    setIndex((i) => (i + 1) % Math.max(1, seq.length));
+    advanceAfterOutcome(challengeOutcome.state.level);
   }
 
   function handleStimulusTimeout() {
@@ -320,10 +535,15 @@ export default function NumberRecognition({
     if (isMatch) targetTrialsRef.current += 1;
     else nonTargetTrialsRef.current += 1;
     setAttempts(attemptsRef.current);
+    const challengeOutcome = flashChallenge.recordOutcome(false);
+    maxChallengeLevelRef.current = Math.max(
+      maxChallengeLevelRef.current,
+      challengeOutcome.state.level
+    );
     setFeedback('wrong');
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
     feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 200);
-    setIndex((i) => (i + 1) % Math.max(1, seq.length));
+    advanceAfterOutcome(challengeOutcome.state.level);
   }
 
   function playAgain() {
@@ -342,15 +562,26 @@ export default function NumberRecognition({
         <SimpleIdlePanel
           description={GAME_DESCRIPTIONS[GAME_ID]}
           onStart={start}
+          startDisabled={!flashChallenge.loaded}
           containerStyle={styles.endCard}
           descriptionStyle={styles.endTitle}
           buttonStyle={styles.startBtn}
           buttonTextStyle={styles.startBtnText}
-        />
+        >
+          <FlashChallengeStatus
+            level={flashChallenge.resumeLevel}
+            highestLevel={flashChallenge.highestLevel}
+          />
+        </SimpleIdlePanel>
       )}
 
       {phase === 'running' && (
         <View style={styles.gameArea}>
+          <FlashChallengeStatus
+            compact
+            level={flashChallenge.level}
+            highestLevel={flashChallenge.highestLevel}
+          />
           <Text testID="score" style={styles.hiddenText}>Score: {score}</Text>
           <StatsRow
             style={styles.statsRow}
@@ -374,7 +605,8 @@ export default function NumberRecognition({
               {
                 key: 'target',
                 value: currentTarget,
-                label: 'Target',
+                label: `Target · ${activeChallenge.digitCount}d`,
+                testID: 'recognition-target',
                 containerStyle: styles.statBox,
                 valueStyle: styles.statValue,
                 labelStyle: styles.statLabel,
@@ -395,6 +627,7 @@ export default function NumberRecognition({
               backgroundColor={stimulusBackground}
               maxFontSize={68}
               minFontSize={18}
+              maskFraction={flashChallenge.profile.maskFraction}
             />
           </View>
 
