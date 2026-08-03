@@ -27,6 +27,7 @@ const ADAPTIVE_DEFAULT_GAME_IDS = new Set([
   'MainIdeaSprint',
   'StructureScan',
   'ComprehensionTest',
+  'CenterLineReader',
   'TextSearch',
 ]);
 

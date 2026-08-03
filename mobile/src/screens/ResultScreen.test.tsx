@@ -55,6 +55,47 @@ describe('ResultScreen truthful metric cards', () => {
     expect(view.getByText('Comprehension')).toBeTruthy();
   });
 
+  it('labels only active-clock guided results as active guide time', () => {
+    const comprehensionView = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: 'ComprehensionTest',
+          wordCount: 0,
+          wpm: 0,
+          score: 100,
+          accuracy: 1,
+          details: {
+            activityType: 'paced-comprehension',
+            targetWpm: 250,
+          },
+        })}
+      />
+    );
+    expect(comprehensionView.getByText('Session time')).toBeTruthy();
+    expect(comprehensionView.queryByText('Active guide time')).toBeNull();
+    comprehensionView.unmount();
+
+    const activeView = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: 'CenterLineReader',
+          wordCount: 0,
+          wpm: 0,
+          score: 100,
+          accuracy: 1,
+          details: {
+            activityType: 'focus-lane-guided-reading',
+            targetWpm: 250,
+            timingMethod: 'monotonic-active-elapsed',
+          },
+        })}
+      />
+    );
+    expect(activeView.getByText('Active guide time')).toBeTruthy();
+  });
+
   it('shows Evidence Hunt metrics without turning them into one index', () => {
     const view = render(
       <ResultScreen

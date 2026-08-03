@@ -12,6 +12,8 @@ const AFFECTED = [
   'TimedWordRecognition/TimedWordRecognition.tsx',
   'WordMismatchGrid/WordMismatchGrid.tsx',
   'LetterRecognition/LetterRecognition.tsx',
+  'CenterLineReader/CenterLineReader.tsx',
+  'ReadingSaccades/ReadingSaccades.tsx',
 ];
 
 describe('reviewed timeout usage', () => {

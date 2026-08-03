@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import type { Article } from '../data/articles';
 import type { MainIdeaPassage } from '../data/mainIdeaPassages';
 import type { StructureScanRound } from '../data/structureScanPassages';
 import { getEvidenceHuntRounds } from '../data/evidenceHuntContent';
@@ -27,10 +28,12 @@ import NumberRecognition from '../games/NumberRecognition/NumberRecognition';
 import NumberSearch from '../games/NumberSearch/NumberSearch';
 import PatternScanning from '../games/PatternScanning/PatternScanning';
 import PowerReader from '../games/PowerReader/PowerReader';
+import CenterLineReader from '../games/CenterLineReader/CenterLineReader';
 import RepeatedReading from '../games/RepeatedReading/RepeatedReading';
 import SchulteLetters from '../games/SchulteLetters/SchulteLetters';
 import SchulteMix from '../games/SchulteMix/SchulteMix';
 import SchulteNumbers from '../games/SchulteNumbers/SchulteNumbers';
+import ReadingSaccades from '../games/ReadingSaccades/ReadingSaccades';
 import StructureScan from '../games/StructureScan/StructureScan';
 import EvidenceHunt from '../games/EvidenceHunt/EvidenceHunt';
 import ContextBuilder from '../games/ContextBuilder/ContextBuilder';
@@ -95,6 +98,26 @@ const STRUCTURE_ROUND: StructureScanRound = {
   ],
   correctHeading: 'Applications',
   evidence: 'The Applications section contains the deadline.',
+};
+
+const GUIDED_READING_ARTICLE: Article = {
+  id: 'lifecycle-guided-reading',
+  version: 1,
+  title: 'Guided reading lifecycle',
+  language: 'en',
+  category: 'psychology',
+  difficulty: 'easy',
+  wordCount: 4,
+  text: 'One two three four.',
+  source: 'Original editorial content',
+  license: 'Original content for this application',
+  comprehensionQuestions: [
+    {
+      question: 'Which word came first?',
+      options: ['One', 'Four'],
+      correctIndex: 0,
+    },
+  ],
 };
 
 function advance(ms: number) {
@@ -193,6 +216,21 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
     endTestId: 'end-screen',
   },
   {
+    id: 'CenterLineReader',
+    element: (report) => (
+      <CenterLineReader
+        article={GUIDED_READING_ARTICLE}
+        intervalMs={1_000}
+        onReportResult={report}
+      />
+    ),
+    complete: (view) => {
+      fireEvent.press(view.getByTestId('finish-focus-early'));
+    },
+    activeTestId: 'focus-lane-active',
+    endTestId: 'end',
+  },
+  {
     id: 'EvidenceHunt',
     element: (report) => (
       <EvidenceHunt
@@ -277,6 +315,23 @@ const LIFECYCLE_ADAPTERS: LifecycleAdapter[] = [
     },
     activeTestId: 'blink-stage',
     endTestId: 'end-screen',
+  },
+  {
+    id: 'ReadingSaccades',
+    element: (report) => (
+      <ReadingSaccades
+        article={GUIDED_READING_ARTICLE}
+        tickMs={1_000}
+        onReportResult={report}
+      />
+    ),
+    complete: (view) => {
+      fireEvent.press(view.getByTestId('finish-early'));
+      fireEvent.press(view.getByTestId('question-option-0'));
+      fireEvent.press(view.getByTestId('continue-saccades-feedback'));
+    },
+    activeTestId: 'saccades-active',
+    endTestId: 'end',
   },
   {
     id: 'VisualSpanExpansion',

@@ -15,6 +15,7 @@ import {
   formatDuration,
   getResultMetric,
   getSchulteGridModeLabel,
+  isGuidedPaceActivity,
   isMeasuredReadingResult,
   isReadingResult,
   isValidProgressMeasurement,
@@ -78,7 +79,7 @@ function encouragement(
         };
   }
 
-  if (result.details?.activityType === 'paced-reading') {
+  if (isGuidedPaceActivity(result.details?.activityType)) {
     return {
       title: 'Guided session complete',
       body: 'This was a configured display pace. Use a measured read next to check speed with understanding.',
@@ -252,7 +253,9 @@ export function ResultScreen({
   resultMetrics.push({
     value: formatDuration(result.elapsedMs),
     label:
-      activityType === 'paced-reading'
+      isGuidedPaceActivity(activityType) &&
+      (activityType === 'paced-reading' ||
+        result.details?.timingMethod === 'monotonic-active-elapsed')
         ? 'Active guide time'
         : isReadingResult(result)
           ? 'Reading time'

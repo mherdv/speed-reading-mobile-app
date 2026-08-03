@@ -8,9 +8,11 @@ import StructureScan from '../games/StructureScan/StructureScan';
 import EvidenceHunt from '../games/EvidenceHunt/EvidenceHunt';
 import ContextBuilder from '../games/ContextBuilder/ContextBuilder';
 import PowerReader from '../games/PowerReader/PowerReader';
+import CenterLineReader from '../games/CenterLineReader/CenterLineReader';
 import LetterRecognition from '../games/LetterRecognition/LetterRecognition';
 import TextSearch from '../games/TextSearch/TextSearch';
 import EyeMovementTraining from '../games/EyeMovementTraining/EyeMovementTraining';
+import ReadingSaccades from '../games/ReadingSaccades/ReadingSaccades';
 import VisualSpanExpansion from '../games/VisualSpanExpansion/VisualSpanExpansion';
 import FlashReading from '../games/FlashReading/FlashReading';
 import WordsRecall from '../games/WordsRecall/WordsRecall';
@@ -137,6 +139,17 @@ describe('All Games - AutoStart Functionality', () => {
     });
   });
 
+  describe('CenterLineReader', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <CenterLineReader autoStart intervalMs={1_000} random={() => 0} />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('focus-lane-active')).toBeTruthy();
+    });
+  });
+
   describe('LetterRecognition', () => {
     it('auto-starts when autoStart prop is true', async () => {
       const { queryByTestId, getByTestId } = render(<LetterRecognition autoStart={true} />);
@@ -160,6 +173,17 @@ describe('All Games - AutoStart Functionality', () => {
       await waitForAutoStart();
       expect(queryByTestId('start-button')).toBeNull();
       expect(getByTestId('blink-stage')).toBeTruthy();
+    });
+  });
+
+  describe('ReadingSaccades', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <ReadingSaccades autoStart tickMs={1_000} random={() => 0} />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('saccades-active')).toBeTruthy();
     });
   });
 

@@ -98,6 +98,31 @@ describe('result helpers', () => {
         })
       )
     ).toContain('Comprehension correct');
+
+    for (const activityType of [
+      'reading-saccade-guide',
+      'focus-lane-guided-reading',
+    ]) {
+      const guided = makeResult({
+        sampleId: activityType,
+        wordCount: 150,
+        wpm: 0,
+        score: 100,
+        details: {
+          activityType,
+          targetWpm: 320,
+          difficulty: 'medium',
+          comparisonBand: `${activityType}-medium`,
+        },
+      });
+      expect(getResultMetric(guided)).toEqual({
+        value: 320,
+        label: 'Guided pace',
+      });
+      expect(getResultComparison(guided).key).toContain(
+        `${activityType}|Guided pace|medium`
+      );
+    }
   });
 
   it('formats short and multi-minute durations', () => {

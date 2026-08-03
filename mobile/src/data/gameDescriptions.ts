@@ -27,6 +27,9 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
   PowerReader:
     'Use Flow, Focus line, or RSVP to experiment with a steady display guide. The configured target is stored separately from measured WPM, and the result counts only the words and chunks actually presented.',
 
+  CenterLineReader:
+    'Read an original connected passage through a fixed center lane. One, two, or up to four-word chunks appear between permanent guide marks while faded neighboring chunks preserve preview and recovery context. Long phrases split earlier to remain readable. Pause, step back, or adjust the guide at any time, then answer two passage questions. The selected pace is a configured guide, not a measured reading speed.',
+
   LetterRecognition:
     'Letter Jumble asks you to scan a crowded letter grid and select every copy of one target. This optional visual-search warm-up measures task speed and accuracy, not reading comprehension.',
 
@@ -35,6 +38,9 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
 
   EyeMovementTraining:
     'Take a short visual-comfort break with gentle blinking and distance focus. This routine may help you pause during screen use, but it does not improve eyesight, diagnose eye health, or measure reading speed.',
+
+  ReadingSaccades:
+    'Follow short word groups from left to right across connected lines, then follow the return cue to the next line. Pause, step back, or finish safely and answer a passage question. The drill records guide completion and comprehension; it does not track your gaze, treat vision, or prove faster reading.',
 
   VisualSpanExpansion:
     'Keep your eyes near a central fixation mark while equal-length words flash at surrounding positions. The selected difficulty sets the word band, while a saved 15-level flash ladder expands the span, shortens exposure, and introduces an opaque lower marker only after the clear stages are mastered. A miss shows both choices, costs 5 points, and narrows the next glance. Treat its score as spatial word-recall performance, not proof of faster connected-text reading.',

@@ -1,6 +1,6 @@
 # SpeedRead exercise, competitor, and game-design report
 
-Date: 2026-07-31
+Date: 2026-08-03
 Scope: mobile speed-reading practice, comprehension, scanning, recognition, and screen comfort
 
 ## Revision record
@@ -22,6 +22,7 @@ Scope: mobile speed-reading practice, comprehension, scanning, recognition, and 
 | V22 | Complete | Standardized responsive brief stimuli, added opaque progressive lower-glyph markers by difficulty, removed unnecessary flash-card framing, and compacted Hard phrase generation for phone legibility. |
 | V23 | Complete | Replaced immediate difficulty-band masking with a persistent 15-level flash ladder: content and exposure grow through nine clear levels, opaque masking begins at level 10, misses lower live load, and demonstrated levels resume in later sessions. |
 | V24 | Complete | Hardened flash progression after two reviewer passes: higher stages now sample genuinely harder content, sustained pace resumes up to 3,000 WPM, number length and spatial/digit span grow deterministically, fixed authored sessions cannot inflate mastery, delayed storage loads cannot erase checkpoints, and result reports use the settings actually played. |
+| V25 | Complete | Added Return-Sweep Flow and Focus Lane as comprehension-checked guided-reading labs, kept their configured pace out of measured WPM, and documented the evidence boundary around return sweeps, centered chunks, preview, and regressions. |
 
 ## Executive decision
 
@@ -132,6 +133,8 @@ This is a comprehensive **actionable** catalog for the current product, not a cl
 | Exercise | Status | Tier | Core rule |
 | --- | --- | --- | --- |
 | Power Reader | Live | B | Use Flow, Focus line, or RSVP with built-in or pasted text; pause or adjust pace; do not call its configured rate measured WPM |
+| Return-Sweep Flow (`ReadingSaccades`) | Live | B | Follow highlighted chunks across stable lines, make the reading-like return to the next line, then answer one comprehension question; configured pace is not measured WPM |
+| Focus Lane (`CenterLineReader`) | Live | B | Read centered 1-, 2-, or 4-word chunks between fixed guides with neighboring chunks retained for preview/regression, then answer two comprehension questions |
 | Flash Recall | Live | C | View one word briefly, type it, and track recognition accuracy |
 | Words Recall | Live | B | View exactly two words, hide them, and type them back in order |
 | Sentence Recall | Live | B | View a natural sentence, hide it, and reconstruct its words in order |
@@ -498,6 +501,38 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Result: correct mismatches, missed mismatches, wrong taps, penalty time, and accuracy.
 - Difficulty: 4/6/8 cards, 35/30/25-second base time, and 1.5/2/2.5-second wrong-tap penalties.
 
+### 32. Return-Sweep Flow (`ReadingSaccades`)
+
+- Follow each emphasized chunk across a stable line, then return to the first
+  chunk of the next line. The cue changes in place rather than moving the text.
+- Complete the passage and answer one passage-dependent comprehension question.
+- Result: comprehension, configured guide pace, and active presentation time.
+  Active time uses a monotonic clock and excludes paused time. Stored measured
+  WPM is zero because the configured rate is a guide, not an observed reading
+  rate.
+- Difficulty: 2-word chunks on up-to-6-word lines at 150 WPM; 3-word chunks on
+  up-to-8-word lines at 230 WPM; or 3-word chunks on up-to-10-word lines at
+  320 WPM. Character fitting breaks long-word lines earlier.
+- The app has no eye tracker and therefore does not score saccade accuracy,
+  fixation location, or visual efficiency. This is guided line-transition
+  practice with a comprehension check, not an eyesight or dyslexia treatment.
+
+### 33. Focus Lane (`CenterLineReader`)
+
+- Read the emphasized center chunk between fixed upper and lower guides while
+  faded neighboring chunks preserve context and a limited preview.
+- Pause or resume at any time, move back one chunk, or adjust the configured
+  presentation pace in 25-WPM steps.
+- Complete the passage and answer two passage-dependent comprehension questions.
+- Result: comprehension, configured guide pace, and presented content. Stored
+  measured WPM is zero; a display setting is not a timed connected-text reading
+  result.
+- Difficulty: 1-word chunks at 160 WPM, up to 2-word chunks at 250 WPM, or up
+  to 4-word chunks at 360 WPM; long phrases split earlier to stay legible.
+- The center guide is a pacing and attention aid. It does not prove that a
+  reader processed every word simultaneously or that removing ordinary eye
+  movements improves reading.
+
 ## Review 1: defects found and corrections
 
 1. **Tier wording was too strong.** “Tier A” now means direct reading practice, not proven causal transfer.
@@ -614,13 +649,13 @@ Practice deciding **where to read next** from text structure. The task does not 
 - Whether optional lab users later improve measured reading relative to their own baseline; no transfer is assumed.
 - Search success in the library and time from opening the library to starting a chosen drill.
 
-## Current implementation audit (updated through V22)
+## Current implementation audit (updated through V25)
 
 This section is the authoritative snapshot for the current source. Earlier revision notes remain as history.
 
 ### Availability and offline boundary
 
-- The registry contains **31 exercises**, and all 31 are available in the searchable Home collection. There is no subscription, checkout, or paid-feature gate in the current source.
+- The registry contains **33 exercises**, and all 33 are available in the searchable Home collection. There is no subscription, checkout, or paid-feature gate in the current source.
 - The exercise engines, authored passages, vocabulary pools, built-in Power Reader article library, and pasted-text workflow are local and usable without requesting network content.
 - Project Gutenberg discovery/book retrieval and Power Reader translation are optional network features. A recent Gutenberg title is metadata, not a falsely labeled offline copy.
 - Content in the implemented recall, vocabulary, and search pools is English-only; the interface must not imply multilingual exercise content.
@@ -665,6 +700,8 @@ Implemented now:
 - an actual timed WPM test whose timer stops before questions;
 - comprehension beside speed and visible measurement-quality flags;
 - guided Flow, Focus line, and centered RSVP modes;
+- comprehension-checked Return-Sweep Flow and Focus Lane guides whose configured
+  rates remain separate from measured WPM;
 - adjustable guide speed, difficulty, and chunk size by level;
 - local pasted text, a 24-article built-in offline library, and optional Project Gutenberg discovery;
 - repeated reading, purposeful search, evidence, structure, context, recall, Schulte number/letter/mix, number preview search, letter-grid search, row/column even-number scanning, and word-pair discrimination;
@@ -700,7 +737,7 @@ The second re-read found two remaining claim risks: guided WPM could still be mi
 
 # Research-cycle platform update
 
-The live catalog now contains 31 exercises. Two connected-reading exercises
+The live catalog now contains 33 exercises. Two connected-reading exercises
 were added because they train skills closer to real reading than another
 symbol-speed drill:
 
@@ -763,7 +800,7 @@ and skipped rounds are reported as omissions.
   result started after that item was assigned. Once all assigned items are
   completed or skipped, the plan stays terminal and does not replenish that day.
 - Home exercise discovery is icon-first at three items per row with a compact
-  level progress bar. All 31 exercises now share one searchable Home collection
+  level progress bar. All 33 exercises now share one searchable Home collection
   without category sections or a separate library route. Favorites persist
   locally as the only separate game collection.
 - Shared exercise description and difficulty panels scroll independently on
@@ -1222,3 +1259,34 @@ authoritative V21 inventory above.
   Result payloads use synchronous getters and actual initial/final per-round
   settings so a promotion, cadence, span, range, or exposure is not reported
   one step behind.
+
+## V25 guided reading-path labs and evidence boundary
+
+- **Return-Sweep Flow** is grounded in the observation that normal multiline
+  reading includes return sweeps and frequent corrective undersweeps; launch
+  position, landing position, line length, and text size affect that movement.
+  See [Slattery and Parker, 2019](https://pmc.ncbi.nlm.nih.gov/articles/PMC6863793/),
+  [Parker et al., 2019](https://doi.org/10.1016/j.visres.2018.12.007), and
+  [Vasilev et al., 2021](https://doi.org/10.1016/j.visres.2021.01.003).
+  These studies describe eye-movement behavior; they do not show that this
+  particular no-eye-tracker game increases ordinary reading speed.
+- **Focus Lane** uses a stable center guide and progressively larger chunks as
+  a controlled presentation technique. In a gaze-contingent study, the useful
+  span was the fixated word plus two words to its right for controls but only
+  one word to the right for readers with aphasia, illustrating that span is not
+  universal; a single word's optimal viewing position also does not establish a
+  multiword “magic center.” See
+  [DeDe, 2020](https://pmc.ncbi.nlm.nih.gov/articles/PMC7540203/) and
+  [Nazir, Jacobs, and O'Regan, 1998](https://pubmed.ncbi.nlm.nih.gov/9701972/).
+- Preserving faded neighbors plus Pause and Back is intentional. Preventing
+  regressions can reduce comprehension, and rapid serial presentation may trade
+  comprehension or comfort for display speed. See
+  [Schotter et al., 2014](https://doi.org/10.1177/0956797614531148),
+  [Benedetto et al., 2015](https://doi.org/10.1016/j.chb.2014.12.043), and the
+  broader [Rayner et al., 2016 review](https://doi.org/10.1177/1529100615623267).
+- The safe product claim for both games is **guided reading-path and paced-chunk
+  practice with immediate comprehension checks**. Neither result contributes a
+  measured WPM value, neither claims to diagnose or train gaze without eye
+  tracking, and neither is presented as treatment for dyslexia or another
+  learning condition. Any transfer claim must come from later, conventional
+  connected-text reads that preserve comprehension.

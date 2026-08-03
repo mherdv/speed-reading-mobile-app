@@ -6,6 +6,7 @@ export const GAME_IDS = [
   'EvidenceHunt',
   'ContextBuilder',
   'PowerReader',
+  'CenterLineReader',
   'FlashReading',
   'WordsRecall',
   'SentenceRecall',
@@ -14,6 +15,7 @@ export const GAME_IDS = [
   'SchulteLetters',
   'SchulteMix',
   'EyeMovementTraining',
+  'ReadingSaccades',
   'VisualSpanExpansion',
   'PatternScanning',
   'TimedWordRecognition',
@@ -42,6 +44,7 @@ export const CORE_GAME_IDS = [
   'EvidenceHunt',
   'ContextBuilder',
   'ComprehensionTest',
+  'CenterLineReader',
   'TextSearch',
 ] as const satisfies readonly GameId[];
 
@@ -49,6 +52,7 @@ export const SCANNING_GAME_IDS = [
   'WordSearchGame',
   'SchulteNumbers',
   'SchulteLetters',
+  'ReadingSaccades',
 ] as const satisfies readonly GameId[];
 
 export const EYE_COMFORT_GAME_IDS = [

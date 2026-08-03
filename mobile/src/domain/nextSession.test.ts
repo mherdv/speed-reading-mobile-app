@@ -173,6 +173,26 @@ describe('next-session coaching', () => {
       kind: 'measured-reading',
       label: 'Check with measured reading',
     });
+
+    for (const activityType of [
+      'reading-saccade-guide',
+      'focus-lane-guided-reading',
+    ]) {
+      expect(
+        getNextSessionAction(
+          result({
+            sampleId: activityType,
+            wordCount: 180,
+            wpm: 0,
+            accuracy: 1,
+            details: { activityType, targetWpm: 320 },
+          })
+        )
+      ).toMatchObject({
+        kind: 'measured-reading',
+        label: 'Check with measured reading',
+      });
+    }
   });
 
   it('finishes eye-comfort sessions without inventing an accuracy target', () => {

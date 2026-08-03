@@ -1,4 +1,5 @@
 import {
+  ALL_GAME_LIST,
   CORE_GAME_LIST,
   EYE_COMFORT_GAME_LIST,
   GAME_LIST,
@@ -16,18 +17,21 @@ describe('game catalog hierarchy', () => {
       'EvidenceHunt',
       'ContextBuilder',
       'ComprehensionTest',
+      'CenterLineReader',
       'TextSearch',
     ]);
     expect(SUPPORTING_GAME_LIST.map((game) => game.id)).toEqual([
       'WordSearchGame',
       'SchulteNumbers',
       'SchulteLetters',
+      'ReadingSaccades',
       'EyeMovementTraining',
     ]);
-    expect(SCANNING_GAME_LIST).toHaveLength(3);
+    expect(SCANNING_GAME_LIST).toHaveLength(4);
     expect(EYE_COMFORT_GAME_LIST.map((game) => game.title)).toEqual([
       'Eye Reset',
     ]);
-    expect(GAME_LIST).toHaveLength(12);
+    expect(GAME_LIST).toHaveLength(14);
+    expect(ALL_GAME_LIST).toHaveLength(33);
   });
 });

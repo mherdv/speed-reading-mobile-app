@@ -392,9 +392,11 @@ describe('Home Today plan', () => {
     );
 
     await waitFor(() => {
-      expect(view.getByText('31 exercises')).toBeTruthy();
+      expect(view.getByText('33 exercises')).toBeTruthy();
     });
     expect(view.getByTestId('open-game-RepeatedReading')).toBeTruthy();
+    expect(view.getByTestId('open-game-CenterLineReader')).toBeTruthy();
+    expect(view.getByTestId('open-game-ReadingSaccades')).toBeTruthy();
     expect(view.getByTestId('open-game-LastWordRecall')).toBeTruthy();
 
     fireEvent.changeText(view.getByTestId('home-game-search'), 'last word');

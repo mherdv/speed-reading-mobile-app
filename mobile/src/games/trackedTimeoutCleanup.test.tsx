@@ -10,6 +10,8 @@ import VisualSpanExpansion from './VisualSpanExpansion/VisualSpanExpansion';
 import TimedWordRecognition from './TimedWordRecognition/TimedWordRecognition';
 import WordMismatchGrid from './WordMismatchGrid/WordMismatchGrid';
 import LetterRecognition from './LetterRecognition/LetterRecognition';
+import CenterLineReader from './CenterLineReader/CenterLineReader';
+import ReadingSaccades from './ReadingSaccades/ReadingSaccades';
 
 describe('tracked game callback cleanup', () => {
   beforeEach(() => {
@@ -31,6 +33,8 @@ describe('tracked game callback cleanup', () => {
     ['Word Flash', <TimedWordRecognition />],
     ['Odd Word', <WordMismatchGrid />],
     ['Letter Hunt', <LetterRecognition />],
+    ['Focus Lane', <CenterLineReader />],
+    ['Return-Sweep Flow', <ReadingSaccades />],
   ])(
     'does not report %s after immediate unmount with callbacks pending',
     async (_name, element) => {

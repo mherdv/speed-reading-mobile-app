@@ -3,6 +3,7 @@ import type { TextSample, AttemptResult } from './types';
 import { randomIndex, type RandomSource } from '../data/randomization';
 import { getComprehensionCounts } from './readingPlan';
 import {
+  isGuidedPaceActivity,
   isMeasuredReadingResult,
   isValidProgressMeasurement,
 } from './results';
@@ -72,10 +73,7 @@ export function getNextSessionAction(
     };
   }
 
-  if (
-    activityType === 'paced-reading' ||
-    activityType === 'paced-comprehension'
-  ) {
+  if (isGuidedPaceActivity(activityType)) {
     return {
       kind: 'measured-reading',
       title: 'Check transfer next',

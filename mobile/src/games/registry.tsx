@@ -7,9 +7,11 @@ import StructureScan from './StructureScan/StructureScan';
 import EvidenceHunt from './EvidenceHunt/EvidenceHunt';
 import ContextBuilder from './ContextBuilder/ContextBuilder';
 import PowerReader from './PowerReader/PowerReader';
+import CenterLineReader from './CenterLineReader/CenterLineReader';
 import LetterRecognition from './LetterRecognition/LetterRecognition';
 import TextSearch from './TextSearch/TextSearch';
 import EyeMovementTraining from './EyeMovementTraining/EyeMovementTraining';
+import ReadingSaccades from './ReadingSaccades/ReadingSaccades';
 import VisualSpanExpansion from './VisualSpanExpansion/VisualSpanExpansion';
 import FlashReading from './FlashReading/FlashReading';
 import WordsRecall from './WordsRecall/WordsRecall';
@@ -83,6 +85,7 @@ const GAME_COMPONENTS: Record<
   EvidenceHunt,
   ContextBuilder,
   PowerReader,
+  CenterLineReader,
   FlashReading,
   WordsRecall,
   SentenceRecall,
@@ -91,6 +94,7 @@ const GAME_COMPONENTS: Record<
   SchulteLetters,
   SchulteMix,
   EyeMovementTraining,
+  ReadingSaccades,
   VisualSpanExpansion,
   PatternScanning,
   TimedWordRecognition,

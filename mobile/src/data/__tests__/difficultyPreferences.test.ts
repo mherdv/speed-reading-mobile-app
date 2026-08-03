@@ -28,6 +28,10 @@ describe('difficulty preferences', () => {
     expect(getDefaultDifficultyPreference('RepeatedReading').mode).toBe(
       'adaptive'
     );
+    expect(allowsAdaptiveDifficulty('CenterLineReader')).toBe(true);
+    expect(getDefaultDifficultyPreference('CenterLineReader').mode).toBe(
+      'adaptive'
+    );
   });
 
   it('starts optional labs in manual mode while reading practice starts adaptive', () => {
@@ -43,6 +47,10 @@ describe('difficulty preferences', () => {
     );
     expect(allowsAdaptiveDifficulty('EvidenceHunt')).toBe(true);
     expect(allowsAdaptiveDifficulty('ContextBuilder')).toBe(true);
+    expect(allowsAdaptiveDifficulty('ReadingSaccades')).toBe(true);
+    expect(getDefaultDifficultyPreference('ReadingSaccades').mode).toBe(
+      'manual'
+    );
   });
 
   it('persists a manual selection', async () => {

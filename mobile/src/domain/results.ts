@@ -68,10 +68,24 @@ export function isReadingResult(result: AttemptResult): boolean {
   return result.wordCount > 0 && result.wpm > 0;
 }
 
+const GUIDED_PACE_ACTIVITY_TYPES = new Set([
+  'paced-reading',
+  'paced-comprehension',
+  'reading-saccade-guide',
+  'focus-lane-guided-reading',
+]);
+
+export function isGuidedPaceActivity(activityType: unknown): boolean {
+  return (
+    typeof activityType === 'string' &&
+    GUIDED_PACE_ACTIVITY_TYPES.has(activityType)
+  );
+}
+
 export function isMeasuredReadingResult(result: AttemptResult): boolean {
   if (!isReadingResult(result)) return false;
   const activityType = result.details?.activityType;
-  if (activityType === 'paced-reading') return false;
+  if (isGuidedPaceActivity(activityType)) return false;
   if (activityType === 'measured-reading') return true;
   return result.sampleId !== 'PowerReader';
 }
@@ -89,7 +103,7 @@ function getInferredActivityType(result: AttemptResult): string {
 
 export function getResultMetric(result: AttemptResult): ResultMetric {
   const activityType = getInferredActivityType(result);
-  if (activityType === 'paced-reading') {
+  if (isGuidedPaceActivity(activityType)) {
     const targetWpm = result.details?.targetWpm;
     const guide =
       typeof targetWpm === 'number' && Number.isFinite(targetWpm)

@@ -190,6 +190,24 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     },
     keywords: ['highlight', 'reader', 'guide', 'books', 'wpm'],
   },
+  CenterLineReader: {
+    id: 'CenterLineReader',
+    title: 'Focus Lane',
+    shortDescription: 'Read connected chunks through a fixed center lane.',
+    category: 'pacing',
+    tier: 'reading-practice',
+    rules: [
+      'Read an original connected passage as each chunk settles between the fixed center indicators.',
+      'Use the faded neighboring chunks for context; pause, step back, or adjust the guide without losing your place.',
+      'Answer two passage questions; target WPM is a configured guide, not a measured reading speed.',
+    ],
+    difficulty: {
+      easy: option('Easy', '8 original passages · 160 WPM guide · 1-word focus'),
+      medium: option('Medium', '8 original passages · 250 WPM guide · up to 2-word focus'),
+      hard: option('Hard', '8 original passages · 360 WPM guide · up to 4-word focus'),
+    },
+    keywords: ['center', 'focus', 'lane', 'chunks', 'context', 'comprehension'],
+  },
   FlashReading: {
     id: 'FlashReading',
     title: 'Flash Recall',
@@ -333,6 +351,24 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
       hard: option('Extended', '8 blinks · 40-second look-away break'),
     },
     keywords: ['break', 'blink', 'comfort', 'screen'],
+  },
+  ReadingSaccades: {
+    id: 'ReadingSaccades',
+    title: 'Return-Sweep Flow',
+    shortDescription: 'Guide each line, then return to the next line start.',
+    category: 'scanning',
+    tier: 'skill-lab',
+    rules: [
+      'Read connected text while an underlined highlight steps through short word groups from left to right.',
+      'At each line ending, follow the return cue to the first group of the next line; pause or step back whenever needed.',
+      'Answer a passage question; results report comprehension and configured guide pace, not measured gaze or reading WPM.',
+    ],
+    difficulty: {
+      easy: option('Easy', '8 original passages · 150 WPM · 2-word anchors · short lines'),
+      medium: option('Medium', '8 original passages · 230 WPM · 3-word anchors · medium lines'),
+      hard: option('Hard', '8 original passages · 320 WPM · 3-word anchors · longer lines'),
+    },
+    keywords: ['return sweep', 'line', 'reading movement', 'guide', 'saccade'],
   },
   VisualSpanExpansion: {
     id: 'VisualSpanExpansion',
