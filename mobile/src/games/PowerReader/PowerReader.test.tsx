@@ -228,7 +228,7 @@ describe('PowerReader', () => {
   it('renders Return-Sweep Flow as stable fitted lines with one active anchor', () => {
     const { getAllByTestId, getByTestId, getByText } = render(
       <PowerReader
-        text="One two three four five six seven eight nine ten eleven twelve"
+        text="One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four"
         chunkSize={2}
         intervalMs={100}
       />
@@ -242,7 +242,17 @@ describe('PowerReader', () => {
     expect(getByTestId('power-return-active-anchor')).toHaveTextContent(
       'One two'
     );
-    expect(getAllByTestId(/^power-return-line-/)).toHaveLength(1);
+    const renderedLines = getAllByTestId(/^power-return-line-\d+$/);
+    expect(renderedLines.length).toBeGreaterThan(1);
+    expect(renderedLines[0]).toHaveStyle({
+      justifyContent: 'space-between',
+    });
+    expect(renderedLines[renderedLines.length - 1]).toHaveStyle({
+      justifyContent: 'flex-start',
+    });
+
+    fireEvent.press(getByTestId('speed-increase'));
+    expect(getByText('255')).toBeTruthy();
 
     act(() => {
       jest.advanceTimersByTime(110);

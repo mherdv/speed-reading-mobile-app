@@ -36,6 +36,7 @@ import {
 import {
   getReadingSaccadesConfig,
   getReturnSweepCharacterLimit,
+  getReturnSweepWindowLineCount,
 } from '../ReadingSaccades/ReadingSaccades';
 import {
   fetchFreeBooksPage,
@@ -275,9 +276,10 @@ type Props = {
 type Phase = 'idle' | 'running' | 'ended';
 
 const WORDS_PER_PAGE = 180;
-const RETURN_SWEEP_WINDOW_LINES = 3;
 const DEFAULT_READING_FONT_SIZE = 18;
 const DEFAULT_READING_COLUMN_WIDTH = 700;
+const MIN_POWER_READER_WPM = 50;
+const MAX_POWER_READER_WPM = 800;
 
 function toNonNegativeInteger(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
@@ -369,7 +371,8 @@ export default function PowerReader({
   onReportResult,
   difficulty = 'medium',
 }: Props & { difficulty?: Difficulty }) {
-  const { width: viewportWidth } = useWindowDimensions();
+  const { height: viewportHeight, width: viewportWidth } =
+    useWindowDimensions();
   const {
     preferences: readingDisplayPreferences,
     tokens: readingDisplay,
@@ -892,9 +895,17 @@ export default function PowerReader({
   }
 
   function adjustSpeed(delta: number) {
-    const newWpm = Math.max(50, Math.min(600, targetWpmRef.current + delta));
+    const newWpm = Math.max(
+      MIN_POWER_READER_WPM,
+      Math.min(MAX_POWER_READER_WPM, targetWpmRef.current + delta)
+    );
+    if (newWpm === targetWpmRef.current) return;
     targetWpmRef.current = newWpm;
     setTargetWpm(newWpm);
+    if (phase === 'running' && !pausedRef.current) {
+      if (chunkTimerRef.current) clearTimeout(chunkTimerRef.current);
+      scheduleNextChunk();
+    }
   }
 
   function selectPresentationMode(mode: PowerReaderPresentationMode) {
@@ -1212,6 +1223,16 @@ export default function PowerReader({
     typeof readingDisplay.column.maxWidth === 'number'
       ? readingDisplay.column.maxWidth
       : DEFAULT_READING_COLUMN_WIDTH;
+  const readingLineHeight =
+    typeof readingDisplay.text.lineHeight === 'number'
+      ? readingDisplay.text.lineHeight
+      : readingFontSize + 12;
+  const returnSweepWindowLineCount = getReturnSweepWindowLineCount(
+    viewportHeight,
+    readingFontSize
+  );
+  const returnSweepLineWindowHeight =
+    returnSweepWindowLineCount * readingLineHeight;
   const returnSweepConfig = getReadingSaccadesConfig(selectedDifficulty);
   const returnSweepCharacterLimit = getReturnSweepCharacterLimit(
     viewportWidth,
@@ -1240,18 +1261,18 @@ export default function PowerReader({
     )
   );
   const preferredReturnSweepWindowStart =
-    Math.floor(activeReturnSweepLineIndex / RETURN_SWEEP_WINDOW_LINES) *
-    RETURN_SWEEP_WINDOW_LINES;
+    Math.floor(activeReturnSweepLineIndex / returnSweepWindowLineCount) *
+    returnSweepWindowLineCount;
   const returnSweepWindowStart = Math.max(
     0,
     Math.min(
       preferredReturnSweepWindowStart,
-      Math.max(0, returnSweepLines.length - RETURN_SWEEP_WINDOW_LINES)
+      Math.max(0, returnSweepLines.length - returnSweepWindowLineCount)
     )
   );
   const visibleReturnSweepLines = returnSweepLines.slice(
     returnSweepWindowStart,
-    returnSweepWindowStart + RETURN_SWEEP_WINDOW_LINES
+    returnSweepWindowStart + returnSweepWindowLineCount
   );
   const wordsRead = Math.min(words.length, pageIndex * WORDS_PER_PAGE + highlightEnd);
   const progress = words.length > 0 ? (wordsRead / words.length) * 100 : 0;
@@ -1891,9 +1912,9 @@ export default function PowerReader({
           <View style={styles.speedControlRow}>
             <Pressable accessibilityRole="button"
               testID="speed-decrease"
-              style={[styles.speedBtn, targetWpm <= 50 && styles.speedBtnDisabled]}
+              style={[styles.speedBtn, targetWpm <= MIN_POWER_READER_WPM && styles.speedBtnDisabled]}
               onPress={() => adjustSpeed(-25)}
-              disabled={targetWpm <= 50}
+              disabled={targetWpm <= MIN_POWER_READER_WPM}
             >
               <Text style={styles.speedBtnText}>−</Text>
             </Pressable>
@@ -1903,9 +1924,9 @@ export default function PowerReader({
             </View>
             <Pressable accessibilityRole="button"
               testID="speed-increase"
-              style={[styles.speedBtn, targetWpm >= 600 && styles.speedBtnDisabled]}
+              style={[styles.speedBtn, targetWpm >= MAX_POWER_READER_WPM && styles.speedBtnDisabled]}
               onPress={() => adjustSpeed(25)}
-              disabled={targetWpm >= 600}
+              disabled={targetWpm >= MAX_POWER_READER_WPM}
             >
               <Text style={styles.speedBtnText}>+</Text>
             </Pressable>
@@ -2012,7 +2033,10 @@ export default function PowerReader({
               readingDisplay.column,
               readingDisplay.surface,
               presentationMode === 'focus-lane' && styles.focusLaneCard,
-              presentationMode === 'return-sweep' && styles.returnSweepCard,
+              presentationMode === 'return-sweep' && [
+                styles.returnSweepCard,
+                { minHeight: returnSweepLineWindowHeight + 84 },
+              ],
             ]}
             ref={pageCardRef}
             onStartShouldSetResponder={() => presentationMode === 'flow' && isPaused && selectionMode === 'phrase'}
@@ -2139,51 +2163,58 @@ export default function PowerReader({
                   Line {activeReturnSweepLineIndex + 1} of{' '}
                   {Math.max(returnSweepLines.length, 1)}
                 </Text>
-                <View style={styles.returnSweepLineWindow}>
+                <View
+                  style={[
+                    styles.returnSweepLineWindow,
+                    { minHeight: returnSweepLineWindowHeight },
+                  ]}
+                  testID="power-return-window"
+                >
                   {visibleReturnSweepLines.map((line, visibleLineIndex) => {
                     const lineIndex =
                       returnSweepWindowStart + visibleLineIndex;
                     const isCurrentLine =
                       lineIndex === activeReturnSweepLineIndex;
+                    const isLastPassageLine =
+                      lineIndex === returnSweepLines.length - 1;
                     return (
-                      <Text
+                      <View
                         accessible={false}
-                        adjustsFontSizeToFit
                         key={line.id}
-                        minimumFontScale={0.72}
-                        numberOfLines={1}
                         style={[
-                          readingDisplay.text,
                           styles.returnSweepLine,
+                          { minHeight: readingLineHeight },
                           !isCurrentLine && styles.returnSweepContextLine,
+                          isLastPassageLine && styles.returnSweepLastLine,
                         ]}
                         testID={`power-return-line-${lineIndex}`}
                       >
-                        {line.anchors.map((anchor, anchorIndex) => {
+                        {line.anchors.map((anchor) => {
                           const isActive =
                             anchor.startWordIndex === highlightStart;
                           return (
-                            <React.Fragment key={anchor.id}>
-                              <Text
-                                style={[
-                                  styles.returnSweepAnchor,
-                                  isActive && styles.returnSweepActiveAnchor,
-                                ]}
-                                testID={
-                                  isActive
-                                    ? 'power-return-active-anchor'
-                                    : undefined
-                                }
-                              >
-                                {anchor.words.join(' ')}
-                              </Text>
-                              {anchorIndex < line.anchors.length - 1
-                                ? ' '
-                                : null}
-                            </React.Fragment>
+                            <Text
+                              accessible={false}
+                              adjustsFontSizeToFit
+                              key={anchor.id}
+                              minimumFontScale={0.9}
+                              numberOfLines={1}
+                              style={[
+                                readingDisplay.text,
+                                styles.returnSweepAnchor,
+                                isActive && styles.returnSweepActiveAnchor,
+                              ]}
+                              testID={
+                                isActive
+                                  ? 'power-return-active-anchor'
+                                  : undefined
+                              }
+                            >
+                              {anchor.words.join(' ')}
+                            </Text>
                           );
                         })}
-                      </Text>
+                      </View>
                     );
                   })}
                 </View>
@@ -2989,26 +3020,29 @@ const styles = StyleSheet.create({
   },
   returnSweepLineWindow: {
     flex: 1,
-    justifyContent: 'space-evenly',
+    justifyContent: 'flex-start',
   },
   returnSweepLine: {
-    minHeight: 48,
-    paddingVertical: 4,
-    textAlign: 'center',
+    alignItems: 'baseline',
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'space-between',
+    paddingVertical: 1,
     width: '100%',
   },
   returnSweepContextLine: {
-    opacity: 0.68,
+    opacity: 1,
+  },
+  returnSweepLastLine: {
+    justifyContent: 'flex-start',
   },
   returnSweepAnchor: {
     borderRadius: 8,
+    flexShrink: 1,
   },
   returnSweepActiveAnchor: {
     backgroundColor: colors.infoSurface,
     color: colors.infoForeground,
-    fontWeight: '800',
-    paddingHorizontal: 3,
-    paddingVertical: 2,
   },
   progressBar: { height: 8, backgroundColor: colors.backgroundDark, borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: colors.primary },

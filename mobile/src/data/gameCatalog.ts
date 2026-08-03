@@ -180,7 +180,7 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     tier: 'skill-lab',
     rules: [
       'Choose local built-in or pasted text, or optionally fetch a public-domain book.',
-      'Use full-page Flow, a three-slot Focus Lane, or responsive Return-Sweep Flow; pause or adjust the guide when needed.',
+      'Use full-page Flow, a three-slot Focus Lane, or a book-like 5–8-line Return-Sweep Flow; pause or adjust the live guide when needed.',
       'Review the target and content presented; measured WPM remains zero for this guided session.',
     ],
     difficulty: {
@@ -359,8 +359,8 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     category: 'scanning',
     tier: 'skill-lab',
     rules: [
-      'Read connected text while a tinted highlight steps through short word groups from left to right.',
-      'At each line ending, continue from the centered first group of the next line; pause or step back whenever needed.',
+      'Read connected text in a book-like, two-edge-aligned block while a tinted highlight steps through short word groups from left to right.',
+      'Keep 5–8 stable lines in view; pause, step back, or change the live guide by 25 WPM whenever needed.',
       'Answer a passage question; results report comprehension and configured guide pace, not measured gaze or reading WPM.',
     ],
     difficulty: {

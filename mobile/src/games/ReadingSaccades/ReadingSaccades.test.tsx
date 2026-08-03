@@ -8,6 +8,7 @@ import ReadingSaccades, {
   buildSaccadeLines,
   getReadingSaccadesConfig,
   getReturnSweepCharacterLimit,
+  getReturnSweepWindowLineCount,
 } from './ReadingSaccades';
 
 const ARTICLE: Article = {
@@ -28,6 +29,13 @@ const ARTICLE: Article = {
       correctIndex: 1,
     },
   ],
+};
+
+const LONG_ARTICLE: Article = {
+  ...ARTICLE,
+  id: 'return-sweep-long-test',
+  wordCount: 96,
+  text: Array.from({ length: 96 }, (_, index) => `word${index + 1}`).join(' '),
 };
 
 async function settleStorage() {
@@ -122,7 +130,7 @@ describe('ReadingSaccades', () => {
   });
 
   it('uses more of a wide reading column without overfilling a phone', () => {
-    const phoneLimit = getReturnSweepCharacterLimit(390, 18, 700);
+    const phoneLimit = getReturnSweepCharacterLimit(393, 18, 700);
     const wideLimit = getReturnSweepCharacterLimit(1200, 18, 700);
     const largeTextLimit = getReturnSweepCharacterLimit(1200, 21, 700);
 
@@ -147,6 +155,10 @@ describe('ReadingSaccades', () => {
         line.anchors.flatMap((anchor) => anchor.words)
       )
     ).toEqual(originalWords);
+
+    expect(phoneLimit).toBe(35);
+    expect(getReturnSweepWindowLineCount(852, 18)).toBe(8);
+    expect(getReturnSweepWindowLineCount(568, 21)).toBe(6);
   });
 
   it('steps anchors left to right and enters the next centered line without arrow UI', async () => {
@@ -175,7 +187,7 @@ describe('ReadingSaccades', () => {
       false
     );
     expect(view.getByTestId('saccades-line-0')).toHaveStyle({
-      textAlign: 'center',
+      justifyContent: 'space-between',
     });
 
     act(() => {
@@ -199,6 +211,102 @@ describe('ReadingSaccades', () => {
     expect(view.getByTestId('saccades-progress-note')).toHaveTextContent(
       '2 lines visited · line 2 of 3'
     );
+  });
+
+  it('changes pace immediately and reports its initial and final guide rates', async () => {
+    const onReportResult = jest.fn();
+    const view = render(
+      <ReadingSaccades
+        article={ARTICLE}
+        anchorWords={2}
+        guideWpm={240}
+        lineWords={4}
+        tickMs={10}
+        onReportResult={onReportResult}
+      />
+    );
+    await settleStorage();
+
+    fireEvent.press(view.getByTestId('start-button'));
+    expect(view.getByText('240')).toBeTruthy();
+    fireEvent.press(view.getByTestId('saccades-faster'));
+    expect(view.getByText('265')).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(10);
+    });
+    expect(view.getByTestId('active-anchor')).toHaveTextContent('three four');
+
+    fireEvent.press(view.getByTestId('finish-early'));
+    fireEvent.press(view.getByTestId('question-option-1'));
+    fireEvent.press(view.getByTestId('continue-saccades-feedback'));
+    await settleStorage();
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          targetWpm: 265,
+          initialTargetWpm: 240,
+          finalTargetWpm: 265,
+        }),
+      })
+    );
+
+    fireEvent.press(view.getByTestId('play-again'));
+    expect(view.getByText('265')).toBeTruthy();
+    expect(view.getByTestId('active-anchor')).toHaveTextContent('one two');
+  });
+
+  it('reschedules the current phrase as soon as the guide pace changes', async () => {
+    const view = render(
+      <ReadingSaccades
+        article={ARTICLE}
+        anchorWords={2}
+        guideWpm={240}
+        lineWords={4}
+      />
+    );
+    await settleStorage();
+    fireEvent.press(view.getByTestId('start-button'));
+
+    act(() => {
+      jest.advanceTimersByTime(250);
+    });
+    fireEvent.press(view.getByTestId('saccades-faster'));
+    act(() => {
+      jest.advanceTimersByTime(452);
+    });
+    expect(view.getByTestId('active-anchor')).toHaveTextContent('one two');
+
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(view.getByTestId('active-anchor')).toHaveTextContent('three four');
+  });
+
+  it('renders an eight-line book window for the iPhone 14 Pro layout contract', async () => {
+    const view = render(
+      <ReadingSaccades
+        article={LONG_ARTICLE}
+        anchorWords={2}
+        lineWords={4}
+        tickMs={1_000}
+      />
+    );
+    await settleStorage();
+    fireEvent.press(view.getByTestId('start-button'));
+
+    expect(view.getAllByTestId(/^saccades-line-\d+$/)).toHaveLength(8);
+    expect(view.getByTestId('saccades-line-window')).toHaveStyle({
+      minHeight: 240,
+    });
+    expect(view.getByTestId('saccades-controls')).toHaveStyle({
+      flexWrap: 'wrap',
+    });
+    expect(view.getByTestId('saccades-faster')).toHaveStyle({
+      flexBasis: '45%',
+      minHeight: 48,
+    });
   });
 
   it('pauses, resumes, and moves back by one anchor without double counting', async () => {
@@ -404,6 +512,8 @@ describe('ReadingSaccades', () => {
     expect(view.queryByTestId('start-button')).toBeNull();
     expect(view.getByTestId('saccades-active')).toBeTruthy();
     expect(view.getByTestId('toggle-guide')).toHaveStyle({ minHeight: 48 });
+    expect(view.getByTestId('saccades-slower')).toHaveStyle({ minHeight: 48 });
+    expect(view.getByTestId('saccades-faster')).toHaveStyle({ minHeight: 48 });
     expect(view.getByTestId('finish-early')).toHaveStyle({ minHeight: 48 });
 
     view.unmount();

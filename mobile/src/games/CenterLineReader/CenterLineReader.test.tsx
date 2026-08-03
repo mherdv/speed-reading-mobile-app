@@ -148,6 +148,16 @@ describe('Focus Lane', () => {
     expect(view.getByTestId('focus-next')).toHaveProp('accessible', false);
     expect(view.getByTestId('focus-next')).toHaveProp('numberOfLines', 2);
     expect(view.getByTestId('focus-current-slot')).toHaveStyle({ flex: 3 });
+    expect(view.getByTestId('focus-control-grid')).toHaveStyle({
+      flexWrap: 'wrap',
+    });
+    expect(view.getByTestId('focus-control-cell-pause')).toHaveStyle({
+      flexBasis: '45%',
+      flexGrow: 1,
+    });
+    expect(view.getByTestId('toggle-focus-pause')).toHaveStyle({
+      minHeight: 48,
+    });
 
     advance(100);
     expect(view.getByTestId('focus-current')).toHaveTextContent('two');

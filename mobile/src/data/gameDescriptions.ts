@@ -40,7 +40,7 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Take a short visual-comfort break with gentle blinking and distance focus. This routine may help you pause during screen use, but it does not improve eyesight, diagnose eye health, or measure reading speed.',
 
   ReadingSaccades:
-    'Follow short word groups from left to right across centered, width-aware lines, then continue at the beginning of the next line. Pause, step back, or finish safely and answer a passage question. The drill records guide completion and comprehension; it does not track your gaze, treat vision, or prove faster reading.',
+    'Follow short word groups from left to right across a stable, book-like block of 5–8 width-aware lines, then continue at the beginning of the next line. Pause, step back, or change the live guide in 25-WPM steps before answering a passage question. The drill records guide completion and comprehension; it does not track your gaze, treat vision, or prove faster reading.',
 
   VisualSpanExpansion:
     'Keep your eyes near a central fixation mark while equal-length words flash at surrounding positions. The selected difficulty sets the word band, while a saved 15-level flash ladder expands the span, shortens exposure, and introduces an opaque lower marker only after the clear stages are mastered. A miss shows both choices, costs 5 points, and narrows the next glance. Treat its score as spatial word-recall performance, not proof of faster connected-text reading.',

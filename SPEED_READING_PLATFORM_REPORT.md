@@ -508,9 +508,13 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 
 ### 32. Return-Sweep Flow (`ReadingSaccades`)
 
-- Follow each emphasized chunk across a stable centered line, then continue at
-  the first chunk of the next line. The emphasis changes in place without
-  adding directional arrow overlays.
+- Follow each emphasized chunk across a stable, book-like line, then continue
+  at the first chunk of the next line. Five to eight responsive lines stay in
+  view, and full lines distribute phrase groups toward both page edges while
+  the final passage line remains left aligned.
+- Pause, step back, or adjust the live guide in 25-WPM increments from 100 to
+  800 WPM. A pace change reschedules the current guide step immediately and is
+  stored as configured pace rather than measured reading speed.
 - Complete the passage and answer one passage-dependent comprehension question.
 - Result: comprehension, configured guide pace, and active presentation time.
   Active time uses a monotonic clock and excludes paused time. Stored measured
@@ -871,7 +875,8 @@ and skipped rounds are reported as omissions.
   Manual practice preserves an in-progress Adaptive qualification, Power
   Reader highlights remain readable on dark passages. Its Focus Lane uses the
   selected book-like text size with two-line fallback, while its Return-Sweep
-  presentation fits stable centered lines to the reading column.
+  presentation keeps a stable 5–8-line, two-edge-aligned reading block within
+  the reading column.
 - Restoring a backup now reloads reading-display settings immediately in the
   running app. Restore behaves as a replacement for supported app keys, while
   writing imported entries before removing omitted keys so a failed storage

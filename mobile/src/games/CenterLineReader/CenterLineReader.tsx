@@ -618,33 +618,41 @@ export default function CenterLineReader({
             Read the center chunk; use the side chunks for preview or recovery.
           </Text>
 
-          <View style={styles.controlGrid}>
-            <Button
-              label={phase === 'paused' ? 'Resume' : 'Pause'}
-              onPress={phase === 'paused' ? resume : pause}
-              testID="toggle-focus-pause"
-            />
-            <Button
-              label="Back one"
-              onPress={backOneChunk}
-              disabled={chunkIndex === 0}
-              testID="focus-back"
-              variant="secondary"
-            />
-            <Button
-              label="−25 WPM"
-              onPress={() => changePace(-GUIDE_STEP_WPM)}
-              disabled={guideWpm <= MIN_GUIDE_WPM}
-              testID="focus-slower"
-              variant="secondary"
-            />
-            <Button
-              label="+25 WPM"
-              onPress={() => changePace(GUIDE_STEP_WPM)}
-              disabled={guideWpm >= MAX_GUIDE_WPM}
-              testID="focus-faster"
-              variant="secondary"
-            />
+          <View style={styles.controlGrid} testID="focus-control-grid">
+            <View style={styles.controlCell} testID="focus-control-cell-pause">
+              <Button
+                label={phase === 'paused' ? 'Resume' : 'Pause'}
+                onPress={phase === 'paused' ? resume : pause}
+                testID="toggle-focus-pause"
+              />
+            </View>
+            <View style={styles.controlCell} testID="focus-control-cell-back">
+              <Button
+                label="Back one"
+                onPress={backOneChunk}
+                disabled={chunkIndex === 0}
+                testID="focus-back"
+                variant="secondary"
+              />
+            </View>
+            <View style={styles.controlCell} testID="focus-control-cell-slower">
+              <Button
+                label="−25 WPM"
+                onPress={() => changePace(-GUIDE_STEP_WPM)}
+                disabled={guideWpm <= MIN_GUIDE_WPM}
+                testID="focus-slower"
+                variant="secondary"
+              />
+            </View>
+            <View style={styles.controlCell} testID="focus-control-cell-faster">
+              <Button
+                label="+25 WPM"
+                onPress={() => changePace(GUIDE_STEP_WPM)}
+                disabled={guideWpm >= MAX_GUIDE_WPM}
+                testID="focus-faster"
+                variant="secondary"
+              />
+            </View>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -941,8 +949,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    justifyContent: 'center',
     marginTop: spacing.sm,
+  },
+  controlCell: {
+    flexBasis: '45%',
+    flexGrow: 1,
   },
   finishButton: {
     minHeight: 48,

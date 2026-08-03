@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -35,9 +35,13 @@ import type { GameReportPayload } from '../registry';
 
 const GAME_ID = 'ReadingSaccades';
 const COMPLETION_THRESHOLD = 0.9;
-const WINDOW_LINE_COUNT = 3;
 const DEFAULT_READING_FONT_SIZE = 18;
 const DEFAULT_READING_COLUMN_WIDTH = 700;
+const MIN_GUIDE_WPM = 100;
+const MAX_GUIDE_WPM = 800;
+const GUIDE_STEP_WPM = 25;
+const MIN_VISIBLE_LINES = 5;
+const MAX_VISIBLE_LINES = 8;
 
 export type ReadingSaccadesConfig = {
   anchorWords: number;
@@ -103,6 +107,30 @@ export function getReturnSweepCharacterLimit(
     24,
     Math.min(76, Math.floor(usableLineWidth / estimatedCharacterWidth))
   );
+}
+
+export function getReturnSweepWindowLineCount(
+  viewportHeight: number,
+  fontSize = DEFAULT_READING_FONT_SIZE
+): number {
+  const safeViewportHeight = Math.max(480, viewportHeight);
+  const safeFontSize = Math.max(12, fontSize);
+  const availableReadingHeight = Math.max(
+    190,
+    Math.min(320, safeViewportHeight * 0.38)
+  );
+  const estimatedLineBox = safeFontSize + 10;
+  return Math.max(
+    MIN_VISIBLE_LINES,
+    Math.min(
+      MAX_VISIBLE_LINES,
+      Math.floor(availableReadingHeight / estimatedLineBox)
+    )
+  );
+}
+
+function clampGuideWpm(value: number): number {
+  return Math.min(MAX_GUIDE_WPM, Math.max(MIN_GUIDE_WPM, value));
 }
 
 export function buildSaccadeLines(
@@ -183,7 +211,8 @@ export default function ReadingSaccades({
   autoStart = false,
   onReportResult,
 }: Props) {
-  const { width: viewportWidth } = useWindowDimensions();
+  const { height: viewportHeight, width: viewportWidth } =
+    useWindowDimensions();
   const { tokens: readingDisplay } = useReadingDisplay();
   const readingFontSize =
     typeof readingDisplay.text.fontSize === 'number'
@@ -198,12 +227,25 @@ export default function ReadingSaccades({
     readingFontSize,
     readingColumnWidth
   );
+  const readingLineHeight =
+    typeof readingDisplay.text.lineHeight === 'number'
+      ? readingDisplay.text.lineHeight
+      : readingFontSize + 12;
+  const visibleLineCount = getReturnSweepWindowLineCount(
+    viewportHeight,
+    readingFontSize
+  );
+  const lineWindowMinHeight = visibleLineCount * readingLineHeight;
   const {
     gameProgress,
     setGameProgress,
     selectedDifficulty,
     progressLoaded,
   } = useGameProgress(GAME_ID, difficulty);
+  const difficultyConfig = getReadingSaccadesConfig(selectedDifficulty);
+  const initialGuideWpm = clampGuideWpm(
+    guideWpmProp ?? difficultyConfig.guideWpm
+  );
   const [phase, setPhase] = useState<Phase>('idle');
   const [guideStep, setGuideStep] = useState<GuideStep>({
     kind: 'anchor',
@@ -211,6 +253,7 @@ export default function ReadingSaccades({
     anchorIndex: 0,
   });
   const [paused, setPaused] = useState(false);
+  const [guideWpm, setGuideWpm] = useState(initialGuideWpm);
   const [wordsPresented, setWordsPresented] = useState(0);
   const [linesPresented, setLinesPresented] = useState(0);
   const [returnSweepsCompleted, setReturnSweepsCompleted] = useState(0);
@@ -241,7 +284,8 @@ export default function ReadingSaccades({
   const returnSweepsRef = useRef(0);
   const sessionAnchorWordsRef = useRef(1);
   const sessionLineWordsRef = useRef(1);
-  const sessionGuideWpmRef = useRef(1);
+  const sessionGuideWpmRef = useRef(initialGuideWpm);
+  const sessionInitialGuideWpmRef = useRef(initialGuideWpm);
   const sessionTickMsRef = useRef<number | undefined>(undefined);
   const startedEpochRef = useRef(0);
   const activeSegmentStartedRef = useRef<number | null>(null);
@@ -258,6 +302,12 @@ export default function ReadingSaccades({
     },
     []
   );
+
+  useEffect(() => {
+    if (phaseRef.current !== 'idle') return;
+    sessionGuideWpmRef.current = initialGuideWpm;
+    setGuideWpm(initialGuideWpm);
+  }, [initialGuideWpm]);
 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
@@ -301,7 +351,7 @@ export default function ReadingSaccades({
             .length ?? sessionAnchorWordsRef.current)
         : sessionAnchorWordsRef.current;
     return Math.max(
-      160,
+      140,
       Math.round((wordCount * 60_000) / sessionGuideWpmRef.current)
     );
   }
@@ -386,8 +436,8 @@ export default function ReadingSaccades({
     beginQuestion();
   }
 
-  function start(force = false) {
-    if (!force && phaseRef.current !== 'idle') return;
+  function start(preserveAdjustedPace = false) {
+    if (!preserveAdjustedPace && phaseRef.current !== 'idle') return;
     clearTrackedTimeouts();
     cancelledRef.current = false;
     reportedRef.current = false;
@@ -409,10 +459,12 @@ export default function ReadingSaccades({
       1,
       Math.floor(lineWordsProp ?? config.lineWords)
     );
-    const configuredGuideWpm = Math.max(
-      1,
+    const configuredGuideWpm = clampGuideWpm(
       Math.floor(guideWpmProp ?? config.guideWpm)
     );
+    const sessionStartingWpm = preserveAdjustedPace
+      ? sessionGuideWpmRef.current
+      : configuredGuideWpm;
     const nextArticle = chooseNextArticle();
     const nextLines = buildSaccadeLines(
       nextArticle.text,
@@ -425,7 +477,8 @@ export default function ReadingSaccades({
     linesRef.current = nextLines;
     sessionAnchorWordsRef.current = configuredAnchorWords;
     sessionLineWordsRef.current = configuredLineWords;
-    sessionGuideWpmRef.current = configuredGuideWpm;
+    sessionGuideWpmRef.current = sessionStartingWpm;
+    sessionInitialGuideWpmRef.current = sessionStartingWpm;
     sessionTickMsRef.current = tickMs;
     startedEpochRef.current = epochNowMs();
     lastArticleIdRef.current = nextArticle.id;
@@ -433,6 +486,7 @@ export default function ReadingSaccades({
     setSessionArticle(nextArticle);
     setSessionLines(nextLines);
     setPaused(false);
+    setGuideWpm(sessionStartingWpm);
     setWordsPresented(0);
     setLinesPresented(0);
     setReturnSweepsCompleted(0);
@@ -447,6 +501,18 @@ export default function ReadingSaccades({
     }
     showAnchor(0, 0);
     scheduleNextStep(guideStepRef.current);
+  }
+
+  function changePace(delta: number) {
+    if (phaseRef.current !== 'active') return;
+    const nextGuideWpm = clampGuideWpm(
+      sessionGuideWpmRef.current + delta
+    );
+    if (nextGuideWpm === sessionGuideWpmRef.current) return;
+    sessionGuideWpmRef.current = nextGuideWpm;
+    setGuideWpm(nextGuideWpm);
+    clearTrackedTimeouts();
+    if (!pausedRef.current) scheduleNextStep(guideStepRef.current);
   }
 
   function togglePause() {
@@ -539,6 +605,8 @@ export default function ReadingSaccades({
         comparisonBand: `reading-saccade-${selectedDifficulty}`,
         difficulty: selectedDifficulty,
         targetWpm: sessionGuideWpmRef.current,
+        initialTargetWpm: sessionInitialGuideWpmRef.current,
+        finalTargetWpm: sessionGuideWpmRef.current,
         configuredPaceOnly: true,
         anchorWords: sessionAnchorWordsRef.current,
         lineWords: sessionLineWordsRef.current,
@@ -569,17 +637,17 @@ export default function ReadingSaccades({
   const preferredWindowStart =
     guideStep.kind === 'return'
       ? guideStep.fromLineIndex
-      : Math.floor(activeLineIndex / WINDOW_LINE_COUNT) * WINDOW_LINE_COUNT;
+      : Math.floor(activeLineIndex / visibleLineCount) * visibleLineCount;
   const windowStart = Math.max(
     0,
     Math.min(
       preferredWindowStart,
-      Math.max(0, sessionLines.length - WINDOW_LINE_COUNT)
+      Math.max(0, sessionLines.length - visibleLineCount)
     )
   );
   const visibleLines = sessionLines.slice(
     windowStart,
-    windowStart + WINDOW_LINE_COUNT
+    windowStart + visibleLineCount
   );
   const question = sessionArticle.comprehensionQuestions[0];
   const activeAnchor =
@@ -638,7 +706,7 @@ export default function ReadingSaccades({
             items={[
               {
                 key: 'pace',
-                value: sessionGuideWpmRef.current,
+                value: guideWpm,
                 label: 'guide WPM',
                 containerStyle: styles.stat,
                 valueStyle: styles.statValue,
@@ -672,7 +740,12 @@ export default function ReadingSaccades({
             />
           </View>
           <ReadingColumn
-            style={[styles.readingCard, readingDisplay.column, readingDisplay.surface]}
+            style={[
+              styles.readingCard,
+              readingDisplay.column,
+              readingDisplay.surface,
+              { minHeight: lineWindowMinHeight + 84 },
+            ]}
           >
             <Text style={[styles.articleTitle, readingDisplay.title]}>
               {sessionArticle.title}
@@ -696,26 +769,29 @@ export default function ReadingSaccades({
             >
               {activeGuideLabel}
             </Text>
-            <View style={styles.lineWindow}>
+            <View
+              style={[styles.lineWindow, { minHeight: lineWindowMinHeight }]}
+              testID="saccades-line-window"
+            >
               {visibleLines.map((line, visibleLineIndex) => {
                 const lineIndex = windowStart + visibleLineIndex;
                 const returnTarget =
                   guideStep.kind === 'return' &&
                   guideStep.toLineIndex === lineIndex;
                 const currentLine = lineIndex === activeLineIndex;
+                const isLastPassageLine =
+                  lineIndex === sessionLines.length - 1;
                 return (
-                  <Text
+                  <View
                     accessible={false}
-                    adjustsFontSizeToFit
                     key={line.id}
-                    minimumFontScale={0.72}
-                    numberOfLines={1}
                     style={[
-                      readingDisplay.text,
                       styles.line,
+                      { minHeight: readingLineHeight },
                       !currentLine && styles.contextLine,
                       currentLine && styles.currentLine,
                       returnTarget && styles.returnTargetLine,
+                      isLastPassageLine && styles.lastLine,
                     ]}
                     testID={`saccades-line-${lineIndex}`}
                   >
@@ -725,30 +801,33 @@ export default function ReadingSaccades({
                         guideStep.lineIndex === lineIndex &&
                         guideStep.anchorIndex === anchorIndex;
                       return (
-                        <Fragment key={anchor.id}>
-                          <Text
-                            testID={
-                              active
-                                ? 'active-anchor'
-                                : `saccades-anchor-${lineIndex}-${anchorIndex}`
-                            }
-                            style={[
-                              styles.anchor,
-                              active && styles.activeAnchor,
-                            ]}
-                          >
-                            {anchor.words.join(' ')}
-                          </Text>
-                          {anchorIndex < line.anchors.length - 1 ? ' ' : null}
-                        </Fragment>
+                        <Text
+                          accessible={false}
+                          adjustsFontSizeToFit
+                          key={anchor.id}
+                          minimumFontScale={0.9}
+                          numberOfLines={1}
+                          testID={
+                            active
+                              ? 'active-anchor'
+                              : `saccades-anchor-${lineIndex}-${anchorIndex}`
+                          }
+                          style={[
+                            readingDisplay.text,
+                            styles.anchor,
+                            active && styles.activeAnchor,
+                          ]}
+                        >
+                          {anchor.words.join(' ')}
+                        </Text>
                       );
                     })}
-                  </Text>
+                  </View>
                 );
               })}
             </View>
           </ReadingColumn>
-          <View style={styles.controls}>
+          <View style={styles.controls} testID="saccades-controls">
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Back one highlighted phrase"
@@ -774,6 +853,34 @@ export default function ReadingSaccades({
               <Text style={styles.secondaryButtonText}>
                 {paused ? 'Resume' : 'Pause'}
               </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reduce guide speed by 25 words per minute"
+              disabled={guideWpm <= MIN_GUIDE_WPM}
+              onPress={() => changePace(-GUIDE_STEP_WPM)}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                guideWpm <= MIN_GUIDE_WPM && styles.buttonDisabled,
+                pressed && styles.pressed,
+              ]}
+              testID="saccades-slower"
+            >
+              <Text style={styles.secondaryButtonText}>−25 WPM</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Increase guide speed by 25 words per minute"
+              disabled={guideWpm >= MAX_GUIDE_WPM}
+              onPress={() => changePace(GUIDE_STEP_WPM)}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                guideWpm >= MAX_GUIDE_WPM && styles.buttonDisabled,
+                pressed && styles.pressed,
+              ]}
+              testID="saccades-faster"
+            >
+              <Text style={styles.secondaryButtonText}>+25 WPM</Text>
             </Pressable>
           </View>
           <Pressable
@@ -926,13 +1033,13 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 14,
     lineHeight: 22,
-    textAlign: 'center',
+    textAlign: 'justify',
   },
   demoLineMuted: {
     color: colors.textSecondary,
     fontSize: 14,
     lineHeight: 22,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   demoAnchor: {
     backgroundColor: colors.infoSurface,
@@ -998,7 +1105,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     marginBottom: spacing.sm,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   statusRow: {
     alignItems: 'center',
@@ -1027,16 +1134,18 @@ const styles = StyleSheet.create({
   },
   lineWindow: {
     flex: 1,
-    justifyContent: 'space-evenly',
+    justifyContent: 'flex-start',
   },
   line: {
-    minHeight: 48,
-    paddingVertical: spacing.xs,
-    textAlign: 'center',
+    alignItems: 'baseline',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'space-between',
+    paddingVertical: 1,
     width: '100%',
   },
   contextLine: {
-    opacity: 0.68,
+    opacity: 1,
   },
   currentLine: {
     opacity: 1,
@@ -1044,15 +1153,16 @@ const styles = StyleSheet.create({
   returnTargetLine: {
     opacity: 1,
   },
+  lastLine: {
+    justifyContent: 'flex-start',
+  },
   anchor: {
     borderRadius: borderRadius.sm,
+    flexShrink: 1,
   },
   activeAnchor: {
     backgroundColor: colors.infoSurface,
     color: colors.infoForeground,
-    fontWeight: '800',
-    paddingHorizontal: 3,
-    paddingVertical: 2,
   },
   pausedPill: {
     backgroundColor: colors.infoSurface,
@@ -1068,6 +1178,7 @@ const styles = StyleSheet.create({
   },
   controls: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   primaryButton: {
@@ -1092,7 +1203,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    flexBasis: 104,
+    flexBasis: '45%',
     flexGrow: 1,
     justifyContent: 'center',
     minHeight: 48,
@@ -1103,6 +1214,9 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontSize: 14,
     fontWeight: '700',
+  },
+  buttonDisabled: {
+    opacity: 0.45,
   },
   finishButton: {
     alignItems: 'center',
