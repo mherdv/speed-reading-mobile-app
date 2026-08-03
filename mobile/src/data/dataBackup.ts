@@ -16,6 +16,7 @@ export const BACKED_UP_STORAGE_KEYS = [
   'powerReaderBookProgress',
   'powerReaderRecentBooks',
   'powerReaderLocalLibrary:v1',
+  'powerReaderPresentationMode',
 ] as const;
 
 export type AppDataBackup = {

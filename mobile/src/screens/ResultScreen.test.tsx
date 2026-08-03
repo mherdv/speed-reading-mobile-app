@@ -96,6 +96,35 @@ describe('ResultScreen truthful metric cards', () => {
     expect(activeView.getByText('Active guide time')).toBeTruthy();
   });
 
+  it('shows Return-Sweep coverage and completed returns', () => {
+    const view = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: 'ReadingSaccades',
+          sampleTitle: 'Return-Sweep Flow',
+          wordCount: 0,
+          wpm: 0,
+          score: 120,
+          accuracy: 1,
+          details: {
+            activityType: 'reading-saccade-guide',
+            targetWpm: 230,
+            wordsPresented: 120,
+            totalWords: 140,
+            returnSweepsCompleted: 14,
+            timingMethod: 'monotonic-active-elapsed',
+          },
+        })}
+      />
+    );
+
+    expect(view.getByText('120/140')).toBeTruthy();
+    expect(view.getByText('Passage guided')).toBeTruthy();
+    expect(view.getByText('14')).toBeTruthy();
+    expect(view.getByText('Return sweeps')).toBeTruthy();
+  });
+
   it('shows Evidence Hunt metrics without turning them into one index', () => {
     const view = render(
       <ResultScreen

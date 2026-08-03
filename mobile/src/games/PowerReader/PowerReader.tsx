@@ -1,5 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Popover, { PopoverPlacement, Rect } from 'react-native-popover-view';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,9 +27,16 @@ import { StatsRow } from '../../ui/StatsRow';
 import { GameDifficultyControl } from '../../ui/GameDifficultyControl';
 import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import type {
-  ReadingFontSize,
   ReadingTheme,
 } from '../../data/readingDisplayPreferences';
+import {
+  addFocusBreakOpportunity,
+  getCenterLineConfig,
+} from '../CenterLineReader/CenterLineReader';
+import {
+  getReadingSaccadesConfig,
+  getReturnSweepCharacterLimit,
+} from '../ReadingSaccades/ReadingSaccades';
 import {
   fetchFreeBooksPage,
   fetchFreeBookText,
@@ -35,40 +55,60 @@ import {
 const GAME_ID = 'PowerReader';
 const BOOK_PROGRESS_KEY = 'powerReaderBookProgress';
 const RECENT_BOOKS_KEY = 'powerReaderRecentBooks';
+export const POWER_READER_PRESENTATION_MODE_KEY =
+  'powerReaderPresentationMode';
 const MAX_RECENT_BOOKS = 3;
 const PROGRESS_WRITE_DEBOUNCE_MS = 180;
 const COMPLETION_THRESHOLD = 0.9;
 
 type Intensity = 'beginner' | 'intermediate' | 'advanced';
-type PresentationMode = 'flow' | 'line' | 'rsvp';
+export type Difficulty = 'easy' | 'medium' | 'hard';
+export type PowerReaderPresentationMode =
+  | 'flow'
+  | 'focus-lane'
+  | 'return-sweep';
+
+export function sanitizePowerReaderPresentationMode(
+  value: unknown
+): PowerReaderPresentationMode {
+  return value === 'focus-lane' || value === 'return-sweep' || value === 'flow'
+    ? value
+    : 'flow';
+}
+
+export function parsePowerReaderPresentationMode(
+  value: string | null
+): PowerReaderPresentationMode {
+  if (value === null) return 'flow';
+  try {
+    return sanitizePowerReaderPresentationMode(JSON.parse(value));
+  } catch {
+    return sanitizePowerReaderPresentationMode(value);
+  }
+}
+
+type PowerReaderPresentationConfig = {
+  chunkSize: number;
+  wpm: number;
+};
 
 export function getPowerReaderReadingWordStyles(theme: ReadingTheme) {
   return {
     highlight:
       theme === 'dark'
         ? {
-            color: '#FFFFFF',
-            backgroundColor: '#0B628F',
+            color: colors.white,
+            backgroundColor: colors.secondary,
           }
         : {
-            color: '#073B5C',
-            backgroundColor: '#D9EEF7',
+            color: colors.primaryDark,
+            backgroundColor: colors.backgroundDark,
           },
     selected: {
-      color: '#211B15',
-      backgroundColor: '#FDE68A',
+      color: colors.warningForeground,
+      backgroundColor: colors.warningSurface,
     },
   } as const;
-}
-
-export function getPowerReaderRsvpTypography(fontSize: ReadingFontSize) {
-  if (fontSize === 'compact') {
-    return { fontSize: 26, lineHeight: 36 };
-  }
-  if (fontSize === 'large') {
-    return { fontSize: 32, lineHeight: 44 };
-  }
-  return { fontSize: 28, lineHeight: 38 };
 }
 
 export type PowerReaderProgressPosition = {
@@ -131,10 +171,83 @@ export function createSerializedProgressWriter(
 }
 
 const INTENSITY_CONFIG: Record<Intensity, { wpm: number; label: string; chunkSize: number; color: string }> = {
-  beginner: { wpm: 150, label: 'Beginner', chunkSize: 2, color: '#10B981' },
+  beginner: { wpm: 150, label: 'Beginner', chunkSize: 2, color: colors.interactiveTeal },
   intermediate: { wpm: 300, label: 'Intermediate', chunkSize: 3, color: colors.interactivePrimary },
-  advanced: { wpm: 500, label: 'Advanced', chunkSize: 5, color: '#0E4979' },
+  advanced: { wpm: 500, label: 'Advanced', chunkSize: 5, color: colors.primary },
 };
+
+export function getPowerReaderPresentationConfig(
+  mode: PowerReaderPresentationMode,
+  difficulty: Difficulty
+): PowerReaderPresentationConfig {
+  if (mode === 'focus-lane') {
+    const config = getCenterLineConfig(difficulty);
+    return { chunkSize: config.chunkWords, wpm: config.guideWpm };
+  }
+  if (mode === 'return-sweep') {
+    const config = getReadingSaccadesConfig(difficulty);
+    return { chunkSize: config.anchorWords, wpm: config.guideWpm };
+  }
+  const config = INTENSITY_CONFIG[difficultyToIntensity(difficulty)];
+  return { chunkSize: config.chunkSize, wpm: config.wpm };
+}
+
+export type PowerReaderSweepAnchor = {
+  id: string;
+  startWordIndex: number;
+  words: string[];
+};
+
+export type PowerReaderSweepLine = {
+  id: string;
+  anchors: PowerReaderSweepAnchor[];
+};
+
+export function buildPowerReaderSweepLines(
+  words: readonly string[],
+  chunkSize: number,
+  maxLineWords: number,
+  maxCharacters: number
+): PowerReaderSweepLine[] {
+  const safeChunkSize = Math.max(1, Math.floor(chunkSize));
+  const safeLineWords = Math.max(safeChunkSize, Math.floor(maxLineWords));
+  const safeCharacters = Math.max(18, Math.floor(maxCharacters));
+  const anchors: PowerReaderSweepAnchor[] = [];
+
+  for (let index = 0; index < words.length; index += safeChunkSize) {
+    anchors.push({
+      id: `anchor-${index}`,
+      startWordIndex: index,
+      words: words.slice(index, index + safeChunkSize),
+    });
+  }
+
+  const lines: PowerReaderSweepLine[] = [];
+  let currentAnchors: PowerReaderSweepAnchor[] = [];
+
+  function appendLine() {
+    if (currentAnchors.length === 0) return;
+    lines.push({
+      id: `line-${currentAnchors[0]!.startWordIndex}`,
+      anchors: currentAnchors,
+    });
+    currentAnchors = [];
+  }
+
+  for (const anchor of anchors) {
+    const candidateAnchors = [...currentAnchors, anchor];
+    const candidateWords = candidateAnchors.flatMap((item) => item.words);
+    const exceedsLine =
+      currentAnchors.length > 0 &&
+      (candidateWords.length > safeLineWords ||
+        candidateWords.join(' ').length > safeCharacters);
+    if (exceedsLine) appendLine();
+    currentAnchors.push(anchor);
+  }
+  appendLine();
+
+  return lines;
+}
 
 function difficultyToIntensity(difficulty: Difficulty): Intensity {
   if (difficulty === 'easy') return 'beginner';
@@ -160,9 +273,11 @@ type Props = {
 };
 
 type Phase = 'idle' | 'running' | 'ended';
-export type Difficulty = 'easy' | 'medium' | 'hard';
 
 const WORDS_PER_PAGE = 180;
+const RETURN_SWEEP_WINDOW_LINES = 3;
+const DEFAULT_READING_FONT_SIZE = 18;
+const DEFAULT_READING_COLUMN_WIDTH = 700;
 
 function toNonNegativeInteger(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
@@ -207,6 +322,21 @@ export function clampPowerReaderProgress(
   return { pageIndex, highlightIndex };
 }
 
+export function alignPowerReaderHighlightIndex(
+  highlightIndex: number,
+  chunkSize: number,
+  pageWordCount: number
+): number {
+  const safeChunkSize = Math.max(1, toNonNegativeInteger(chunkSize));
+  const safeWordCount = toNonNegativeInteger(pageWordCount);
+  if (safeWordCount === 0) return 0;
+  const clampedIndex = Math.min(
+    toNonNegativeInteger(highlightIndex),
+    safeWordCount - 1
+  );
+  return Math.floor(clampedIndex / safeChunkSize) * safeChunkSize;
+}
+
 export const OFFLINE_POWER_READER_ARTICLES: readonly PowerReaderArticle[] =
   ARTICLES.map((article) => ({
     id: `offline-${article.id}-v${article.version}`,
@@ -239,6 +369,7 @@ export default function PowerReader({
   onReportResult,
   difficulty = 'medium',
 }: Props & { difficulty?: Difficulty }) {
+  const { width: viewportWidth } = useWindowDimensions();
   const {
     preferences: readingDisplayPreferences,
     tokens: readingDisplay,
@@ -246,10 +377,6 @@ export default function PowerReader({
   const readingWordStyles = useMemo(
     () => getPowerReaderReadingWordStyles(readingDisplayPreferences.theme),
     [readingDisplayPreferences.theme]
-  );
-  const rsvpTypography = useMemo(
-    () => getPowerReaderRsvpTypography(readingDisplayPreferences.fontSize),
-    [readingDisplayPreferences.fontSize]
   );
   const initialOfflineArticle =
     getOfflinePowerReaderArticles(difficulty)[0] ?? STARTER_ARTICLE;
@@ -282,7 +409,10 @@ export default function PowerReader({
   const [customText, setCustomText] = useState('');
   const [localArticles, setLocalArticles] = useState<PowerReaderArticle[]>([]);
   const [importingText, setImportingText] = useState(false);
-  const [presentationMode, setPresentationMode] = useState<PresentationMode>('flow');
+  const [presentationMode, setPresentationMode] =
+    useState<PowerReaderPresentationMode>('flow');
+  const [presentationModeLoaded, setPresentationModeLoaded] = useState(false);
+  const presentationModeTouchedRef = useRef(false);
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [recentBooks, setRecentBooks] = useState<PowerReaderArticle[]>([]);
   const [resumeFromSaved, setResumeFromSaved] = useState(false);
@@ -300,6 +430,22 @@ export default function PowerReader({
   const [selectionBox, setSelectionBox] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
   const pageCardRef = useRef<View | null>(null);
   const [translateAnchorRect, setTranslateAnchorRect] = useState<Rect | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(POWER_READER_PRESENTATION_MODE_KEY)
+      .then((storedMode) => {
+        if (!active || presentationModeTouchedRef.current) return;
+        setPresentationMode(parsePowerReaderPresentationMode(storedMode));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setPresentationModeLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const activeArticle = selectedArticle;
   const text = activeArticle?.text ?? '';
@@ -416,10 +562,18 @@ export default function PowerReader({
   }, [textProp, booksRequested, debouncedQuery]);
 
 
-  useAutoStart(autoStart, phase, progressLoaded, start);
+  useAutoStart(
+    autoStart,
+    phase,
+    progressLoaded && presentationModeLoaded,
+    start
+  );
 
-  const intensityConfig = INTENSITY_CONFIG[selectedIntensity];
-  const chunkSize = chunkSizeProp ?? intensityConfig.chunkSize;
+  const presentationConfig = getPowerReaderPresentationConfig(
+    presentationMode,
+    selectedDifficulty
+  );
+  const chunkSize = chunkSizeProp ?? presentationConfig.chunkSize;
 
   const words = useMemo(() => text.split(/\s+/).filter(Boolean), [text]);
   const pages = useMemo(() => {
@@ -651,8 +805,17 @@ export default function PowerReader({
 
   function scheduleNextChunk() {
     if (pausedRef.current) return;
+    const currentPageWords = pagesRef.current[pageIndexRef.current] ?? [];
+    const currentChunkWordCount = Math.max(
+      1,
+      Math.min(
+        chunkSize,
+        currentPageWords.length - highlightIndexRef.current
+      )
+    );
     const currentInterval =
-      intervalMsProp ?? Math.round((chunkSize / targetWpmRef.current) * 60000);
+      intervalMsProp ??
+      Math.round((currentChunkWordCount / targetWpmRef.current) * 60000);
     chunkTimerRef.current = setTimeout(() => {
       if (cancelledRef.current || pausedRef.current) return;
       const pageWords = pagesRef.current[pageIndexRef.current] ?? [];
@@ -681,6 +844,7 @@ export default function PowerReader({
   }
 
   function start(force = false) {
+    presentationModeTouchedRef.current = true;
     cancelledRef.current = false;
     if (!force && phase !== 'idle') return;
     if (!text.trim() || pages.length === 0) return;
@@ -690,9 +854,22 @@ export default function PowerReader({
       highlightIndexRef.current = 0;
       setPageIndex(0);
       setHighlightIndex(0);
+    } else {
+      const pageWords = pagesRef.current[pageIndexRef.current] ?? [];
+      const alignedHighlight = alignPowerReaderHighlightIndex(
+        highlightIndexRef.current,
+        chunkSize,
+        pageWords.length
+      );
+      highlightIndexRef.current = alignedHighlight;
+      setHighlightIndex(alignedHighlight);
     }
-    targetWpmRef.current = intensityConfig.wpm;
-    setTargetWpm(intensityConfig.wpm);
+    const startConfig = getPowerReaderPresentationConfig(
+      presentationMode,
+      selectedDifficulty
+    );
+    targetWpmRef.current = startConfig.wpm;
+    setTargetWpm(startConfig.wpm);
     presentedWordIndexesRef.current = new Set();
     presentedChunkKeysRef.current = new Set();
     presentedPageIndexesRef.current = new Set();
@@ -718,6 +895,16 @@ export default function PowerReader({
     const newWpm = Math.max(50, Math.min(600, targetWpmRef.current + delta));
     targetWpmRef.current = newWpm;
     setTargetWpm(newWpm);
+  }
+
+  function selectPresentationMode(mode: PowerReaderPresentationMode) {
+    presentationModeTouchedRef.current = true;
+    setPresentationModeLoaded(true);
+    setPresentationMode(mode);
+    void AsyncStorage.setItem(
+      POWER_READER_PRESENTATION_MODE_KEY,
+      JSON.stringify(mode)
+    ).catch(() => undefined);
   }
 
   function togglePause() {
@@ -790,6 +977,8 @@ export default function PowerReader({
         completedEnoughForProgress,
         completionThreshold: COMPLETION_THRESHOLD,
         difficulty: selectedDifficulty,
+        comparisonBand: `power-reader-${presentationMode}-${selectedDifficulty}`,
+        chunkSize,
         articleTitle: activeArticle?.title,
         source: activeArticle?.source,
         presentationMode,
@@ -1005,8 +1194,65 @@ export default function PowerReader({
   const pageWords = pages[pageIndex] ?? [];
   const highlightStart = highlightIndex;
   const highlightEnd = Math.min(highlightIndex + chunkSize, pageWords.length);
-  const lineStart = Math.max(0, highlightStart - 4);
-  const lineEnd = Math.min(pageWords.length, highlightEnd + 4);
+  const previousChunk = pageWords
+    .slice(Math.max(0, highlightStart - chunkSize), highlightStart)
+    .join(' ');
+  const currentChunk = pageWords.slice(highlightStart, highlightEnd).join(' ');
+  const nextChunk = pageWords
+    .slice(highlightEnd, Math.min(pageWords.length, highlightEnd + chunkSize))
+    .join(' ');
+  const displayedPreviousChunk = addFocusBreakOpportunity(previousChunk);
+  const displayedCurrentChunk = addFocusBreakOpportunity(currentChunk);
+  const displayedNextChunk = addFocusBreakOpportunity(nextChunk);
+  const readingFontSize =
+    typeof readingDisplay.text.fontSize === 'number'
+      ? readingDisplay.text.fontSize
+      : DEFAULT_READING_FONT_SIZE;
+  const readingColumnWidth =
+    typeof readingDisplay.column.maxWidth === 'number'
+      ? readingDisplay.column.maxWidth
+      : DEFAULT_READING_COLUMN_WIDTH;
+  const returnSweepConfig = getReadingSaccadesConfig(selectedDifficulty);
+  const returnSweepCharacterLimit = getReturnSweepCharacterLimit(
+    viewportWidth,
+    readingFontSize,
+    readingColumnWidth
+  );
+  const returnSweepLines = useMemo(
+    () =>
+      buildPowerReaderSweepLines(
+        pageWords,
+        chunkSize,
+        returnSweepConfig.lineWords,
+        returnSweepCharacterLimit
+      ),
+    [
+      chunkSize,
+      pageWords,
+      returnSweepCharacterLimit,
+      returnSweepConfig.lineWords,
+    ]
+  );
+  const activeReturnSweepLineIndex = Math.max(
+    0,
+    returnSweepLines.findIndex((line) =>
+      line.anchors.some((anchor) => anchor.startWordIndex === highlightStart)
+    )
+  );
+  const preferredReturnSweepWindowStart =
+    Math.floor(activeReturnSweepLineIndex / RETURN_SWEEP_WINDOW_LINES) *
+    RETURN_SWEEP_WINDOW_LINES;
+  const returnSweepWindowStart = Math.max(
+    0,
+    Math.min(
+      preferredReturnSweepWindowStart,
+      Math.max(0, returnSweepLines.length - RETURN_SWEEP_WINDOW_LINES)
+    )
+  );
+  const visibleReturnSweepLines = returnSweepLines.slice(
+    returnSweepWindowStart,
+    returnSweepWindowStart + RETURN_SWEEP_WINDOW_LINES
+  );
   const wordsRead = Math.min(words.length, pageIndex * WORDS_PER_PAGE + highlightEnd);
   const progress = words.length > 0 ? (wordsRead / words.length) * 100 : 0;
 
@@ -1194,20 +1440,20 @@ export default function PowerReader({
               {/* Speedometer outline */}
               <Path
                 d="M20 60 A35 35 0 1 1 80 60"
-                stroke="#4B5563"
+                stroke={colors.textSecondary}
                 strokeWidth="6"
                 strokeLinecap="round"
                 fill="none"
               />
               {/* Speedometer tick marks */}
-              <Path d="M25 50 L30 52" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
-              <Path d="M35 38 L38 42" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
-              <Path d="M50 32 L50 38" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
-              <Path d="M65 38 L62 42" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
-              <Path d="M75 50 L70 52" stroke="#4B5563" strokeWidth="3" strokeLinecap="round" />
+              <Path d="M25 50 L30 52" stroke={colors.textSecondary} strokeWidth="3" strokeLinecap="round" />
+              <Path d="M35 38 L38 42" stroke={colors.textSecondary} strokeWidth="3" strokeLinecap="round" />
+              <Path d="M50 32 L50 38" stroke={colors.textSecondary} strokeWidth="3" strokeLinecap="round" />
+              <Path d="M65 38 L62 42" stroke={colors.textSecondary} strokeWidth="3" strokeLinecap="round" />
+              <Path d="M75 50 L70 52" stroke={colors.textSecondary} strokeWidth="3" strokeLinecap="round" />
               {/* Needle */}
-              <Path d="M50 55 L68 40" stroke="#4B5563" strokeWidth="4" strokeLinecap="round" />
-              <Circle cx="50" cy="55" r="5" fill="#4B5563" />
+              <Path d="M50 55 L68 40" stroke={colors.textSecondary} strokeWidth="4" strokeLinecap="round" />
+              <Circle cx="50" cy="55" r="5" fill={colors.textSecondary} />
             </Svg>
           </View>
 
@@ -1462,13 +1708,13 @@ export default function PowerReader({
 
               {loadingArticles && (
                 <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#0E4979" />
+                  <ActivityIndicator color={colors.primary} />
                   <Text style={styles.loadingText}>Loading free books...</Text>
                 </View>
               )}
               {loadingBook && (
                 <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#0E4979" />
+                  <ActivityIndicator color={colors.primary} />
                   <Text style={styles.loadingText}>Loading book text...</Text>
                 </View>
               )}
@@ -1540,8 +1786,8 @@ export default function PowerReader({
             <View style={styles.modeRow}>
               {([
                 ['flow', 'Flow'],
-                ['line', 'Focus line'],
-                ['rsvp', 'RSVP'],
+                ['focus-lane', 'Focus Lane'],
+                ['return-sweep', 'Return-Sweep Flow'],
               ] as const).map(([mode, label]) => {
                 const isSelected = presentationMode === mode;
                 return (
@@ -1551,9 +1797,15 @@ export default function PowerReader({
                     key={mode}
                     testID={`mode-${mode}`}
                     style={[styles.modeButton, isSelected && styles.modeButtonActive]}
-                    onPress={() => setPresentationMode(mode)}
+                    onPress={() => selectPresentationMode(mode)}
                   >
-                    <Text style={[styles.modeButtonText, isSelected && styles.modeButtonTextActive]}>
+                    <Text
+                      numberOfLines={2}
+                      style={[
+                        styles.modeButtonText,
+                        isSelected && styles.modeButtonTextActive,
+                      ]}
+                    >
                       {label}
                     </Text>
                   </Pressable>
@@ -1563,9 +1815,9 @@ export default function PowerReader({
             <Text style={styles.modeHelp}>
               {presentationMode === 'flow'
                 ? 'Read the full page with a moving highlight.'
-                : presentationMode === 'line'
-                  ? 'Keep one compact line in focus.'
-                  : 'See only the current word group at the focal point.'}
+                : presentationMode === 'focus-lane'
+                  ? 'Keep your gaze near the fixed center lane while side chunks preserve context.'
+                  : 'Follow each highlighted group across stable lines, then continue at the next line start.'}
             </Text>
           </View>
 
@@ -1758,8 +2010,9 @@ export default function PowerReader({
             style={[
               styles.pageCard,
               readingDisplay.column,
-              presentationMode !== 'rsvp' && readingDisplay.surface,
-              presentationMode === 'rsvp' && styles.rsvpCard,
+              readingDisplay.surface,
+              presentationMode === 'focus-lane' && styles.focusLaneCard,
+              presentationMode === 'return-sweep' && styles.returnSweepCard,
             ]}
             ref={pageCardRef}
             onStartShouldSetResponder={() => presentationMode === 'flow' && isPaused && selectionMode === 'phrase'}
@@ -1812,43 +2065,128 @@ export default function PowerReader({
               </Text>
             )}
 
-            {presentationMode === 'line' && (
-              <Text
-                testID="line-display"
-                style={[styles.focusLineText, readingDisplay.text]}
-              >
-                {pageWords.slice(lineStart, lineEnd).map((word, relativeIndex) => {
-                  const index = lineStart + relativeIndex;
-                  const isHighlighted = index >= highlightStart && index < highlightEnd;
-                  return (
+            {presentationMode === 'focus-lane' && (
+              <View testID="focus-lane-display" style={styles.focusLaneDisplay}>
+                <View accessible={false} style={styles.focusGuideRow}>
+                  <View style={styles.focusGuideTick} />
+                </View>
+                <View style={styles.focusLaneRow}>
+                  <View style={styles.focusNeighborSlot}>
                     <Text
-                      key={`${pageIndex}-line-${index}`}
+                      accessible={false}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                      numberOfLines={2}
                       style={[
-                        styles.lineWord,
-                        { color: readingDisplay.text.color },
-                        isHighlighted && readingWordStyles.highlight,
+                        readingDisplay.text,
+                        readingDisplay.subtleText,
+                        styles.focusNeighborText,
                       ]}
+                      testID="power-focus-previous"
                     >
-                      {word}{' '}
+                      {displayedPreviousChunk}
                     </Text>
-                  );
-                })}
-              </Text>
+                  </View>
+                  <View style={styles.focusCurrentSlot}>
+                    <Text
+                      accessibilityLabel={currentChunk}
+                      accessibilityLiveRegion="polite"
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.85}
+                      numberOfLines={2}
+                      style={[readingDisplay.text, styles.focusCurrentText]}
+                      testID="power-focus-current"
+                    >
+                      {displayedCurrentChunk}
+                    </Text>
+                  </View>
+                  <View style={styles.focusNeighborSlot}>
+                    <Text
+                      accessible={false}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                      numberOfLines={2}
+                      style={[
+                        readingDisplay.text,
+                        readingDisplay.subtleText,
+                        styles.focusNeighborText,
+                      ]}
+                      testID="power-focus-next"
+                    >
+                      {displayedNextChunk}
+                    </Text>
+                  </View>
+                </View>
+                <View accessible={false} style={styles.focusGuideRow}>
+                  <View style={styles.focusGuideTick} />
+                </View>
+              </View>
             )}
 
-            {presentationMode === 'rsvp' && (
-              <View testID="rsvp-display" style={styles.rsvpDisplay}>
-                <View style={styles.rsvpGuide} />
+            {presentationMode === 'return-sweep' && (
+              <View
+                testID="return-sweep-display"
+                style={styles.returnSweepDisplay}
+              >
                 <Text
-                  testID="rsvp-text"
-                  style={[
-                    styles.rsvpText,
-                    rsvpTypography,
-                  ]}
+                  accessibilityLiveRegion="polite"
+                  style={styles.accessibilityAnnouncement}
+                  testID="power-return-announcement"
                 >
-                  {pageWords.slice(highlightStart, highlightEnd).join(' ')}
+                  Current phrase: {currentChunk}
                 </Text>
-                <View style={styles.rsvpGuide} />
+                <Text style={[styles.returnSweepMeta, readingDisplay.title]}>
+                  Line {activeReturnSweepLineIndex + 1} of{' '}
+                  {Math.max(returnSweepLines.length, 1)}
+                </Text>
+                <View style={styles.returnSweepLineWindow}>
+                  {visibleReturnSweepLines.map((line, visibleLineIndex) => {
+                    const lineIndex =
+                      returnSweepWindowStart + visibleLineIndex;
+                    const isCurrentLine =
+                      lineIndex === activeReturnSweepLineIndex;
+                    return (
+                      <Text
+                        accessible={false}
+                        adjustsFontSizeToFit
+                        key={line.id}
+                        minimumFontScale={0.72}
+                        numberOfLines={1}
+                        style={[
+                          readingDisplay.text,
+                          styles.returnSweepLine,
+                          !isCurrentLine && styles.returnSweepContextLine,
+                        ]}
+                        testID={`power-return-line-${lineIndex}`}
+                      >
+                        {line.anchors.map((anchor, anchorIndex) => {
+                          const isActive =
+                            anchor.startWordIndex === highlightStart;
+                          return (
+                            <React.Fragment key={anchor.id}>
+                              <Text
+                                style={[
+                                  styles.returnSweepAnchor,
+                                  isActive && styles.returnSweepActiveAnchor,
+                                ]}
+                                testID={
+                                  isActive
+                                    ? 'power-return-active-anchor'
+                                    : undefined
+                                }
+                              >
+                                {anchor.words.join(' ')}
+                              </Text>
+                              {anchorIndex < line.anchors.length - 1
+                                ? ' '
+                                : null}
+                            </React.Fragment>
+                          );
+                        })}
+                      </Text>
+                    );
+                  })}
+                </View>
               </View>
             )}
 
@@ -1949,7 +2287,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 24,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
@@ -1958,13 +2296,13 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 16,
   },
   heroDescription: {
     fontSize: 15,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 32,
@@ -1984,11 +2322,11 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   errorText: {
     fontSize: 12,
-    color: '#EF4444',
+    color: colors.error,
     marginBottom: 8,
   },
   articleList: {
@@ -1996,15 +2334,15 @@ const styles = StyleSheet.create({
   },
   articleCard: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
   },
   articleCardActive: {
-    borderColor: '#0E4979',
-    backgroundColor: '#E7F5FB',
+    borderColor: colors.primary,
+    backgroundColor: colors.surfaceTonal,
   },
   articleMain: {
     flexDirection: 'row',
@@ -2014,13 +2352,13 @@ const styles = StyleSheet.create({
     width: 64,
     height: 96,
     borderRadius: 8,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
   },
   articleCoverFallback: {
     width: 64,
     height: 96,
     borderRadius: 8,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2033,24 +2371,24 @@ const styles = StyleSheet.create({
   articleTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.textPrimary,
   },
   articleTitleActive: {
-    color: '#083B65',
+    color: colors.primaryDark,
   },
   articleAuthor: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#4B5563',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   articleDescription: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 6,
   },
   articleDescriptionActive: {
-    color: '#4B5563',
+    color: colors.textSecondary,
   },
   articleMeta: {
     fontSize: 10,
@@ -2059,7 +2397,7 @@ const styles = StyleSheet.create({
   },
   articleProgress: {
     fontSize: 11,
-    color: '#0B628F',
+    color: colors.secondary,
     marginTop: 6,
     fontWeight: '600',
   },
@@ -2071,35 +2409,35 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     minHeight: 44,
-    backgroundColor: '#0E4979',
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 14,
     justifyContent: 'center',
   },
   actionButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 12,
     fontWeight: '700',
   },
   actionButtonOutline: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: '#0E4979',
+    borderColor: colors.primary,
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 14,
     justifyContent: 'center',
   },
   actionButtonOutlineText: {
-    color: '#0E4979',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
   },
   loadMoreBtn: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
     borderStyle: 'dashed',
     borderRadius: 12,
     paddingVertical: 12,
@@ -2112,49 +2450,49 @@ const styles = StyleSheet.create({
   loadMoreText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0B628F',
+    color: colors.secondary,
   },
   sectionLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   searchInput: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.textPrimary,
+    backgroundColor: colors.cardBackground,
     marginBottom: 12,
     userSelect: 'text',
   },
   customTextInput: {
     minHeight: 112,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
     lineHeight: 20,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.textPrimary,
+    backgroundColor: colors.cardBackground,
     userSelect: 'text',
   },
   customTitleInput: {
     minHeight: 48,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.textPrimary,
+    backgroundColor: colors.cardBackground,
     userSelect: 'text',
   },
   useCustomButton: {
@@ -2187,17 +2525,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
+    paddingHorizontal: 4,
   },
   modeButtonActive: {
     borderColor: colors.interactivePrimary,
-    backgroundColor: '#E7F5FB',
+    backgroundColor: colors.surfaceTonal,
   },
   modeButtonText: {
-    color: '#4B5563',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
+    lineHeight: 16,
+    textAlign: 'center',
   },
   modeButtonTextActive: {
     color: colors.interactivePrimary,
@@ -2239,11 +2580,11 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.white,
   },
   statsContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
@@ -2256,12 +2597,12 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 40,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
   },
   statNumber: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.textPrimary,
   },
   statDescription: {
     fontSize: 12,
@@ -2273,7 +2614,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 12,
     marginBottom: 20,
-    shadowColor: '#0E4979',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2287,15 +2628,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startBtnText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
   },
   // Running phase styles
   header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   runningScroll: {
     flex: 1,
   },
@@ -2305,10 +2646,10 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12, marginTop: 12 },
-  statBox: { alignItems: 'center', backgroundColor: '#E7F5FB', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
-  progressBox: { backgroundColor: '#D9EEF7' },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#0B628F' },
-  statLabel: { fontSize: 10, color: '#0E4979' },
+  statBox: { alignItems: 'center', backgroundColor: colors.surfaceTonal, paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
+  progressBox: { backgroundColor: colors.backgroundDark },
+  statValue: { fontSize: 18, fontWeight: '700', color: colors.secondary },
+  statLabel: { fontSize: 10, color: colors.primary },
   speedControlRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -2318,7 +2659,7 @@ const styles = StyleSheet.create({
   pauseButton: {
     minHeight: 44,
     alignSelf: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: colors.textPrimary,
     borderRadius: 999,
     paddingHorizontal: 18,
     paddingVertical: 8,
@@ -2326,10 +2667,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pauseButtonActive: {
-    backgroundColor: '#4B5563',
+    backgroundColor: colors.textSecondary,
   },
   pauseButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -2345,24 +2686,24 @@ const styles = StyleSheet.create({
   selectionChip: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: '#B7DDEB',
+    borderColor: colors.border,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
     justifyContent: 'center',
   },
   selectionChipActive: {
-    backgroundColor: '#0E4979',
-    borderColor: '#0E4979',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   selectionChipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#083B65',
+    color: colors.primaryDark,
     textTransform: 'capitalize',
   },
   selectionChipTextActive: {
-    color: '#FFFFFF',
+    color: colors.white,
   },
   selectionClear: {
     minHeight: 44,
@@ -2373,7 +2714,7 @@ const styles = StyleSheet.create({
   selectionClearText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#EF4444',
+    color: colors.error,
   },
   languageControls: {
     flexDirection: 'row',
@@ -2385,7 +2726,7 @@ const styles = StyleSheet.create({
   languageLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginRight: 6,
   },
   languageChip: {
@@ -2393,43 +2734,43 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#B7DDEB',
+    borderColor: colors.border,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
     justifyContent: 'center',
   },
   languageChipActive: {
-    backgroundColor: '#0E4979',
-    borderColor: '#0E4979',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   languageChipText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#083B65',
+    color: colors.primaryDark,
   },
   languageChipTextActive: {
-    color: '#FFFFFF',
+    color: colors.white,
   },
   translateIconButton: {
     minWidth: 44,
     minHeight: 44,
     alignItems: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: colors.textPrimary,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 4,
     justifyContent: 'center',
   },
   translateIconText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 11,
     fontWeight: '700',
   },
   translateFallbackButton: {
     minHeight: 44,
     alignSelf: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: colors.textPrimary,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -2437,16 +2778,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   translateFallbackText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 11,
     fontWeight: '700',
   },
   translateTooltip: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.cardBackground,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     maxHeight: 260,
     zIndex: 20,
     elevation: 6,
@@ -2464,7 +2805,7 @@ const styles = StyleSheet.create({
   translateTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.textPrimary,
   },
   translateClose: {
     fontSize: 14,
@@ -2478,21 +2819,21 @@ const styles = StyleSheet.create({
   },
   translateSourceText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   translateResultText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.textPrimary,
   },
   translateStatus: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   translateError: {
     fontSize: 12,
-    color: '#EF4444',
+    color: colors.error,
   },
   pageControls: {
     flexDirection: 'row',
@@ -2503,7 +2844,7 @@ const styles = StyleSheet.create({
   },
   pageButton: {
     minHeight: 44,
-    backgroundColor: '#D9EEF7',
+    backgroundColor: colors.backgroundDark,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
@@ -2515,28 +2856,28 @@ const styles = StyleSheet.create({
   pageButtonText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#083B65',
+    color: colors.primaryDark,
   },
   pageProgressText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   speedBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#0E4979',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   speedBtnDisabled: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
   },
   speedBtnText: {
     fontSize: 24,
     fontWeight: '700',
-    color: 'white',
+    color: colors.white,
     lineHeight: 28,
   },
   speedDisplay: {
@@ -2547,74 +2888,138 @@ const styles = StyleSheet.create({
   speedValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#0B628F',
+    color: colors.secondary,
   },
   speedLabel: {
     fontSize: 10,
-    color: '#0E4979',
+    color: colors.primary,
   },
   pageCard: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 16,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     minHeight: 200,
     position: 'relative',
   },
   pageText: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#111827',
+    color: colors.textPrimary,
   },
   pageWord: {
-    color: '#111827',
+    color: colors.textPrimary,
   },
-  focusLineText: {
-    marginVertical: 'auto',
-    textAlign: 'center',
-    fontSize: 20,
-    lineHeight: 32,
-    color: colors.textMuted,
-  },
-  lineWord: {
-    color: colors.textMuted,
-  },
-  rsvpCard: {
+  focusLaneCard: {
+    minHeight: 250,
+    paddingHorizontal: 4,
     justifyContent: 'center',
-    backgroundColor: '#111827',
   },
-  rsvpDisplay: {
-    minHeight: 160,
+  focusLaneDisplay: {
+    justifyContent: 'center',
+    width: '100%',
+  },
+  focusGuideRow: {
     alignItems: 'center',
+    height: 24,
     justifyContent: 'center',
   },
-  rsvpGuide: {
-    width: 2,
-    height: 18,
-    backgroundColor: '#1BA3DD',
+  focusGuideTick: {
+    backgroundColor: colors.secondary,
+    borderRadius: 999,
+    height: 20,
+    width: 3,
   },
-  rsvpText: {
-    minHeight: 54,
-    paddingHorizontal: 12,
+  focusLaneRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    minHeight: 92,
+    width: '100%',
+  },
+  focusNeighborSlot: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 3,
+  },
+  focusCurrentSlot: {
+    alignItems: 'center',
+    borderColor: colors.secondary,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    flex: 3,
+    justifyContent: 'center',
+    minHeight: 86,
+    minWidth: 0,
+    paddingHorizontal: 4,
+  },
+  focusNeighborText: {
+    fontSize: 12,
+    lineHeight: 18,
     textAlign: 'center',
-    textAlignVertical: 'center',
-    color: '#FFFFFF',
-    fontSize: 28,
-    lineHeight: 38,
-    fontWeight: '700',
   },
-  progressBar: { height: 8, backgroundColor: '#D9EEF7', borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#0E4979' },
+  focusCurrentText: {
+    flexShrink: 1,
+    textAlign: 'center',
+    width: '100%',
+  },
+  returnSweepCard: {
+    minHeight: 300,
+  },
+  returnSweepDisplay: {
+    flex: 1,
+    minHeight: 250,
+    width: '100%',
+  },
+  accessibilityAnnouncement: {
+    height: 1,
+    left: 0,
+    opacity: 0,
+    position: 'absolute',
+    top: 0,
+    width: 1,
+  },
+  returnSweepMeta: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 6,
+    textAlign: 'right',
+  },
+  returnSweepLineWindow: {
+    flex: 1,
+    justifyContent: 'space-evenly',
+  },
+  returnSweepLine: {
+    minHeight: 48,
+    paddingVertical: 4,
+    textAlign: 'center',
+    width: '100%',
+  },
+  returnSweepContextLine: {
+    opacity: 0.68,
+  },
+  returnSweepAnchor: {
+    borderRadius: 8,
+  },
+  returnSweepActiveAnchor: {
+    backgroundColor: colors.infoSurface,
+    color: colors.infoForeground,
+    fontWeight: '800',
+    paddingHorizontal: 3,
+    paddingVertical: 2,
+  },
+  progressBar: { height: 8, backgroundColor: colors.backgroundDark, borderRadius: 4, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: colors.primary },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  endScore: { fontSize: 48, fontWeight: '800', color: '#0E4979', marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
+  endTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  endScore: { fontSize: 48, fontWeight: '800', color: colors.primary, marginVertical: 8 },
+  endMeta: { fontSize: 14, color: colors.textSecondary },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
-  levelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  levelText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   starsText: { fontSize: 16, color: colors.warningForeground },
-  playAgainBtn: { marginTop: 16, backgroundColor: '#0E4979', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
-  playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
+  playAgainBtn: { marginTop: 16, backgroundColor: colors.primary, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
+  playAgainText: { color: colors.white, fontSize: 14, fontWeight: '600' },
 });

@@ -7,6 +7,7 @@ import * as progressStore from '../../data/progressStore';
 import ReadingSaccades, {
   buildSaccadeLines,
   getReadingSaccadesConfig,
+  getReturnSweepCharacterLimit,
 } from './ReadingSaccades';
 
 const ARTICLE: Article = {
@@ -57,17 +58,17 @@ describe('ReadingSaccades', () => {
   it('defines the requested difficulty progression', () => {
     expect(getReadingSaccadesConfig('easy')).toEqual({
       anchorWords: 2,
-      lineWords: 6,
+      lineWords: 12,
       guideWpm: 150,
     });
     expect(getReadingSaccadesConfig('medium')).toEqual({
       anchorWords: 3,
-      lineWords: 8,
+      lineWords: 14,
       guideWpm: 230,
     });
     expect(getReadingSaccadesConfig('hard')).toEqual({
       anchorWords: 3,
-      lineWords: 10,
+      lineWords: 16,
       guideWpm: 320,
     });
   });
@@ -120,7 +121,35 @@ describe('ReadingSaccades', () => {
     ).toBe(true);
   });
 
-  it('steps anchors left to right, shows a return cue, and enters the next line', async () => {
+  it('uses more of a wide reading column without overfilling a phone', () => {
+    const phoneLimit = getReturnSweepCharacterLimit(390, 18, 700);
+    const wideLimit = getReturnSweepCharacterLimit(1200, 18, 700);
+    const largeTextLimit = getReturnSweepCharacterLimit(1200, 21, 700);
+
+    expect(phoneLimit).toBeGreaterThanOrEqual(30);
+    expect(wideLimit).toBeGreaterThan(phoneLimit);
+    expect(largeTextLimit).toBeLessThan(wideLimit);
+
+    const text =
+      'one two three four five six seven eight nine ten eleven twelve thirteen fourteen';
+    const narrowLines = buildSaccadeLines(text, 10, 2, 24);
+    const wideLines = buildSaccadeLines(text, 10, 2, 72);
+    const originalWords = text.split(' ');
+
+    expect(wideLines.length).toBeLessThan(narrowLines.length);
+    expect(
+      wideLines.flatMap((line) =>
+        line.anchors.flatMap((anchor) => anchor.words)
+      )
+    ).toEqual(originalWords);
+    expect(
+      narrowLines.flatMap((line) =>
+        line.anchors.flatMap((anchor) => anchor.words)
+      )
+    ).toEqual(originalWords);
+  });
+
+  it('steps anchors left to right and enters the next centered line without arrow UI', async () => {
     const view = render(
       <ReadingSaccades
         article={ARTICLE}
@@ -133,6 +162,11 @@ describe('ReadingSaccades', () => {
 
     fireEvent.press(view.getByTestId('start-button'));
     expect(view.getByTestId('active-anchor').props.children).toBe('one two');
+    expect(view.queryByTestId('saccades-direction')).toBeNull();
+    expect(view.queryByTestId('return-sweep-cue')).toBeNull();
+    expect(view.getByTestId('saccades-progress-fill')).toHaveStyle({
+      width: `${(2 / 12) * 100}%`,
+    });
     expect(view.getByTestId('saccades-current-announcement')).toHaveTextContent(
       'Current phrase: one two'
     );
@@ -140,6 +174,9 @@ describe('ReadingSaccades', () => {
       'accessible',
       false
     );
+    expect(view.getByTestId('saccades-line-0')).toHaveStyle({
+      textAlign: 'center',
+    });
 
     act(() => {
       jest.advanceTimersByTime(10);
@@ -149,7 +186,8 @@ describe('ReadingSaccades', () => {
     act(() => {
       jest.advanceTimersByTime(10);
     });
-    expect(view.getByTestId('return-sweep-cue')).toBeTruthy();
+    expect(view.queryByTestId('return-sweep-cue')).toBeNull();
+    expect(view.queryByTestId('saccades-direction')).toBeNull();
     expect(view.getByTestId('saccades-current-announcement')).toHaveTextContent(
       'Return to line 2'
     );
@@ -158,7 +196,9 @@ describe('ReadingSaccades', () => {
       jest.advanceTimersByTime(10);
     });
     expect(view.getByTestId('active-anchor').props.children).toBe('five six');
-    expect(view.getByText('2 lines visited · 1 return sweeps')).toBeTruthy();
+    expect(view.getByTestId('saccades-progress-note')).toHaveTextContent(
+      '2 lines visited · line 2 of 3'
+    );
   });
 
   it('pauses, resumes, and moves back by one anchor without double counting', async () => {
@@ -175,6 +215,9 @@ describe('ReadingSaccades', () => {
     await settleStorage();
     fireEvent.press(view.getByTestId('start-button'));
     fireEvent.press(view.getByTestId('toggle-guide'));
+    expect(view.getByTestId('saccades-paused-pill')).toHaveTextContent(
+      'PAUSED'
+    );
 
     act(() => {
       jest.advanceTimersByTime(100);
@@ -231,7 +274,7 @@ describe('ReadingSaccades', () => {
     expect(onReportResult).toHaveBeenCalledTimes(1);
     expect(onReportResult).toHaveBeenCalledWith(
       expect.objectContaining({
-        elapsedMs: 100,
+        elapsedMs: 80,
         score: 12,
         accuracy: 1,
         details: expect.objectContaining({
@@ -248,8 +291,8 @@ describe('ReadingSaccades', () => {
           wordCount: 12,
           wordsPresented: 12,
           completionRate: 1,
-          linesPresented: 4,
-          returnSweepsCompleted: 3,
+          linesPresented: 3,
+          returnSweepsCompleted: 2,
           comprehensionCorrect: true,
           comprehensionAccuracy: 1,
           wpm: 0,

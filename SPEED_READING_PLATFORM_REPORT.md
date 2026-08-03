@@ -132,7 +132,7 @@ This is a comprehensive **actionable** catalog for the current product, not a cl
 
 | Exercise | Status | Tier | Core rule |
 | --- | --- | --- | --- |
-| Power Reader | Live | B | Use Flow, Focus line, or RSVP with built-in or pasted text; pause or adjust pace; do not call its configured rate measured WPM |
+| Power Reader | Live | B | Use full-page Flow, a three-slot Focus Lane, or responsive Return-Sweep Flow with built-in or pasted text; pause or adjust pace; do not call its configured rate measured WPM |
 | Return-Sweep Flow (`ReadingSaccades`) | Live | B | Follow highlighted chunks across stable lines, make the reading-like return to the next line, then answer one comprehension question; configured pace is not measured WPM |
 | Focus Lane (`CenterLineReader`) | Live | B | Read centered 1-, 2-, or 4-word chunks between fixed guides with neighboring chunks retained for preview/regression, then answer two comprehension questions |
 | Flash Recall | Live | C | View one word briefly, type it, and track recognition accuracy |
@@ -225,13 +225,18 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 ### 3. Power Reader
 
 - Choose the built-in article, custom text, or a public-domain book.
-- Choose Flow, Focus line, or centered RSVP presentation.
+- Choose full-page Flow, a fixed three-slot Focus Lane, or responsive
+  Return-Sweep Flow presentation. These reuse Power Reader's selected text and
+  lifecycle rather than starting the separate games or inventing questions for
+  pasted/imported material.
 - Follow the highlighted phrase; pause, resume, or adjust the guide speed.
 - Finish when the text is complete.
 - Result: configured target, unique words/chunks/pages actually presented, article, and active guide time. Stored measured WPM is zero.
 - Progression integrity: the session is successful for mastery only when at least 90% of the document’s unique words were actually presented. Page-skipping still produces an honest result but cannot award successful progression.
 - Legacy history: older `PowerReader` records without an activity type are displayed as Guided pace, using their old WPM or score as the configured guide value rather than relabeling them measured WPM.
-- Difficulty: approximately 150 WPM/2-word chunks, 300 WPM/3-word chunks, or 500 WPM/5-word chunks.
+- Difficulty: Flow starts at 150 WPM/2-word, 300 WPM/3-word, or 500 WPM/5-word
+  chunks. Focus Lane starts at 160/1, 250/2, or 360/4. Return-Sweep Flow starts
+  at 150/2, 230/3, or 320/3 with responsive 12/14/16-word line ceilings.
 - Offline boundary: the built-in article and pasted text are local; browsing or reopening Project Gutenberg books requires a connection.
 
 ### 4. Flash Recall
@@ -503,16 +508,19 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 
 ### 32. Return-Sweep Flow (`ReadingSaccades`)
 
-- Follow each emphasized chunk across a stable line, then return to the first
-  chunk of the next line. The cue changes in place rather than moving the text.
+- Follow each emphasized chunk across a stable centered line, then continue at
+  the first chunk of the next line. The emphasis changes in place without
+  adding directional arrow overlays.
 - Complete the passage and answer one passage-dependent comprehension question.
 - Result: comprehension, configured guide pace, and active presentation time.
   Active time uses a monotonic clock and excludes paused time. Stored measured
   WPM is zero because the configured rate is a guide, not an observed reading
   rate.
-- Difficulty: 2-word chunks on up-to-6-word lines at 150 WPM; 3-word chunks on
-  up-to-8-word lines at 230 WPM; or 3-word chunks on up-to-10-word lines at
-  320 WPM. Character fitting breaks long-word lines earlier.
+- Difficulty: 2-word chunks with a 12-word safety ceiling at 150 WPM; 3-word
+  chunks with a 14-word ceiling at 230 WPM; or 3-word chunks with a 16-word
+  ceiling at 320 WPM. Responsive character fitting is the primary line break:
+  it uses more of wide reading columns and breaks earlier on narrow screens or
+  at larger text sizes.
 - The app has no eye tracker and therefore does not score saccade accuracy,
   fixation location, or visual efficiency. This is guided line-transition
   practice with a comprehension check, not an eyesight or dyslexia treatment.
@@ -520,7 +528,10 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 ### 33. Focus Lane (`CenterLineReader`)
 
 - Read the emphasized center chunk between fixed upper and lower guides while
-  faded neighboring chunks preserve context and a limited preview.
+  secondary neighboring chunks preserve context and a limited preview.
+- The center chunk uses the selected passage font size rather than a display
+  heading size. Long terms and chunks may wrap to a second centered line, with
+  invisible break opportunities preserving the original accessible text.
 - Pause or resume at any time, move back one chunk, or adjust the configured
   presentation pace in 25-WPM steps.
 - Complete the passage and answer two passage-dependent comprehension questions.
@@ -699,7 +710,8 @@ Implemented now:
 
 - an actual timed WPM test whose timer stops before questions;
 - comprehension beside speed and visible measurement-quality flags;
-- guided Flow, Focus line, and centered RSVP modes;
+- guided full-page Flow, three-slot Focus Lane, and responsive Return-Sweep
+  Flow modes inside Power Reader;
 - comprehension-checked Return-Sweep Flow and Focus Lane guides whose configured
   rates remain separate from measured WPM;
 - adjustable guide speed, difficulty, and chunk size by level;
@@ -857,8 +869,9 @@ and skipped rounds are reported as omissions.
 - The first implementation review identified and corrected four integrity
   gaps: removed passage IDs can no longer leave Today permanently pending,
   Manual practice preserves an in-progress Adaptive qualification, Power
-  Reader highlights remain readable on dark passages, and its default RSVP
-  stimulus remains a focal 28/38 px rather than shrinking to body-text size.
+  Reader highlights remain readable on dark passages. Its Focus Lane uses the
+  selected book-like text size with two-line fallback, while its Return-Sweep
+  presentation fits stable centered lines to the reading column.
 - Restoring a backup now reloads reading-display settings immediately in the
   running app. Restore behaves as a replacement for supported app keys, while
   writing imported entries before removing omitted keys so a failed storage

@@ -180,13 +180,13 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     tier: 'skill-lab',
     rules: [
       'Choose local built-in or pasted text, or optionally fetch a public-domain book.',
-      'Use Flow, Focus line, or RSVP; pause or adjust the guide when needed.',
+      'Use full-page Flow, a three-slot Focus Lane, or responsive Return-Sweep Flow; pause or adjust the guide when needed.',
       'Review the target and content presented; measured WPM remains zero for this guided session.',
     ],
     difficulty: {
-      easy: option('Easy', '8 offline articles · 150 WPM guide · 2-word chunks'),
-      medium: option('Medium', '8 offline articles · 300 WPM guide · 3-word chunks'),
-      hard: option('Hard', '8 offline articles · 500 WPM guide · 5-word chunks'),
+      easy: option('Easy', '8 offline articles · Flow 150/2 · Focus 160/1 · Sweep 150/2'),
+      medium: option('Medium', '8 offline articles · Flow 300/3 · Focus 250/2 · Sweep 230/3'),
+      hard: option('Hard', '8 offline articles · Flow 500/5 · Focus 360/4 · Sweep 320/3'),
     },
     keywords: ['highlight', 'reader', 'guide', 'books', 'wpm'],
   },
@@ -197,8 +197,8 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     category: 'pacing',
     tier: 'reading-practice',
     rules: [
-      'Read an original connected passage as each chunk settles between the fixed center indicators.',
-      'Use the faded neighboring chunks for context; pause, step back, or adjust the guide without losing your place.',
+      'Read an original connected passage at a book-like text size as each chunk settles between the fixed center indicators; long chunks may wrap to two lines.',
+      'Use the secondary side chunks for context; pause, step back, or adjust the guide without losing your place.',
       'Answer two passage questions; target WPM is a configured guide, not a measured reading speed.',
     ],
     difficulty: {
@@ -359,14 +359,14 @@ export const GAME_CATALOG: Record<GameId, GameCatalogEntry> = {
     category: 'scanning',
     tier: 'skill-lab',
     rules: [
-      'Read connected text while an underlined highlight steps through short word groups from left to right.',
-      'At each line ending, follow the return cue to the first group of the next line; pause or step back whenever needed.',
+      'Read connected text while a tinted highlight steps through short word groups from left to right.',
+      'At each line ending, continue from the centered first group of the next line; pause or step back whenever needed.',
       'Answer a passage question; results report comprehension and configured guide pace, not measured gaze or reading WPM.',
     ],
     difficulty: {
-      easy: option('Easy', '8 original passages · 150 WPM · 2-word anchors · short lines'),
-      medium: option('Medium', '8 original passages · 230 WPM · 3-word anchors · medium lines'),
-      hard: option('Hard', '8 original passages · 320 WPM · 3-word anchors · longer lines'),
+      easy: option('Easy', '8 original passages · 150 WPM · 2-word anchors · responsive lines'),
+      medium: option('Medium', '8 original passages · 230 WPM · 3-word anchors · responsive lines'),
+      hard: option('Hard', '8 original passages · 320 WPM · 3-word anchors · responsive lines'),
     },
     keywords: ['return sweep', 'line', 'reading movement', 'guide', 'saccade'],
   },

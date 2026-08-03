@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { Article } from '../../data/articles';
 import CenterLineReader, {
+  addFocusBreakOpportunity,
   chunkCenterLineText,
   getCenterLineConfig,
   getCenterLineDelayMs,
@@ -97,6 +98,17 @@ describe('Focus Lane', () => {
     expect(getCenterLineDelayMs('one two.', 120)).toBe(1_500);
   });
 
+  it('adds an invisible wrap point to long words without changing their text', () => {
+    const original = 'electroencephalographically';
+    const displayed = addFocusBreakOpportunity(original);
+
+    expect(displayed).toContain('\u200B');
+    expect(displayed.replaceAll('\u200B', '')).toBe(original);
+    expect(addFocusBreakOpportunity('ordinary reading')).toBe(
+      'ordinary reading'
+    );
+  });
+
   it('keeps the focus guides fixed and pause/back controls recover context', async () => {
     const view = render(
       <CenterLineReader
@@ -110,6 +122,32 @@ describe('Focus Lane', () => {
     fireEvent.press(view.getByTestId('start-button'));
     expect(view.getByTestId('focus-guides')).toBeTruthy();
     expect(view.getByTestId('focus-current')).toHaveTextContent('One');
+    expect(view.getByTestId('focus-current')).toHaveProp('numberOfLines', 2);
+    expect(view.getByTestId('focus-current')).toHaveProp(
+      'minimumFontScale',
+      0.85
+    );
+    expect(view.getByTestId('focus-current')).toHaveProp(
+      'adjustsFontSizeToFit',
+      true
+    );
+    expect(view.getByTestId('focus-current')).toHaveProp(
+      'accessibilityLabel',
+      'One'
+    );
+    expect(view.getByTestId('focus-current')).toHaveStyle({
+      fontSize: 18,
+      lineHeight: 30,
+    });
+    expect(view.getByTestId('focus-previous')).toHaveProp('accessible', false);
+    expect(view.getByTestId('focus-previous')).toHaveProp('numberOfLines', 2);
+    expect(view.getByTestId('focus-previous')).toHaveStyle({
+      fontSize: 12,
+      lineHeight: 18,
+    });
+    expect(view.getByTestId('focus-next')).toHaveProp('accessible', false);
+    expect(view.getByTestId('focus-next')).toHaveProp('numberOfLines', 2);
+    expect(view.getByTestId('focus-current-slot')).toHaveStyle({ flex: 3 });
 
     advance(100);
     expect(view.getByTestId('focus-current')).toHaveTextContent('two');

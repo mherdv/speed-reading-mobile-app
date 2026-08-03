@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { colors } from '../theme/colors';
+
 type Props = {
   /** Rating from 0 to 5 */
   rating: number;
@@ -18,8 +20,8 @@ export function StarRating({
   rating,
   size = 24,
   showValue = false,
-  activeColor = '#FBBF24',
-  inactiveColor = '#E5E7EB',
+  activeColor = colors.starActive,
+  inactiveColor = colors.starInactive,
 }: Props) {
   const clampedRating = Math.min(5, Math.max(0, rating));
   const fullStars = Math.floor(clampedRating);
@@ -78,6 +80,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
 });

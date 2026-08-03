@@ -34,6 +34,10 @@ describe('app data backup', () => {
         },
       })
     );
+    await AsyncStorage.setItem(
+      'powerReaderPresentationMode',
+      JSON.stringify('return-sweep')
+    );
     await AsyncStorage.setItem('unrelated-key', JSON.stringify('ignore'));
 
     const backup = await createDataBackup(
@@ -52,6 +56,9 @@ describe('app data backup', () => {
     expect(
       backup.entries['speed-reading:flash-challenge-progress:v1']
     ).toBeTruthy();
+    expect(backup.entries.powerReaderPresentationMode).toBe(
+      JSON.stringify('return-sweep')
+    );
     expect(backup.entries['unrelated-key']).toBeUndefined();
 
     await AsyncStorage.clear();

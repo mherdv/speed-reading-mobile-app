@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { colors } from '../theme/colors';
+
 type Props = {
   /** Current level (1-15) */
   level: number;
@@ -126,10 +128,10 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   starFull: {
-    color: '#F5A623', // Orange filled star (matching design)
+    color: colors.starActive,
   },
   starEmpty: {
-    color: '#E1E8ED', // Light gray for empty stars
+    color: colors.starInactive,
   },
   halfStarContainer: {
     position: 'relative',
@@ -140,7 +142,7 @@ const styles = StyleSheet.create({
   },
   levelText: {
     marginLeft: 6,
-    color: '#5D6D7E',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
 });

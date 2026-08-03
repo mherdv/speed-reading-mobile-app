@@ -37,23 +37,23 @@ const MIN_GUIDE_WPM = 100;
 const MAX_GUIDE_WPM = 800;
 const GUIDE_STEP_WPM = 25;
 const MAX_FOCUS_CHARS = 24;
+const LONG_FOCUS_WORD_LENGTH = 16;
 
 export type CenterLineConfig = {
   chunkWords: number;
   guideWpm: number;
-  neighborOpacity: number;
 };
 
 export function getCenterLineConfig(
   difficulty: Difficulty
 ): CenterLineConfig {
   if (difficulty === 'easy') {
-    return { chunkWords: 1, guideWpm: 160, neighborOpacity: 0.62 };
+    return { chunkWords: 1, guideWpm: 160 };
   }
   if (difficulty === 'medium') {
-    return { chunkWords: 2, guideWpm: 250, neighborOpacity: 0.48 };
+    return { chunkWords: 2, guideWpm: 250 };
   }
-  return { chunkWords: 4, guideWpm: 360, neighborOpacity: 0.34 };
+  return { chunkWords: 4, guideWpm: 360 };
 }
 
 export function chunkCenterLineText(
@@ -84,6 +84,14 @@ export function chunkCenterLineText(
   }
   if (currentWords.length > 0) chunks.push(currentWords.join(' '));
   return chunks;
+}
+
+export function addFocusBreakOpportunity(text: string): string {
+  return text.replace(/\S+/gu, (word) => {
+    if (word.length <= LONG_FOCUS_WORD_LENGTH) return word;
+    const midpoint = Math.ceil(word.length / 2);
+    return `${word.slice(0, midpoint)}\u200B${word.slice(midpoint)}`;
+  });
 }
 
 export function getCenterLineDelayMs(chunk: string, guideWpm: number): number {
@@ -463,10 +471,9 @@ export default function CenterLineReader({
   const nextChunk = chunksRef.current[chunkIndex + 1] ?? '';
   const totalChunks = chunksRef.current.length;
   const progress = totalChunks > 0 ? (chunkIndex + 1) / totalChunks : 0;
-  const focusFontSize =
-    typeof readingDisplay.text.fontSize === 'number'
-      ? readingDisplay.text.fontSize + 8
-      : 26;
+  const displayedPreviousChunk = addFocusBreakOpportunity(previousChunk);
+  const displayedCurrentChunk = addFocusBreakOpportunity(currentChunk);
+  const displayedNextChunk = addFocusBreakOpportunity(nextChunk);
   const currentQuestion =
     sessionArticle?.comprehensionQuestions[questionIndex] ?? null;
 
@@ -552,46 +559,48 @@ export default function CenterLineReader({
                 <Text
                   accessible={false}
                   adjustsFontSizeToFit
-                  minimumFontScale={0.55}
-                  numberOfLines={1}
+                  minimumFontScale={0.75}
+                  numberOfLines={2}
                   style={[
-                    styles.neighborText,
                     readingDisplay.text,
-                    { opacity: config.neighborOpacity },
+                    readingDisplay.subtleText,
+                    styles.neighborText,
                   ]}
+                  testID="focus-previous"
                 >
-                  {previousChunk}
+                  {displayedPreviousChunk}
                 </Text>
               </View>
-              <View style={styles.currentSlot}>
+              <View style={styles.currentSlot} testID="focus-current-slot">
                 <Text
+                  accessibilityLabel={currentChunk}
                   accessibilityLiveRegion="polite"
                   adjustsFontSizeToFit
-                  minimumFontScale={0.5}
-                  numberOfLines={1}
+                  minimumFontScale={0.85}
+                  numberOfLines={2}
                   style={[
-                    styles.currentText,
                     readingDisplay.text,
-                    { fontSize: focusFontSize, lineHeight: focusFontSize + 10 },
+                    styles.currentText,
                   ]}
                   testID="focus-current"
                 >
-                  {currentChunk}
+                  {displayedCurrentChunk}
                 </Text>
               </View>
               <View style={styles.neighborSlot}>
                 <Text
                   accessible={false}
                   adjustsFontSizeToFit
-                  minimumFontScale={0.55}
-                  numberOfLines={1}
+                  minimumFontScale={0.75}
+                  numberOfLines={2}
                   style={[
-                    styles.neighborText,
                     readingDisplay.text,
-                    { opacity: config.neighborOpacity },
+                    readingDisplay.subtleText,
+                    styles.neighborText,
                   ]}
+                  testID="focus-next"
                 >
-                  {nextChunk}
+                  {displayedNextChunk}
                 </Text>
               </View>
             </View>
@@ -606,7 +615,7 @@ export default function CenterLineReader({
           </View>
 
           <Text style={styles.contextHint}>
-            Read the center chunk; use the faded neighbors for preview or recovery.
+            Read the center chunk; use the side chunks for preview or recovery.
           </Text>
 
           <View style={styles.controlGrid}>
@@ -855,7 +864,7 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     borderRadius: borderRadius.full,
-    backgroundColor: colors.secondaryLight,
+    backgroundColor: colors.secondary,
   },
   laneCard: {
     minHeight: 210,
@@ -872,7 +881,7 @@ const styles = StyleSheet.create({
     width: 3,
     height: 20,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.secondaryLight,
+    backgroundColor: colors.secondary,
   },
   laneRow: {
     width: '100%',
@@ -881,23 +890,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   neighborSlot: {
-    flex: 0.35,
+    flex: 1,
     minWidth: 0,
     paddingHorizontal: 3,
   },
   currentSlot: {
-    flex: 4,
+    flex: 3,
     minWidth: 0,
-    minHeight: 72,
+    minHeight: 86,
     alignItems: 'center',
     justifyContent: 'center',
-    borderColor: colors.secondaryLight,
+    borderColor: colors.secondary,
     borderLeftWidth: 2,
     borderRightWidth: 2,
     paddingHorizontal: 4,
   },
-  neighborText: { textAlign: 'center' },
-  currentText: { fontWeight: '800', textAlign: 'center' },
+  neighborText: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  currentText: {
+    flexShrink: 1,
+    textAlign: 'center',
+    width: '100%',
+  },
   pausedPill: {
     position: 'absolute',
     top: 12,

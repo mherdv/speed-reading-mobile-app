@@ -1,5 +1,12 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import {
   getArticlesByDifficulty,
@@ -13,7 +20,7 @@ import {
   measuredElapsedMs,
   monotonicNowMs,
 } from '../../domain/timing';
-import { borderRadius, colors, spacing } from '../../theme/colors';
+import { borderRadius, colors, shadows, spacing } from '../../theme/colors';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
@@ -29,6 +36,8 @@ import type { GameReportPayload } from '../registry';
 const GAME_ID = 'ReadingSaccades';
 const COMPLETION_THRESHOLD = 0.9;
 const WINDOW_LINE_COUNT = 3;
+const DEFAULT_READING_FONT_SIZE = 18;
+const DEFAULT_READING_COLUMN_WIDTH = 700;
 
 export type ReadingSaccadesConfig = {
   anchorWords: number;
@@ -69,12 +78,31 @@ export function getReadingSaccadesConfig(
   difficulty: Difficulty
 ): ReadingSaccadesConfig {
   if (difficulty === 'easy') {
-    return { anchorWords: 2, lineWords: 6, guideWpm: 150 };
+    return { anchorWords: 2, lineWords: 12, guideWpm: 150 };
   }
   if (difficulty === 'medium') {
-    return { anchorWords: 3, lineWords: 8, guideWpm: 230 };
+    return { anchorWords: 3, lineWords: 14, guideWpm: 230 };
   }
-  return { anchorWords: 3, lineWords: 10, guideWpm: 320 };
+  return { anchorWords: 3, lineWords: 16, guideWpm: 320 };
+}
+
+export function getReturnSweepCharacterLimit(
+  viewportWidth: number,
+  fontSize = DEFAULT_READING_FONT_SIZE,
+  columnWidth = DEFAULT_READING_COLUMN_WIDTH
+): number {
+  const safeViewportWidth = Math.max(280, viewportWidth);
+  const safeFontSize = Math.max(12, fontSize);
+  const safeColumnWidth = Math.max(240, columnWidth);
+  const usableLineWidth = Math.max(
+    216,
+    Math.min(safeViewportWidth - 64, safeColumnWidth - 32)
+  );
+  const estimatedCharacterWidth = safeFontSize * 0.52;
+  return Math.max(
+    24,
+    Math.min(76, Math.floor(usableLineWidth / estimatedCharacterWidth))
+  );
 }
 
 export function buildSaccadeLines(
@@ -155,7 +183,21 @@ export default function ReadingSaccades({
   autoStart = false,
   onReportResult,
 }: Props) {
+  const { width: viewportWidth } = useWindowDimensions();
   const { tokens: readingDisplay } = useReadingDisplay();
+  const readingFontSize =
+    typeof readingDisplay.text.fontSize === 'number'
+      ? readingDisplay.text.fontSize
+      : DEFAULT_READING_FONT_SIZE;
+  const readingColumnWidth =
+    typeof readingDisplay.column.maxWidth === 'number'
+      ? readingDisplay.column.maxWidth
+      : DEFAULT_READING_COLUMN_WIDTH;
+  const lineCharacterLimit = getReturnSweepCharacterLimit(
+    viewportWidth,
+    readingFontSize,
+    readingColumnWidth
+  );
   const {
     gameProgress,
     setGameProgress,
@@ -183,7 +225,8 @@ export default function ReadingSaccades({
     return buildSaccadeLines(
       initialArticle.text,
       lineWordsProp ?? config.lineWords,
-      anchorWordsProp ?? config.anchorWords
+      anchorWordsProp ?? config.anchorWords,
+      lineCharacterLimit
     );
   });
 
@@ -374,7 +417,8 @@ export default function ReadingSaccades({
     const nextLines = buildSaccadeLines(
       nextArticle.text,
       configuredLineWords,
-      configuredAnchorWords
+      configuredAnchorWords,
+      lineCharacterLimit
     );
 
     articleRef.current = nextArticle;
@@ -546,7 +590,10 @@ export default function ReadingSaccades({
     guideStep.kind === 'return'
       ? `Return to line ${guideStep.toLineIndex + 1}`
       : `Current phrase: ${activeAnchor?.words.join(' ') ?? ''}`;
-
+  const completionProgress =
+    sessionArticle.wordCount > 0
+      ? Math.min(1, wordsPresented / sessionArticle.wordCount)
+      : 0;
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Return-Sweep Flow</Text>
@@ -562,6 +609,17 @@ export default function ReadingSaccades({
           onStart={() => start()}
           startLabel="Start line guide"
         >
+          <View
+            accessible
+            accessibilityLabel="Example: read across each line, then return down and left to the next line"
+            style={styles.idleDemo}
+          >
+            <Text style={styles.demoLine}>
+              Read <Text style={styles.demoAnchor}>short groups</Text> across
+            </Text>
+            <Text style={styles.demoLine}>begin the next line here</Text>
+            <Text style={styles.demoLineMuted}>and continue smoothly</Text>
+          </View>
           <Text style={styles.safetyNote}>
             Stop immediately if the movement feels uncomfortable.
           </Text>
@@ -575,23 +633,62 @@ export default function ReadingSaccades({
           testID="saccades-active"
         >
           <StatsRow
+            style={styles.statsRow}
+            testID="saccades-stats"
             items={[
               {
                 key: 'pace',
                 value: sessionGuideWpmRef.current,
-                label: 'Guide WPM',
+                label: 'guide WPM',
+                containerStyle: styles.stat,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
               },
               {
                 key: 'progress',
                 value: `${wordsPresented}/${sessionArticle.wordCount}`,
-                label: 'Words shown',
+                label: 'words shown',
+                containerStyle: styles.stat,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
+              },
+              {
+                key: 'returns',
+                value: returnSweepsCompleted,
+                label: 'returns',
+                containerStyle: styles.stat,
+                valueStyle: styles.statValue,
+                labelStyle: styles.statLabel,
               },
             ]}
           />
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${completionProgress * 100}%` },
+              ]}
+              testID="saccades-progress-fill"
+            />
+          </View>
           <ReadingColumn
             style={[styles.readingCard, readingDisplay.column, readingDisplay.surface]}
           >
-            <Text style={styles.articleTitle}>{sessionArticle.title}</Text>
+            <Text style={[styles.articleTitle, readingDisplay.title]}>
+              {sessionArticle.title}
+            </Text>
+            <View style={styles.statusRow}>
+              <View style={styles.statusMeta}>
+                {paused && (
+                  <View style={styles.pausedPill} testID="saccades-paused-pill">
+                    <Text style={styles.pausedText}>PAUSED</Text>
+                  </View>
+                )}
+                <Text style={[styles.lineCounter, readingDisplay.title]}>
+                  Line {activeLineIndex + 1} of {sessionLines.length}
+                </Text>
+              </View>
+            </View>
             <Text
               accessibilityLiveRegion="polite"
               style={styles.accessibilityAnnouncement}
@@ -605,6 +702,7 @@ export default function ReadingSaccades({
                 const returnTarget =
                   guideStep.kind === 'return' &&
                   guideStep.toLineIndex === lineIndex;
+                const currentLine = lineIndex === activeLineIndex;
                 return (
                   <Text
                     accessible={false}
@@ -612,19 +710,15 @@ export default function ReadingSaccades({
                     key={line.id}
                     minimumFontScale={0.72}
                     numberOfLines={1}
-                    style={[readingDisplay.text, styles.line]}
+                    style={[
+                      readingDisplay.text,
+                      styles.line,
+                      !currentLine && styles.contextLine,
+                      currentLine && styles.currentLine,
+                      returnTarget && styles.returnTargetLine,
+                    ]}
                     testID={`saccades-line-${lineIndex}`}
                   >
-                    <Text
-                      accessible={false}
-                      style={[
-                        styles.returnCueInline,
-                        !returnTarget && styles.returnCueHidden,
-                      ]}
-                      testID={returnTarget ? 'return-sweep-cue' : undefined}
-                    >
-                      {returnTarget ? '↙ ' : '\u00A0\u00A0'}
-                    </Text>
                     {line.anchors.map((anchor, anchorIndex) => {
                       const active =
                         guideStep.kind === 'anchor' &&
@@ -681,24 +775,25 @@ export default function ReadingSaccades({
                 {paused ? 'Resume' : 'Pause'}
               </Text>
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Finish reading and answer the question"
-              onPress={beginQuestion}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.pressed,
-              ]}
-              testID="finish-early"
-            >
-              <Text style={styles.primaryButtonText}>Finish early</Text>
-            </Pressable>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Finish reading and answer the question"
+            onPress={beginQuestion}
+            style={({ pressed }) => [
+              styles.finishButton,
+              pressed && styles.pressed,
+            ]}
+            testID="finish-early"
+          >
+            <Text style={styles.finishButtonText}>Finish safely</Text>
+          </Pressable>
           <Text style={styles.safetyNote}>
             Pausing is always okay. Stop if the movement feels uncomfortable.
           </Text>
-          <Text style={styles.progressNote}>
-            {linesPresented} lines visited · {returnSweepsCompleted} return sweeps
+          <Text style={styles.progressNote} testID="saccades-progress-note">
+            {linesPresented} lines visited · line {activeLineIndex + 1} of{' '}
+            {sessionLines.length}
           </Text>
         </ScrollView>
       )}
@@ -801,32 +896,102 @@ export default function ReadingSaccades({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: spacing.sm,
+    minHeight: 0,
   },
   title: {
     color: colors.textPrimary,
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '800',
+    textAlign: 'center',
   },
   subtitle: {
     color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 19,
-    marginTop: 2,
+    marginTop: 4,
+    textAlign: 'center',
   },
-  gameArea: {
-    flexGrow: 1,
-    gap: spacing.sm,
-    paddingBottom: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  readingCard: {
+  idleDemo: {
+    alignItems: 'stretch',
+    backgroundColor: colors.background,
     borderColor: colors.border,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    width: '100%',
+  },
+  demoLine: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  demoLineMuted: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  demoAnchor: {
+    backgroundColor: colors.infoSurface,
+    color: colors.infoForeground,
+    fontWeight: '800',
+  },
+  gameArea: {
+    alignSelf: 'center',
+    flexGrow: 1,
+    gap: spacing.sm,
+    maxWidth: 840,
+    paddingBottom: spacing.xl,
+    paddingTop: spacing.md,
+    width: '100%',
+  },
+  statsRow: {
+    gap: spacing.sm,
+  },
+  stat: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceTonal,
+    borderRadius: borderRadius.md,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 58,
+    padding: spacing.sm,
+  },
+  statValue: {
+    color: colors.primaryDark,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  statLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  progressTrack: {
+    backgroundColor: colors.backgroundDark,
+    borderRadius: borderRadius.full,
+    height: 6,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.full,
+    height: '100%',
+  },
+  readingCard: {
+    borderColor: colors.border,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
     minHeight: 300,
     padding: spacing.md,
+    position: 'relative',
     width: '100%',
+    ...shadows.medium,
   },
   articleTitle: {
     color: colors.textPrimary,
@@ -834,6 +999,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: spacing.sm,
     textAlign: 'center',
+  },
+  statusRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: spacing.xs,
+    minHeight: 28,
+  },
+  statusMeta: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  lineCounter: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
   },
   accessibilityAnnouncement: {
     height: 1,
@@ -843,13 +1025,6 @@ const styles = StyleSheet.create({
     top: 0,
     width: 1,
   },
-  returnCueInline: {
-    color: colors.infoForeground,
-    fontWeight: '800',
-  },
-  returnCueHidden: {
-    opacity: 0,
-  },
   lineWindow: {
     flex: 1,
     justifyContent: 'space-evenly',
@@ -857,20 +1032,39 @@ const styles = StyleSheet.create({
   line: {
     minHeight: 48,
     paddingVertical: spacing.xs,
-    textAlign: 'left',
+    textAlign: 'center',
     width: '100%',
+  },
+  contextLine: {
+    opacity: 0.68,
+  },
+  currentLine: {
+    opacity: 1,
+  },
+  returnTargetLine: {
+    opacity: 1,
   },
   anchor: {
     borderRadius: borderRadius.sm,
-    marginRight: 4,
+  },
+  activeAnchor: {
+    backgroundColor: colors.infoSurface,
+    color: colors.infoForeground,
+    fontWeight: '800',
     paddingHorizontal: 3,
     paddingVertical: 2,
   },
-  activeAnchor: {
-    backgroundColor: colors.warningSurface,
-    color: colors.warningForeground,
+  pausedPill: {
+    backgroundColor: colors.infoSurface,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  pausedText: {
+    color: colors.infoForeground,
+    fontSize: 10,
     fontWeight: '800',
-    textDecorationLine: 'underline',
+    letterSpacing: 0.8,
   },
   controls: {
     flexDirection: 'row',
@@ -898,7 +1092,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    flex: 1,
+    flexBasis: 104,
+    flexGrow: 1,
     justifyContent: 'center',
     minHeight: 48,
     paddingHorizontal: 8,
@@ -906,6 +1101,18 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: colors.primaryDark,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  finishButton: {
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+    minHeight: 48,
+  },
+  finishButtonText: {
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: '700',
   },

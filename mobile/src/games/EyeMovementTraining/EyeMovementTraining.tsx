@@ -355,10 +355,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     padding: 14,
     borderRadius: borderRadius.lg,
-    backgroundColor: '#FFF5E8',
+    backgroundColor: colors.warningSurface,
   },
   safetyTitle: {
-    color: colors.warning,
+    color: colors.warningForeground,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     ...shadows.medium,
   },
   quietCard: {
-    backgroundColor: '#F0F7F2',
+    backgroundColor: colors.successSurface,
   },
   stageEyebrow: {
     color: colors.primaryDark,
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     marginVertical: spacing.xl,
     borderRadius: 64,
     borderWidth: 10,
-    borderColor: '#B7DDEB',
+    borderColor: colors.border,
     backgroundColor: colors.surfaceTonal,
   },
   counterValue: {
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 20,
-    backgroundColor: '#EAF5EC',
+    backgroundColor: colors.successSurface,
   },
   durationValue: {
     color: colors.success,

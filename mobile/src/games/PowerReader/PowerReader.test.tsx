@@ -1,16 +1,23 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet } from 'react-native';
 import PowerReader, {
+  alignPowerReaderHighlightIndex,
+  buildPowerReaderSweepLines,
   clampPowerReaderProgress,
   createSerializedProgressWriter,
   getOfflinePowerReaderArticles,
+  getPowerReaderPresentationConfig,
   getPowerReaderReadingWordStyles,
-  getPowerReaderRsvpTypography,
   OFFLINE_POWER_READER_ARTICLES,
+  parsePowerReaderPresentationMode,
+  POWER_READER_PRESENTATION_MODE_KEY,
+  sanitizePowerReaderPresentationMode,
 } from './PowerReader';
 import { ARTICLES } from '../../data/articles';
 import * as progressStore from '../../data/progressStore';
+import { colors } from '../../theme/colors';
 
 describe('PowerReader', () => {
   beforeEach(() => {
@@ -121,52 +128,140 @@ describe('PowerReader', () => {
     expect(getByTestId('flow-display')).toBeTruthy();
   });
 
-  it.each([
-    ['line', 'line-display'],
-    ['rsvp', 'rsvp-display'],
-  ])('renders the %s presentation mode', (mode, displayTestId) => {
-    const { getByTestId } = render(
-      <PowerReader text="One two three four five six" chunkSize={2} intervalMs={100} />
+  it('uses the matching pace and chunk configuration for each presentation', () => {
+    expect(getPowerReaderPresentationConfig('flow', 'hard')).toEqual({
+      chunkSize: 5,
+      wpm: 500,
+    });
+    expect(getPowerReaderPresentationConfig('focus-lane', 'hard')).toEqual({
+      chunkSize: 4,
+      wpm: 360,
+    });
+    expect(getPowerReaderPresentationConfig('return-sweep', 'hard')).toEqual({
+      chunkSize: 3,
+      wpm: 320,
+    });
+    expect(sanitizePowerReaderPresentationMode('return-sweep')).toBe(
+      'return-sweep'
+    );
+    expect(sanitizePowerReaderPresentationMode('retired-mode')).toBe('flow');
+    expect(parsePowerReaderPresentationMode('"focus-lane"')).toBe(
+      'focus-lane'
+    );
+    expect(parsePowerReaderPresentationMode('return-sweep')).toBe(
+      'return-sweep'
+    );
+  });
+
+  it('restores the selected presentation before an exact replay auto-starts', async () => {
+    jest.spyOn(AsyncStorage, 'getItem').mockImplementation(async (key) =>
+      key === POWER_READER_PRESENTATION_MODE_KEY
+        ? JSON.stringify('return-sweep')
+        : null
+    );
+    const view = render(
+      <PowerReader
+        autoStart
+        difficulty="hard"
+        intervalMs={1_000}
+        text="One two three four five six"
+      />
     );
 
-    fireEvent.press(getByTestId(`mode-${mode}`));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(view.getByTestId('return-sweep-display')).toBeTruthy();
+    expect(view.getByText('320')).toBeTruthy();
+  });
+
+  it('keeps Return-Sweep anchors intact while fitting them into lines', () => {
+    const lines = buildPowerReaderSweepLines(
+      'one two three four five six seven eight nine ten'.split(' '),
+      2,
+      4,
+      100
+    );
+
+    expect(lines).toHaveLength(3);
+    expect(lines.flatMap((line) => line.anchors)).toEqual([
+      { id: 'anchor-0', startWordIndex: 0, words: ['one', 'two'] },
+      { id: 'anchor-2', startWordIndex: 2, words: ['three', 'four'] },
+      { id: 'anchor-4', startWordIndex: 4, words: ['five', 'six'] },
+      { id: 'anchor-6', startWordIndex: 6, words: ['seven', 'eight'] },
+      { id: 'anchor-8', startWordIndex: 8, words: ['nine', 'ten'] },
+    ]);
+  });
+
+  it('renders a book-sized, two-line Focus Lane with side context', () => {
+    const { getByTestId, getByText } = render(
+      <PowerReader
+        text="electroencephalographically reading stays connected here"
+        chunkSize={2}
+        intervalMs={100}
+      />
+    );
+
+    fireEvent.press(getByTestId('mode-focus-lane'));
+    expect(getByText('Focus Lane')).toBeTruthy();
     fireEvent.press(getByTestId('start-button'));
 
-    expect(getByTestId(displayTestId)).toBeTruthy();
+    expect(getByTestId('focus-lane-display')).toBeTruthy();
+    expect(getByTestId('power-focus-current')).toHaveProp('numberOfLines', 2);
+    expect(getByTestId('power-focus-current')).toHaveProp(
+      'accessibilityLabel',
+      'electroencephalographically reading'
+    );
+    expect(getByTestId('power-focus-current')).toHaveStyle({
+      fontSize: 18,
+      lineHeight: 30,
+    });
+    expect(getByTestId('power-focus-previous')).toHaveProp('numberOfLines', 2);
+    expect(getByTestId('power-focus-next')).toHaveTextContent(
+      'stays connected'
+    );
+  });
+
+  it('renders Return-Sweep Flow as stable fitted lines with one active anchor', () => {
+    const { getAllByTestId, getByTestId, getByText } = render(
+      <PowerReader
+        text="One two three four five six seven eight nine ten eleven twelve"
+        chunkSize={2}
+        intervalMs={100}
+      />
+    );
+
+    fireEvent.press(getByTestId('mode-return-sweep'));
+    expect(getByText('Return-Sweep Flow')).toBeTruthy();
+    fireEvent.press(getByTestId('start-button'));
+
+    expect(getByTestId('return-sweep-display')).toBeTruthy();
+    expect(getByTestId('power-return-active-anchor')).toHaveTextContent(
+      'One two'
+    );
+    expect(getAllByTestId(/^power-return-line-/)).toHaveLength(1);
+
+    act(() => {
+      jest.advanceTimersByTime(110);
+    });
+    expect(getByTestId('power-return-active-anchor')).toHaveTextContent(
+      'three four'
+    );
   });
 
   it('uses accessible dark reading highlight and selection pairs', () => {
     expect(getPowerReaderReadingWordStyles('dark')).toEqual({
       highlight: {
-        color: '#FFFFFF',
-        backgroundColor: '#0B628F',
+        color: colors.white,
+        backgroundColor: colors.secondary,
       },
       selected: {
-        color: '#211B15',
-        backgroundColor: '#FDE68A',
+        color: colors.warningForeground,
+        backgroundColor: colors.warningSurface,
       },
-    });
-  });
-
-  it('preserves a large focal size for default RSVP reading', () => {
-    expect(getPowerReaderRsvpTypography('comfortable')).toEqual({
-      fontSize: 28,
-      lineHeight: 38,
-    });
-
-    const { getByTestId } = render(
-      <PowerReader
-        text="One two three four"
-        chunkSize={2}
-        intervalMs={100}
-      />
-    );
-    fireEvent.press(getByTestId('mode-rsvp'));
-    fireEvent.press(getByTestId('start-button'));
-
-    expect(getByTestId('rsvp-text')).toHaveStyle({
-      fontSize: 28,
-      lineHeight: 38,
     });
   });
 
@@ -197,6 +292,34 @@ describe('PowerReader', () => {
       })
     );
     expect(getByText('Guide: 300 WPM')).toBeTruthy();
+  });
+
+  it('reports Focus Lane as a distinct presentation comparison band', () => {
+    const onReportResult = jest.fn();
+    const { getByTestId } = render(
+      <PowerReader
+        text="One two"
+        chunkSize={2}
+        intervalMs={50}
+        onReportResult={onReportResult}
+      />
+    );
+
+    fireEvent.press(getByTestId('mode-focus-lane'));
+    fireEvent.press(getByTestId('start-button'));
+    act(() => {
+      jest.advanceTimersByTime(60);
+    });
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          comparisonBand: 'power-reader-focus-lane-medium',
+          presentationMode: 'focus-lane',
+          targetWpm: 250,
+        }),
+      })
+    );
   });
 
   it('reports only unique chunks presented when page controls skip content', () => {
@@ -352,5 +475,7 @@ describe('PowerReader', () => {
         10
       )
     ).toEqual({ pageIndex: 1, highlightIndex: 1 });
+    expect(alignPowerReaderHighlightIndex(7, 3, 20)).toBe(6);
+    expect(alignPowerReaderHighlightIndex(99, 4, 10)).toBe(8);
   });
 });

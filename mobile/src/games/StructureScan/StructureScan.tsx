@@ -461,9 +461,9 @@ const styles = StyleSheet.create({
   goalCard: {
     padding: 15,
     borderRadius: 18,
-    backgroundColor: '#E9F8FA',
+    backgroundColor: colors.infoSurface,
     borderWidth: 1,
-    borderColor: '#BCE5E9',
+    borderColor: colors.border,
   },
   eyebrow: {
     color: colors.primaryDark,
@@ -551,13 +551,13 @@ const styles = StyleSheet.create({
   },
   feedbackCorrect: {
     borderWidth: 1,
-    borderColor: '#A8DFC8',
-    backgroundColor: '#F0FBF6',
+    borderColor: colors.success,
+    backgroundColor: colors.successSurface,
   },
   feedbackReview: {
     borderWidth: 1,
-    borderColor: '#F0D2A8',
-    backgroundColor: '#FFF9EF',
+    borderColor: colors.warning,
+    backgroundColor: colors.warningSurface,
   },
   feedbackTitle: {
     color: colors.textPrimary,

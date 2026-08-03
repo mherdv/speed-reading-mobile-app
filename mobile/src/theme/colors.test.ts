@@ -40,6 +40,7 @@ describe('semantic color contrast', () => {
     ['teal action', colors.onInteractive, colors.interactiveTeal],
     ['warm action', colors.onInteractive, colors.interactiveWarm],
     ['info action', colors.onInteractive, colors.interactiveInfo],
+    ['error action', colors.onInteractive, colors.error],
     ['disabled', colors.disabledForeground, colors.disabledSurface],
     ['success', colors.successForeground, colors.successSurface],
     ['error', colors.errorForeground, colors.errorSurface],
@@ -51,6 +52,12 @@ describe('semantic color contrast', () => {
 
   it('keeps the focus indicator visible against the default card', () => {
     expect(contrastRatio(colors.focusRing, colors.cardBackground)).toBeGreaterThanOrEqual(
+      3
+    );
+  });
+
+  it('keeps progress and guide indicators visible on tonal tracks', () => {
+    expect(contrastRatio(colors.secondary, colors.backgroundDark)).toBeGreaterThanOrEqual(
       3
     );
   });

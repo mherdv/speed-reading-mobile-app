@@ -550,12 +550,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.textPrimary,
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 10,
   },
   idleContent: {
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
   },
   descriptionText: {
     fontSize: 15,
-    color: '#4B5563',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
   levelLabel: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#374151',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   starsDisplay: {
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startButtonText: {
-    color: 'white',
+    color: colors.white,
     fontWeight: '700',
     fontSize: 16,
   },
@@ -604,26 +604,26 @@ const styles = StyleSheet.create({
   },
   statBox: {
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.warningSurface,
     paddingVertical: 6,
     paddingHorizontal: 16,
     borderRadius: 8,
   },
   timerBox: {
-    backgroundColor: '#FDE68A',
+    backgroundColor: colors.warningSurface,
   },
   statValue: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#B45309',
+    color: colors.warningForeground,
   },
   statLabel: {
     fontSize: 10,
-    color: '#D97706',
+    color: colors.warningForeground,
   },
   instruction: {
     fontSize: 12,
-    color: '#92400E',
+    color: colors.warningForeground,
     textAlign: 'center',
     marginBottom: 8,
     fontWeight: '500',
@@ -646,10 +646,10 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     maxWidth: '48%',
-    backgroundColor: 'white',
+    backgroundColor: colors.cardBackground,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     padding: 10,
     marginBottom: 8,
     alignItems: 'center',
@@ -657,12 +657,12 @@ const styles = StyleSheet.create({
   },
   cardSelected: {
     borderColor: colors.warningForeground,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: colors.warningSurface,
   },
   cardWord: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   cardWordTop: {
@@ -674,7 +674,7 @@ const styles = StyleSheet.create({
   cardDivider: {
     width: '80%',
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
   },
   checkMark: {
     position: 'absolute',
@@ -688,7 +688,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkMarkText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submitBtnText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
   endTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.textPrimary,
   },
   endScore: {
     fontSize: 48,
@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
   },
   endMeta: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   endDifficulty: {
     fontSize: 12,
@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
   levelText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textPrimary,
   },
   starsText: {
     fontSize: 16,
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   playAgainText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '600',
   },

@@ -731,10 +731,10 @@ const styles = StyleSheet.create({
     ...shadows.medium,
   },
   feedbackCardCorrect: {
-    backgroundColor: '#EAF8F2',
+    backgroundColor: colors.successSurface,
   },
   feedbackCardReview: {
-    backgroundColor: '#FFF4E8',
+    backgroundColor: colors.warningSurface,
   },
   feedbackTitle: {
     fontSize: 20,

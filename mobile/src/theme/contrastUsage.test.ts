@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SOURCE_ROOT = path.resolve(__dirname, '..');
+const GAME_SOURCE_ROOT = path.join(SOURCE_ROOT, 'games');
 const FORBIDDEN_LOW_CONTRAST_LIVE_COLORS = [
   '#8B5CF6',
   '#F59E0B',
@@ -17,6 +18,8 @@ const SEMANTIC_TEXT_SURFACES = [
   path.join(SOURCE_ROOT, 'ui/ProgressCharts.tsx'),
 ];
 const RAW_HEX_COLOR = /#[0-9a-f]{3,8}\b/gi;
+const RAW_NAMED_NEUTRAL =
+  /(?:backgroundColor|borderColor|color|shadowColor):\s*['"](?:black|white)['"]/gi;
 
 function sourceFiles(directory: string): string[] {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -45,4 +48,17 @@ describe('live contrast token usage', () => {
       expect(source.match(RAW_HEX_COLOR) ?? []).toEqual([]);
     }
   );
+
+  it('expresses every game color through the shared theme', () => {
+    const offenders = sourceFiles(GAME_SOURCE_ROOT)
+      .filter((file) => {
+        const source = fs.readFileSync(file, 'utf8');
+        return Boolean(
+          source.match(RAW_HEX_COLOR) ?? source.match(RAW_NAMED_NEUTRAL)
+        );
+      })
+      .map((file) => path.relative(SOURCE_ROOT, file));
+
+    expect(offenders).toEqual([]);
+  });
 });

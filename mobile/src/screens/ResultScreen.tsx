@@ -242,6 +242,20 @@ export function ResultScreen({
         label: 'Task accuracy',
       });
     }
+    if (activityType === 'reading-saccade-guide') {
+      const wordsPresented = numberDetail('wordsPresented') ?? 0;
+      const totalWords = numberDetail('totalWords') ?? 0;
+      resultMetrics.push(
+        {
+          value: `${wordsPresented}/${totalWords}`,
+          label: 'Passage guided',
+        },
+        {
+          value: `${numberDetail('returnSweepsCompleted') ?? 0}`,
+          label: 'Return sweeps',
+        }
+      );
+    }
     const mistakes = numberDetail('mistakes');
     if (schulteGridModeLabel && mistakes !== undefined) {
       resultMetrics.push({

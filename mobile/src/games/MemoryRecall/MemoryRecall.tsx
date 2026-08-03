@@ -392,7 +392,7 @@ export default function MemoryRecall({
               value={sequence.join(' ')}
               difficulty={difficulty}
               testID="sequence"
-              color="#0E4979"
+              color={colors.primary}
               backgroundColor={colors.background}
               maxFontSize={40}
               minFontSize={9}
@@ -642,26 +642,26 @@ export default function MemoryRecall({
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12 },
   header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   idleContent: { flex: 1 },
   descriptionText: {
     fontSize: 15,
-    color: '#4B5563',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
     paddingHorizontal: 8,
   },
   startBtn: { backgroundColor: colors.interactivePrimary, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
+  startBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
-  statBox: { alignItems: 'center', backgroundColor: '#E7F5FB', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
-  levelBox: { backgroundColor: '#CDEAF5' },
+  statBox: { alignItems: 'center', backgroundColor: colors.surfaceTonal, paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
+  levelBox: { backgroundColor: colors.infoSurface },
   strikeBox: { backgroundColor: colors.warningSurface },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#0E4979' },
-  statLabel: { fontSize: 10, color: '#0B628F' },
+  statValue: { fontSize: 18, fontWeight: '700', color: colors.primary },
+  statLabel: { fontSize: 10, color: colors.secondary },
   strikeValue: { color: colors.warningForeground },
   strikeLabel: { color: colors.warningForeground },
   sequenceCard: {
@@ -671,20 +671,20 @@ const styles = StyleSheet.create({
     margin: 0,
     padding: 0,
   },
-  instruction: { textAlign: 'center', color: '#6B7280', fontSize: 12 },
+  instruction: { textAlign: 'center', color: colors.textSecondary, fontSize: 12 },
   inputCard: {
-    backgroundColor: '#F3FAFD',
+    backgroundColor: colors.background,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: '#0B628F',
+    borderColor: colors.secondary,
     minHeight: 60,
     justifyContent: 'center',
   },
-  cardCorrect: { backgroundColor: '#D1FAE5', borderColor: '#34D399' },
-  cardWrong: { backgroundColor: '#FEE2E2', borderColor: '#F87171' },
-  inputDisplay: { fontSize: 24, fontWeight: '700', color: '#0E4979', textAlign: 'center', letterSpacing: 4 },
+  cardCorrect: { backgroundColor: colors.successSurface, borderColor: colors.success },
+  cardWrong: { backgroundColor: colors.errorSurface, borderColor: colors.error },
+  inputDisplay: { fontSize: 24, fontWeight: '700', color: colors.primary, textAlign: 'center', letterSpacing: 4 },
   reviewCard: {
     borderRadius: 14,
     borderWidth: 2,
@@ -781,9 +781,9 @@ const styles = StyleSheet.create({
   },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
+  endTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
   endScore: { fontSize: 48, fontWeight: '800', color: colors.interactivePrimary, marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
+  endMeta: { fontSize: 14, color: colors.textSecondary },
   playAgainBtn: { marginTop: 16, backgroundColor: colors.interactivePrimary, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
-  playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
+  playAgainText: { color: colors.white, fontSize: 14, fontWeight: '600' },
 });

@@ -2,6 +2,8 @@ import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { colors } from '../theme/colors';
+
 type Props = {
   onPress: () => void;
   testID?: string;
@@ -32,7 +34,7 @@ export function BackButton({
       <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
         <Path
           d="M15 19l-7-7 7-7"
-          stroke="#374151"
+          stroke={colors.textPrimary}
           strokeWidth={2.5}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -47,10 +49,10 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.cardBackground,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,

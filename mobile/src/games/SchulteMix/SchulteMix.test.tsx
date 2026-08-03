@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import SchulteMix from './SchulteMix';
+import { colors } from '../../theme/colors';
 
 type TestNode = {
   props: {
@@ -109,12 +110,12 @@ describe('SchulteMix', () => {
     expect(
       StyleSheet.flatten(getByTestId('cell-number-1').props.style)
         .backgroundColor
-    ).toBe('#EFF6FF');
+    ).toBe(colors.infoSurface);
     expect(
       StyleSheet.flatten(
         getByTestId('cell-number-1').findByType('Text').props.style
       ).color
-    ).toBe('#1F2937');
+    ).toBe(colors.textPrimary);
 
     fireEvent.press(getByTestId('cell-letter-A'));
     fireEvent.press(getByTestId('cell-number-2'));

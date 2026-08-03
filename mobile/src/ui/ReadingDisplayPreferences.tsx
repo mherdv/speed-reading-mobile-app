@@ -40,6 +40,7 @@ const ReadingDisplayContext =
 
 export type ReadingDisplayTokens = {
   text: TextStyle;
+  subtleText: TextStyle;
   title: TextStyle;
   surface: ViewStyle;
   column: ViewStyle;
@@ -72,17 +73,20 @@ export function getReadingDisplayTokens(
       ? {
           surface: '#17252D',
           text: '#F4F8FA',
+          subtleText: '#9AAAB2',
           title: '#FFFFFF',
         }
       : preferences.theme === 'warm'
         ? {
             surface: '#FFF8E8',
             text: '#31291F',
+            subtleText: '#6F6253',
             title: '#211B15',
           }
         : {
             surface: colors.cardBackground,
             text: colors.textPrimary,
+            subtleText: colors.textSecondary,
             title: colors.textPrimary,
           };
 
@@ -92,6 +96,9 @@ export function getReadingDisplayTokens(
       fontSize,
       lineHeight: fontSize + lineGap,
       fontWeight: boldText ? '600' : '400',
+    },
+    subtleText: {
+      color: palette.subtleText,
     },
     title: {
       color: palette.title,

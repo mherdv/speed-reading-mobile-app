@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 12,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
@@ -69,9 +69,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   destructive: {
-    backgroundColor: '#FFF1F2',
+    backgroundColor: colors.errorSurface,
     borderWidth: 1,
-    borderColor: '#FECDD3',
+    borderColor: colors.errorForeground,
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   labelDestructive: {
-    color: colors.error,
+    color: colors.errorForeground,
   },
   labelDisabled: {
     color: colors.textMuted,

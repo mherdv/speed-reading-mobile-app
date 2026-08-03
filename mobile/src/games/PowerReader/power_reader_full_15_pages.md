@@ -53,8 +53,9 @@ PowerReader is structured into blocks:
 - Full sentence (advanced).
 
 **Presentation Modes:**
-- RSVP (Rapid Serial Visual Presentation): center flashes.
-- Chunk cards: a chunk displayed until timeout.
+- Flow: highlight chunks within the full reading page.
+- Focus Lane: hold the current chunk between fixed center guides with neighboring context.
+- Return-Sweep Flow: guide chunks across stable, responsive lines before continuing at the next line.
 
 **Response Types:**
 - Tap “Got it” (confidence signal).

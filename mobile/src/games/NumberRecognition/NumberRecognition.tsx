@@ -296,10 +296,10 @@ export default function NumberRecognition({
   const current = seq[Math.min(index, seq.length - 1)] ?? 0;
   const stimulusBackground =
     feedback === 'correct'
-      ? '#D1FAE5'
+      ? colors.successSurface
       : feedback === 'wrong'
-        ? '#FEE2E2'
-        : '#FFFBEB';
+        ? colors.errorSurface
+        : colors.warningSurface;
   const liveCadenceMs = exposureMsForFlashChallengeLevel(
     baseChallenge.displayCadenceMs,
     flashChallenge.level,
@@ -623,7 +623,7 @@ export default function NumberRecognition({
               value={String(current)}
               difficulty={difficulty}
               testID="current-number"
-              color="#92400E"
+              color={colors.warningForeground}
               backgroundColor={stimulusBackground}
               maxFontSize={68}
               minFontSize={18}
@@ -662,19 +662,19 @@ export default function NumberRecognition({
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12 },
   header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   targetHighlight: { color: colors.warningForeground, fontWeight: '700' },
   startBtn: { backgroundColor: colors.warningForeground, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  startBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
+  startBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
   gameArea: { flex: 1 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
-  statBox: { alignItems: 'center', backgroundColor: '#FEF3C7', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
-  timerBox: { backgroundColor: '#FDE68A' },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#92400E' },
-  statLabel: { fontSize: 10, color: '#B45309' },
+  statBox: { alignItems: 'center', backgroundColor: colors.warningSurface, paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
+  timerBox: { backgroundColor: colors.warningSurface },
+  statValue: { fontSize: 18, fontWeight: '700', color: colors.warningForeground },
+  statLabel: { fontSize: 10, color: colors.warningForeground },
   numberCard: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: colors.warningSurface,
     alignItems: 'center',
     borderWidth: 0,
     justifyContent: 'center',
@@ -682,19 +682,19 @@ const styles = StyleSheet.create({
     minHeight: 150,
     padding: 0,
   },
-  cardCorrect: { backgroundColor: '#D1FAE5' },
-  cardWrong: { backgroundColor: '#FEE2E2' },
+  cardCorrect: { backgroundColor: colors.successSurface },
+  cardWrong: { backgroundColor: colors.errorSurface },
   buttonsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   choiceBtn: { flex: 1, paddingVertical: 16, borderRadius: 10, alignItems: 'center' },
-  matchBtn: { backgroundColor: '#10B981' },
-  noBtn: { backgroundColor: '#EF4444' },
-  choiceBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
+  matchBtn: { backgroundColor: colors.interactiveTeal },
+  noBtn: { backgroundColor: colors.error },
+  choiceBtnText: { color: colors.white, fontSize: 16, fontWeight: '700' },
   endCard: { alignItems: 'center', paddingVertical: 20 },
   endEmoji: { fontSize: 40, marginBottom: 8 },
-  endTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
+  endTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
   endScore: { fontSize: 48, fontWeight: '800', color: colors.warningForeground, marginVertical: 8 },
-  endMeta: { fontSize: 14, color: '#6B7280' },
+  endMeta: { fontSize: 14, color: colors.textSecondary },
   playAgainBtn: { marginTop: 16, backgroundColor: colors.warningForeground, paddingVertical: 10, paddingHorizontal: 24, borderRadius: 8 },
-  playAgainText: { color: 'white', fontSize: 14, fontWeight: '600' },
+  playAgainText: { color: colors.white, fontSize: 14, fontWeight: '600' },
   hiddenText: { position: 'absolute', opacity: 0 },
 });
