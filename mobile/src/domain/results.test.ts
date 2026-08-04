@@ -4,6 +4,7 @@ import {
   formatAttemptSummary,
   formatDuration,
   getResultMetric,
+  getResultMetrics,
   assessReadingMeasurement,
   isValidProgressMeasurement,
   areResultsComparable,
@@ -101,6 +102,7 @@ describe('result helpers', () => {
 
     for (const activityType of [
       'reading-saccade-guide',
+      'reading-line-landing',
       'focus-lane-guided-reading',
     ]) {
       const guided = makeResult({
@@ -123,6 +125,63 @@ describe('result helpers', () => {
         `${activityType}|Guided pace|medium`
       );
     }
+  });
+
+  it('keeps preview, meaning, and line-landing outcomes separate in history', () => {
+    expect(
+      getResultMetrics(
+        makeResult({
+          wordCount: 0,
+          wpm: 0,
+          accuracy: 0.8,
+          details: {
+            activityType: 'preview-catch',
+            previewAccuracy: 0.8,
+            comprehensionCorrect: false,
+          },
+        })
+      )
+    ).toEqual([
+      { value: 80, label: 'Preview accuracy' },
+      { value: 0, label: 'Comprehension' },
+    ]);
+
+    expect(
+      getResultMetrics(
+        makeResult({
+          wordCount: 0,
+          wpm: 0,
+          accuracy: 0.75,
+          details: {
+            activityType: 'peripheral-word-recognition',
+            meaningAccuracy: 0.5,
+          },
+        })
+      )
+    ).toEqual([
+      { value: 75, label: 'Word accuracy' },
+      { value: 50, label: 'Meaning accuracy' },
+    ]);
+
+    expect(
+      getResultMetrics(
+        makeResult({
+          wordCount: 0,
+          wpm: 0,
+          accuracy: 0.8,
+          details: {
+            activityType: 'reading-line-landing',
+            targetWpm: 250,
+            lineLandingAccuracy: 0.75,
+            comprehensionCorrect: true,
+          },
+        })
+      )
+    ).toEqual([
+      { value: 250, label: 'Guided pace' },
+      { value: 75, label: 'Line-start accuracy' },
+      { value: 100, label: 'Comprehension' },
+    ]);
   });
 
   it('formats short and multi-minute durations', () => {

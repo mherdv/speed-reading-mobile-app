@@ -3,6 +3,12 @@ import { GAME_IDS } from './gameIds';
 import { getWpmTestPool } from './wpmTestContent';
 import { BASELINE_TEXT_SAMPLES } from './textSamples';
 import { getDifficultyOptions } from '../ui/GameDifficultyControl';
+import {
+  PAGE_GLIMPSE_EXPECTED_ITEM_COUNT,
+  PAGE_GLIMPSE_ITEMS,
+  PAGE_GLIMPSE_ITEMS_PER_DIFFICULTY,
+} from '../games/PageGlimpse/pageGlimpseContent';
+import { PREVIEW_CATCH_PASSAGES } from '../games/PreviewCatch/previewCatchContent';
 
 describe('game catalog', () => {
   it('exposes the baseline assessment as a clearly named standalone exercise', () => {
@@ -33,6 +39,40 @@ describe('game catalog', () => {
           difficulty
         ].helper
       ).toContain(advertisedCount);
+    }
+  });
+
+  it('keeps Page Glimpse inventory claims in sync with authored content', () => {
+    expect(PAGE_GLIMPSE_ITEMS).toHaveLength(PAGE_GLIMPSE_EXPECTED_ITEM_COUNT);
+
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      const availableItems = PAGE_GLIMPSE_ITEMS.filter(
+        (item) => item.difficulty === difficulty
+      );
+      expect(availableItems).toHaveLength(PAGE_GLIMPSE_ITEMS_PER_DIFFICULTY);
+      expect(GAME_CATALOG.PageGlimpse.difficulty[difficulty].helper).toContain(
+        `${PAGE_GLIMPSE_ITEMS_PER_DIFFICULTY} original prompts`
+      );
+    }
+  });
+
+  it('keeps Preview Catch inventory claims in sync with authored content', () => {
+    expect(PREVIEW_CATCH_PASSAGES).toHaveLength(9);
+    expect(
+      PREVIEW_CATCH_PASSAGES.reduce(
+        (total, passage) => total + passage.trials.length,
+        0
+      )
+    ).toBe(45);
+
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      const availablePassages = PREVIEW_CATCH_PASSAGES.filter(
+        (passage) => passage.difficulty === difficulty
+      );
+      expect(availablePassages).toHaveLength(3);
+      expect(GAME_CATALOG.PreviewCatch.difficulty[difficulty].helper).toContain(
+        '3 of 9 original passages'
+      );
     }
   });
 

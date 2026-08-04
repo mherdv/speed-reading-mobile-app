@@ -14,6 +14,7 @@ import type { AttemptResult } from '../domain/types';
 import {
   formatDuration,
   getResultMetric,
+  getResultMetrics,
   getSchulteGridModeLabel,
   isMeasuredReadingResult,
   isReadingResult,
@@ -442,7 +443,14 @@ function formatHistoryMeta(item: AttemptResult): string {
       const comprehension = getComprehensionCounts(item);
       return `${base} · ${comprehension.correct}/${comprehension.total} comprehension`;
     }
-    return `${base} · Guided pacing`;
+    const secondaryMetrics = getResultMetrics(item).slice(1);
+    return [
+      base,
+      'Guided pacing',
+      ...secondaryMetrics.map(
+        (metric) => `${metric.label}: ${metric.value}%`
+      ),
+    ].join(' · ');
   }
 
   const parts: string[] = [base];
@@ -457,6 +465,15 @@ function formatHistoryMeta(item: AttemptResult): string {
     parts.push(
       `${item.details.meaningCorrect ?? 0}/${item.details.attempts ?? 0} meanings`,
       `${item.details.clueCorrect ?? 0}/${item.details.attempts ?? 0} clues`
+    );
+    return parts.join(' · ');
+  }
+  const secondaryMetrics = getResultMetrics(item).slice(1);
+  if (secondaryMetrics.length > 0) {
+    parts.push(
+      ...secondaryMetrics.map(
+        (metric) => `${metric.label}: ${metric.value}%`
+      )
     );
     return parts.join(' · ');
   }

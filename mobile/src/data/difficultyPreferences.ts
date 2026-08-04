@@ -25,6 +25,7 @@ const ADAPTIVE_DEFAULT_GAME_IDS = new Set([
   'RepeatedReading',
   'WpmTest',
   'MainIdeaSprint',
+  'PageGlimpse',
   'StructureScan',
   'ComprehensionTest',
   'CenterLineReader',

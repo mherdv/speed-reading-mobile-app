@@ -165,4 +165,50 @@ describe('HistoryScreen reading quality', () => {
       )
     ).toBeTruthy();
   });
+
+  it('shows comprehension and meaning separately in individual session rows', async () => {
+    await saveResult({
+      ...reading('preview', 0, true),
+      sampleId: 'PreviewCatch',
+      sampleTitle: 'Preview Catch',
+      elapsedMs: 1_000,
+      wordCount: 0,
+      wpm: 0,
+      score: 80,
+      accuracy: 1,
+      details: {
+        activityType: 'preview-catch',
+        previewAccuracy: 1,
+        comprehensionCorrect: false,
+      },
+    });
+    await saveResult({
+      ...reading('peripheral-word', 0, true),
+      sampleId: 'PeripheralWordCatch',
+      sampleTitle: 'Peripheral Words',
+      elapsedMs: 1_000,
+      wordCount: 0,
+      wpm: 0,
+      score: 70,
+      accuracy: 0.75,
+      details: {
+        activityType: 'peripheral-word-recognition',
+        meaningAccuracy: 0.5,
+      },
+    });
+
+    const view = render(
+      <HistoryScreen refreshToken={0} onBack={jest.fn()} />
+    );
+    await waitFor(() => {
+      expect(view.getByText('Not enough readings')).toBeTruthy();
+    });
+    fireEvent.press(view.getByText('Sessions'));
+    fireEvent.press(view.getByTestId('history-filter-labs'));
+
+    expect(view.getByText('100 Preview accuracy')).toBeTruthy();
+    expect(view.getByText('1.00s · Comprehension: 0%')).toBeTruthy();
+    expect(view.getByText('75 Word accuracy')).toBeTruthy();
+    expect(view.getByText('1.00s · Meaning accuracy: 50%')).toBeTruthy();
+  });
 });

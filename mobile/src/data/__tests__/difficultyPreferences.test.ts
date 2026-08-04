@@ -41,6 +41,18 @@ describe('difficulty preferences', () => {
     expect(getDefaultDifficultyPreference('StructureScan').mode).toBe(
       'adaptive'
     );
+    expect(getDefaultDifficultyPreference('PageGlimpse').mode).toBe(
+      'adaptive'
+    );
+    expect(getDefaultDifficultyPreference('PreviewCatch').mode).toBe(
+      'manual'
+    );
+    expect(getDefaultDifficultyPreference('PeripheralLetterCatch').mode).toBe(
+      'manual'
+    );
+    expect(getDefaultDifficultyPreference('PeripheralWordCatch').mode).toBe(
+      'manual'
+    );
     expect(getDefaultDifficultyPreference('EvidenceHunt').mode).toBe('manual');
     expect(getDefaultDifficultyPreference('ContextBuilder').mode).toBe(
       'manual'

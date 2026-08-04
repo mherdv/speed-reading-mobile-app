@@ -205,6 +205,7 @@ export const gameGradients: Record<string, readonly [string, string]> = {
   RepeatedReading: ['#0E4979', '#155A88'],
   WpmTest: ['#0E4979', '#155A88'],
   MainIdeaSprint: ['#155A88', '#0B628F'],
+  PageGlimpse: ['#155A88', '#0B628F'],
   StructureScan: ['#0B628F', '#0D769E'],
   EvidenceHunt: ['#0B628F', '#0D769E'],
   ContextBuilder: ['#155A88', '#0B628F'],
@@ -215,6 +216,9 @@ export const gameGradients: Record<string, readonly [string, string]> = {
   SentenceRecall: ['#155A88', '#0B628F'],
   EyeMovementTraining: ['#166A9A', '#19759B'],
   ReadingSaccades: ['#0B557E', '#0D769E'],
+  PreviewCatch: ['#0B557E', '#0D769E'],
+  PeripheralLetterCatch: ['#0E5D8A', '#0D769E'],
+  PeripheralWordCatch: ['#155A88', '#0B628F'],
   SymbolRecognition: ['#0E4979', '#0D769E'],
 
   ComprehensionTest: ['#0E4979', '#0B628F'],

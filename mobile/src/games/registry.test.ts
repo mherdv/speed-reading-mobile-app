@@ -13,6 +13,7 @@ describe('game catalog hierarchy', () => {
       'RepeatedReading',
       'WpmTest',
       'MainIdeaSprint',
+      'PageGlimpse',
       'StructureScan',
       'EvidenceHunt',
       'ContextBuilder',
@@ -25,13 +26,16 @@ describe('game catalog hierarchy', () => {
       'SchulteNumbers',
       'SchulteLetters',
       'ReadingSaccades',
+      'PreviewCatch',
+      'PeripheralLetterCatch',
+      'PeripheralWordCatch',
       'EyeMovementTraining',
     ]);
-    expect(SCANNING_GAME_LIST).toHaveLength(4);
+    expect(SCANNING_GAME_LIST).toHaveLength(7);
     expect(EYE_COMFORT_GAME_LIST.map((game) => game.title)).toEqual([
       'Eye Reset',
     ]);
-    expect(GAME_LIST).toHaveLength(14);
-    expect(ALL_GAME_LIST).toHaveLength(33);
+    expect(GAME_LIST).toHaveLength(18);
+    expect(ALL_GAME_LIST).toHaveLength(37);
   });
 });

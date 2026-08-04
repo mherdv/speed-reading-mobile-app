@@ -125,6 +125,137 @@ describe('ResultScreen truthful metric cards', () => {
     expect(view.getByText('Return sweeps')).toBeTruthy();
   });
 
+  it('shows Line-Landing catch accuracy alongside guided coverage', () => {
+    const view = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: 'ReadingSaccades',
+          sampleTitle: 'Return-Sweep Flow',
+          wordCount: 0,
+          wpm: 0,
+          score: 120,
+          accuracy: 0.8,
+          details: {
+            activityType: 'reading-line-landing',
+            targetWpm: 230,
+            wordsPresented: 120,
+            totalWords: 140,
+            returnSweepsCompleted: 14,
+            lineLandingCorrect: 11,
+            lineLandingAttempts: 14,
+            lineLandingRequired: 14,
+            lineLandingAnswered: 14,
+            lineLandingOmitted: 0,
+            lineLandingAccuracy: 11 / 14,
+            lineLandingRequiredAccuracy: 0.72,
+            comprehensionCorrect: true,
+            timingMethod: 'monotonic-active-elapsed',
+          },
+        })}
+      />
+    );
+
+    expect(view.getByText('11/14')).toBeTruthy();
+    expect(view.getByText('Line starts caught')).toBeTruthy();
+    expect(view.getByText('14/14')).toBeTruthy();
+    expect(view.getByText('Checkpoints completed')).toBeTruthy();
+    expect(view.getByText('72%')).toBeTruthy();
+    expect(view.getByText('Accuracy target')).toBeTruthy();
+    expect(view.getByText('1/1')).toBeTruthy();
+    expect(view.getByText('Comprehension')).toBeTruthy();
+    expect(view.getByText('Guided pace')).toBeTruthy();
+  });
+
+  it('marks every Line-Landing checkpoint metric N/A for a one-line passage', () => {
+    const view = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: 'ReadingSaccades',
+          sampleTitle: 'Return-Sweep Flow',
+          wordCount: 0,
+          wpm: 0,
+          score: 6,
+          accuracy: 1,
+          details: {
+            activityType: 'reading-line-landing',
+            targetWpm: 150,
+            lineLandingRequired: 0,
+            lineLandingAnswered: 0,
+            lineLandingCorrect: 0,
+            lineLandingNotApplicable: true,
+            lineLandingRequiredAccuracy: 0.67,
+            comprehensionCorrect: true,
+          },
+        })}
+      />
+    );
+
+    expect(view.getAllByText('N/A')).toHaveLength(3);
+    expect(view.queryByText('67%')).toBeNull();
+  });
+
+  it('shows Preview Catch recognition and comprehension without praising a meaning miss', () => {
+    const view = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: 'PreviewCatch',
+          sampleTitle: 'Preview Catch',
+          wordCount: 0,
+          wpm: 0,
+          score: 80,
+          accuracy: 1,
+          details: {
+            activityType: 'preview-catch',
+            rounds: 5,
+            previewCorrect: 5,
+            previewAccuracy: 1,
+            comprehensionCorrect: false,
+          },
+        })}
+      />
+    );
+
+    expect(view.getByText('5/5')).toBeTruthy();
+    expect(view.getByText('Previews correct')).toBeTruthy();
+    expect(view.getByText('0/1')).toBeTruthy();
+    expect(view.getByText('Comprehension')).toBeTruthy();
+    expect(view.getByText('Recognition found—protect meaning')).toBeTruthy();
+    expect(view.queryByText('Sharp and controlled')).toBeNull();
+  });
+
+  it('shows Peripheral Words recognition and meaning checks separately', () => {
+    const view = render(
+      <ResultScreen
+        {...actions}
+        result={result({
+          sampleId: 'PeripheralWordCatch',
+          sampleTitle: 'Peripheral Words',
+          wordCount: 0,
+          wpm: 0,
+          score: 80,
+          accuracy: 0.9,
+          details: {
+            activityType: 'peripheral-word-recognition',
+            rounds: 10,
+            correct: 9,
+            meaningChecks: 2,
+            meaningCorrect: 1,
+            meaningAccuracy: 0.5,
+          },
+        })}
+      />
+    );
+
+    expect(view.getByText('9/10')).toBeTruthy();
+    expect(view.getByText('Words correct')).toBeTruthy();
+    expect(view.getByText('1/2')).toBeTruthy();
+    expect(view.getByText('Meaning checks')).toBeTruthy();
+    expect(view.getByText('Word shape caught—review meaning')).toBeTruthy();
+  });
+
   it('shows Evidence Hunt metrics without turning them into one index', () => {
     const view = render(
       <ResultScreen

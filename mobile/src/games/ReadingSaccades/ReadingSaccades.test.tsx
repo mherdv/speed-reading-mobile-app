@@ -1,11 +1,14 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AccessibilityInfo } from 'react-native';
 
 import type { Article } from '../../data/articles';
 import * as progressStore from '../../data/progressStore';
 import ReadingSaccades, {
+  buildLineLandingOptions,
   buildSaccadeLines,
+  getLineLandingConfig,
   getReadingSaccadesConfig,
   getReturnSweepCharacterLimit,
   getReturnSweepWindowLineCount,
@@ -38,6 +41,20 @@ const LONG_ARTICLE: Article = {
   text: Array.from({ length: 96 }, (_, index) => `word${index + 1}`).join(' '),
 };
 
+const NEAR_COMPLETE_ARTICLE: Article = {
+  ...ARTICLE,
+  id: 'return-sweep-near-complete-test',
+  wordCount: 20,
+  text: 'a b c d e f g h i j k l m n o p q r s t',
+};
+
+const ONE_LINE_ARTICLE: Article = {
+  ...ARTICLE,
+  id: 'return-sweep-one-line-test',
+  wordCount: 6,
+  text: 'one two three four five six',
+};
+
 async function settleStorage() {
   await act(async () => {
     await Promise.resolve();
@@ -50,6 +67,9 @@ describe('ReadingSaccades', () => {
   beforeEach(async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-08-03T08:00:00.000Z'));
+    jest
+      .spyOn(AccessibilityInfo, 'isScreenReaderEnabled')
+      .mockResolvedValue(false);
     await AsyncStorage.clear();
     jest.spyOn(progressStore, 'updateProgress').mockResolvedValue({
       progress: { level: 1, streak: 1, totalPlays: 1, bestScore: 12 },
@@ -79,6 +99,26 @@ describe('ReadingSaccades', () => {
       lineWords: 16,
       guideWpm: 320,
     });
+    expect(getLineLandingConfig('easy')).toEqual({
+      exposureMs: 900,
+      optionCount: 3,
+      requiredAccuracy: 0.67,
+    });
+    expect(getLineLandingConfig('medium').exposureMs).toBe(650);
+    expect(getLineLandingConfig('hard')).toEqual({
+      exposureMs: 450,
+      optionCount: 4,
+      requiredAccuracy: 0.75,
+    });
+  });
+
+  it('builds unique line-start choices with the exact target present once', () => {
+    const lines = buildSaccadeLines(ARTICLE.text, 4, 2, 40);
+    const result = buildLineLandingOptions(lines, 1, 4, () => 0.25);
+
+    expect(result.options).toHaveLength(4);
+    expect(new Set(result.options).size).toBe(4);
+    expect(result.options[result.correctIndex]).toBe('five six');
   });
 
   it('splits every word into stable lines and final partial anchors', () => {
@@ -210,6 +250,270 @@ describe('ReadingSaccades', () => {
     expect(view.getByTestId('active-anchor').props.children).toBe('five six');
     expect(view.getByTestId('saccades-progress-note')).toHaveTextContent(
       '2 lines visited · line 2 of 3'
+    );
+  });
+
+  it('catches a concealed next-line phrase before continuing the book flow', async () => {
+    const onReportResult = jest.fn();
+    const view = render(
+      <ReadingSaccades
+        article={ARTICLE}
+        anchorWords={2}
+        landingExposureMs={20}
+        lineWords={4}
+        mode="line-landing"
+        random={() => 0.25}
+        tickMs={10}
+        onReportResult={onReportResult}
+      />
+    );
+    await settleStorage();
+
+    expect(view.getByTestId('saccades-mode-line-landing')).toHaveAccessibilityState({
+      selected: true,
+    });
+    fireEvent.press(view.getByTestId('start-button'));
+    expect(view.getByTestId('saccades-anchor-1-0')).toHaveTextContent('••••');
+
+    act(() => {
+      jest.advanceTimersByTime(30);
+    });
+    expect(view.getByTestId('line-landing-flash')).toHaveTextContent(
+      'five six'
+    );
+    expect(view.getByTestId('line-landing-preview')).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(20);
+    });
+    expect(view.getByTestId('line-landing-choice')).toBeTruthy();
+    expect(view.getByTestId('saccades-anchor-1-0')).toHaveTextContent('••••');
+
+    fireEvent.press(view.getByText('five six'));
+    expect(view.getByTestId('line-landing-feedback')).toBeTruthy();
+    expect(view.getByText('Caught')).toBeTruthy();
+    fireEvent.press(view.getByTestId('continue-line-landing'));
+    expect(view.getByTestId('active-anchor')).toHaveTextContent('five six');
+    expect(view.getByTestId('line-landing-score')).toHaveTextContent(
+      '1/1 line starts caught'
+    );
+
+    fireEvent.press(view.getByTestId('back-anchor'));
+    act(() => {
+      jest.advanceTimersByTime(20);
+    });
+    expect(view.queryByTestId('line-landing-preview')).toBeNull();
+    expect(view.queryByTestId('line-landing-choice')).toBeNull();
+    expect(view.getByTestId('active-anchor')).toHaveTextContent('five six');
+    expect(view.getByTestId('line-landing-score')).toHaveTextContent(
+      '1/1 line starts caught'
+    );
+
+    fireEvent.press(view.getByTestId('finish-early'));
+    fireEvent.press(view.getByTestId('question-option-1'));
+    fireEvent.press(view.getByTestId('continue-saccades-feedback'));
+    await settleStorage();
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accuracy: 1,
+        details: expect.objectContaining({
+          activityType: 'reading-line-landing',
+          mode: 'line-landing',
+          lineLandingExposureMs: 20,
+          lineLandingAttempts: 1,
+          lineLandingCorrect: 1,
+          lineLandingAccuracy: 1,
+          lineLandingRequired: 1,
+          lineLandingAnswered: 1,
+          lineLandingOmitted: 0,
+          lineLandingQualified: true,
+          comparisonBand: 'reading-saccade-line-landing-easy-timed',
+          completedEnoughForProgress: false,
+        }),
+      })
+    );
+  });
+
+  it('waits for an explicit screen-reader action before hiding a line start', async () => {
+    jest
+      .spyOn(AccessibilityInfo, 'isScreenReaderEnabled')
+      .mockResolvedValue(true);
+    const view = render(
+      <ReadingSaccades
+        article={ARTICLE}
+        anchorWords={2}
+        landingExposureMs={20}
+        lineWords={4}
+        mode="line-landing"
+        random={() => 0.25}
+        tickMs={10}
+      />
+    );
+    await settleStorage();
+
+    fireEvent.press(view.getByTestId('start-button'));
+    act(() => {
+      jest.advanceTimersByTime(30);
+    });
+    expect(view.getByTestId('line-landing-flash')).toHaveTextContent(
+      'five six'
+    );
+    expect(view.getByTestId('line-landing-manual-continue')).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(2_000);
+    });
+    expect(view.getByTestId('line-landing-preview')).toBeTruthy();
+    expect(view.queryByTestId('line-landing-choice')).toBeNull();
+
+    fireEvent.press(view.getByTestId('line-landing-manual-continue'));
+    expect(view.queryByTestId('line-landing-preview')).toBeNull();
+    expect(view.getByTestId('line-landing-choice')).toBeTruthy();
+  });
+
+  it('keeps one captured exposure mode when screen-reader state changes mid-prompt', async () => {
+    const endNonCalibratingSession = jest.fn();
+    const beginNonCalibratingSpy = jest
+      .spyOn(progressStore, 'beginNonCalibratingProgressSession')
+      .mockReturnValue(endNonCalibratingSession);
+    const report = jest.fn();
+    const view = render(
+      <ReadingSaccades
+        article={ARTICLE}
+        anchorWords={2}
+        landingExposureMs={20}
+        lineWords={4}
+        mode="line-landing"
+        random={() => 0.25}
+        tickMs={10}
+        onReportResult={report}
+      />
+    );
+    await settleStorage();
+    const readerCalls = (
+      AccessibilityInfo.addEventListener as unknown as jest.Mock
+    ).mock.calls.filter(([event]) => event === 'screenReaderChanged');
+    const screenReaderChanged = readerCalls[readerCalls.length - 1]?.[1] as
+      | ((enabled: boolean) => void)
+      | undefined;
+    expect(screenReaderChanged).toBeDefined();
+
+    fireEvent.press(view.getByTestId('start-button'));
+    act(() => {
+      screenReaderChanged?.(true);
+    });
+    act(() => {
+      jest.advanceTimersByTime(30);
+    });
+    expect(view.getByTestId('line-landing-manual-continue')).toBeTruthy();
+
+    act(() => {
+      screenReaderChanged?.(false);
+      jest.advanceTimersByTime(200);
+    });
+    expect(view.getByTestId('line-landing-preview')).toBeTruthy();
+    expect(view.getByTestId('line-landing-manual-continue')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('line-landing-manual-continue'));
+    fireEvent.press(view.getByText('five six'));
+    fireEvent.press(view.getByTestId('continue-line-landing'));
+    fireEvent.press(view.getByTestId('finish-early'));
+    fireEvent.press(view.getByTestId('question-option-1'));
+    fireEvent.press(view.getByTestId('continue-saccades-feedback'));
+    await settleStorage();
+
+    expect(report.mock.calls[0]?.[0].details).toEqual(
+      expect.objectContaining({
+        lineLandingExposureMode: 'manual',
+        screenReaderManualMode: true,
+        adaptiveQualificationEligible: false,
+        comparisonBand: 'reading-saccade-line-landing-easy-manual',
+      })
+    );
+    expect(beginNonCalibratingSpy).toHaveBeenCalledWith('ReadingSaccades');
+    expect(endNonCalibratingSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a pending landing as omitted instead of qualifying a near-complete finish', async () => {
+    const onReportResult = jest.fn();
+    const view = render(
+      <ReadingSaccades
+        article={NEAR_COMPLETE_ARTICLE}
+        anchorWords={3}
+        landingExposureMs={100}
+        lineWords={18}
+        mode="line-landing"
+        tickMs={10}
+        onReportResult={onReportResult}
+      />
+    );
+    await settleStorage();
+
+    fireEvent.press(view.getByTestId('start-button'));
+    act(() => {
+      jest.advanceTimersByTime(70);
+    });
+    expect(view.getByTestId('line-landing-preview')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('finish-early'));
+    fireEvent.press(view.getByTestId('question-option-1'));
+    fireEvent.press(view.getByTestId('continue-saccades-feedback'));
+    await settleStorage();
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          completionRate: 0.9,
+          lineLandingRequired: 1,
+          lineLandingAnswered: 0,
+          lineLandingOmitted: 1,
+          lineLandingQualified: false,
+          completedEnoughForProgress: false,
+        }),
+      })
+    );
+    expect(progressStore.updateProgress).toHaveBeenCalledWith(
+      'ReadingSaccades',
+      false,
+      18,
+      'easy'
+    );
+  });
+
+  it('treats a one-line passage as having no applicable landing checkpoint', async () => {
+    const onReportResult = jest.fn();
+    const view = render(
+      <ReadingSaccades
+        article={ONE_LINE_ARTICLE}
+        anchorWords={2}
+        lineWords={6}
+        mode="line-landing"
+        tickMs={10}
+        onReportResult={onReportResult}
+      />
+    );
+    await settleStorage();
+
+    fireEvent.press(view.getByTestId('start-button'));
+    act(() => {
+      jest.advanceTimersByTime(30);
+    });
+    fireEvent.press(view.getByTestId('question-option-1'));
+    fireEvent.press(view.getByTestId('continue-saccades-feedback'));
+    await settleStorage();
+
+    expect(onReportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          lineLandingRequired: 0,
+          lineLandingAnswered: 0,
+          lineLandingOmitted: 0,
+          lineLandingNotApplicable: true,
+          lineLandingQualified: true,
+          completedEnoughForProgress: true,
+        }),
+      })
     );
   });
 

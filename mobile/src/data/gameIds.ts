@@ -2,6 +2,7 @@ export const GAME_IDS = [
   'RepeatedReading',
   'WpmTest',
   'MainIdeaSprint',
+  'PageGlimpse',
   'StructureScan',
   'EvidenceHunt',
   'ContextBuilder',
@@ -16,6 +17,9 @@ export const GAME_IDS = [
   'SchulteMix',
   'EyeMovementTraining',
   'ReadingSaccades',
+  'PreviewCatch',
+  'PeripheralLetterCatch',
+  'PeripheralWordCatch',
   'VisualSpanExpansion',
   'PatternScanning',
   'TimedWordRecognition',
@@ -40,6 +44,7 @@ export const CORE_GAME_IDS = [
   'RepeatedReading',
   'WpmTest',
   'MainIdeaSprint',
+  'PageGlimpse',
   'StructureScan',
   'EvidenceHunt',
   'ContextBuilder',
@@ -53,6 +58,9 @@ export const SCANNING_GAME_IDS = [
   'SchulteNumbers',
   'SchulteLetters',
   'ReadingSaccades',
+  'PreviewCatch',
+  'PeripheralLetterCatch',
+  'PeripheralWordCatch',
 ] as const satisfies readonly GameId[];
 
 export const EYE_COMFORT_GAME_IDS = [

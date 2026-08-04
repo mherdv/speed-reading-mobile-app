@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
+  AppState,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,13 +16,18 @@ import {
   type Article,
 } from '../../data/articles';
 import { GAME_DESCRIPTIONS } from '../../data/gameDescriptions';
-import { levelToStars, updateProgress } from '../../data/progressStore';
+import {
+  beginNonCalibratingProgressSession,
+  levelToStars,
+  updateProgress,
+} from '../../data/progressStore';
 import {
   epochNowMs,
   measuredElapsedMs,
   monotonicNowMs,
 } from '../../domain/timing';
 import { borderRadius, colors, shadows, spacing } from '../../theme/colors';
+import { useAccessibilityPreferences } from '../../hooks/useAccessibilityPreferences';
 import { GameIdlePanel } from '../../ui/GameIdlePanel';
 import { useReadingDisplay } from '../../ui/ReadingDisplayPreferences';
 import { ReadingColumn } from '../../ui/ResponsiveShell';
@@ -43,6 +50,8 @@ const GUIDE_STEP_WPM = 25;
 const MIN_VISIBLE_LINES = 5;
 const MAX_VISIBLE_LINES = 8;
 
+export type ReadingSaccadesMode = 'flow' | 'line-landing';
+
 export type ReadingSaccadesConfig = {
   anchorWords: number;
   lineWords: number;
@@ -64,6 +73,19 @@ type GuideStep =
   | { kind: 'anchor'; lineIndex: number; anchorIndex: number }
   | { kind: 'return'; fromLineIndex: number; toLineIndex: number };
 
+type LandingStage = 'none' | 'flash' | 'choice' | 'feedback';
+type LandingExposureMode = 'timed' | 'manual';
+
+type LandingPrompt = {
+  lineIndex: number;
+  target: string;
+  options: string[];
+  correctIndex: number;
+  selectedIndex: number | null;
+  correct: boolean | null;
+  exposureMode: LandingExposureMode;
+};
+
 type Phase = 'idle' | 'active' | 'question' | 'feedback' | 'ended';
 
 type Props = {
@@ -72,6 +94,8 @@ type Props = {
   lineWords?: number;
   guideWpm?: number;
   tickMs?: number;
+  landingExposureMs?: number;
+  mode?: ReadingSaccadesMode;
   random?: () => number;
   difficulty?: Difficulty;
   autoStart?: boolean;
@@ -88,6 +112,20 @@ export function getReadingSaccadesConfig(
     return { anchorWords: 3, lineWords: 14, guideWpm: 230 };
   }
   return { anchorWords: 3, lineWords: 16, guideWpm: 320 };
+}
+
+export function getLineLandingConfig(difficulty: Difficulty): {
+  exposureMs: number;
+  optionCount: number;
+  requiredAccuracy: number;
+} {
+  if (difficulty === 'easy') {
+    return { exposureMs: 900, optionCount: 3, requiredAccuracy: 0.67 };
+  }
+  if (difficulty === 'medium') {
+    return { exposureMs: 650, optionCount: 4, requiredAccuracy: 0.72 };
+  }
+  return { exposureMs: 450, optionCount: 4, requiredAccuracy: 0.75 };
 }
 
 export function getReturnSweepCharacterLimit(
@@ -189,6 +227,56 @@ export function buildSaccadeLines(
   return lines;
 }
 
+function shuffled<T>(items: readonly T[], random: () => number): T[] {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(
+      Math.min(0.999999, Math.max(0, random())) * (index + 1)
+    );
+    [next[index], next[randomIndex]] = [next[randomIndex]!, next[index]!];
+  }
+  return next;
+}
+
+export function buildLineLandingOptions(
+  lines: readonly SaccadeLine[],
+  targetLineIndex: number,
+  optionCount: number,
+  random: () => number
+): { options: string[]; correctIndex: number } {
+  const target = lines[targetLineIndex]?.anchors[0]?.words.join(' ') ?? '';
+  const safeOptionCount = Math.max(2, Math.floor(optionCount));
+  const candidates = Array.from(
+    new Set(
+      lines
+        .flatMap((line) => line.anchors)
+        .map((anchor) => anchor.words.join(' '))
+        .filter((candidate) => candidate.length > 0 && candidate !== target)
+    )
+  ).sort((first, second) => {
+    const lengthDifference =
+      Math.abs(first.length - target.length) -
+      Math.abs(second.length - target.length);
+    return lengthDifference || first.localeCompare(second);
+  });
+  const closeCandidatePool = candidates.slice(
+    0,
+    Math.min(
+      candidates.length,
+      Math.max(safeOptionCount - 1, (safeOptionCount - 1) * 2)
+    )
+  );
+  const distractors = shuffled(closeCandidatePool, random).slice(
+    0,
+    safeOptionCount - 1
+  );
+  const options = shuffled([target, ...distractors], random);
+  return {
+    options,
+    correctIndex: Math.max(0, options.indexOf(target)),
+  };
+}
+
 function clampRandomArticle(
   difficulty: Difficulty,
   random: () => number
@@ -206,6 +294,8 @@ export default function ReadingSaccades({
   lineWords: lineWordsProp,
   guideWpm: guideWpmProp,
   tickMs,
+  landingExposureMs: landingExposureMsProp,
+  mode: modeProp,
   random = Math.random,
   difficulty = 'easy',
   autoStart = false,
@@ -213,6 +303,9 @@ export default function ReadingSaccades({
 }: Props) {
   const { height: viewportHeight, width: viewportWidth } =
     useWindowDimensions();
+  const { screenReader } = useAccessibilityPreferences();
+  const screenReaderRef = useRef(screenReader);
+  screenReaderRef.current = screenReader;
   const { tokens: readingDisplay } = useReadingDisplay();
   const readingFontSize =
     typeof readingDisplay.text.fontSize === 'number'
@@ -254,6 +347,15 @@ export default function ReadingSaccades({
   });
   const [paused, setPaused] = useState(false);
   const [guideWpm, setGuideWpm] = useState(initialGuideWpm);
+  const [selectedMode, setSelectedMode] = useState<ReadingSaccadesMode>(
+    modeProp ?? 'flow'
+  );
+  const [landingStage, setLandingStage] = useState<LandingStage>('none');
+  const [landingPrompt, setLandingPrompt] = useState<LandingPrompt | null>(
+    null
+  );
+  const [landingAttempts, setLandingAttempts] = useState(0);
+  const [landingCorrect, setLandingCorrect] = useState(0);
   const [wordsPresented, setWordsPresented] = useState(0);
   const [linesPresented, setLinesPresented] = useState(0);
   const [returnSweepsCompleted, setReturnSweepsCompleted] = useState(0);
@@ -282,6 +384,18 @@ export default function ReadingSaccades({
   const presentedWordIndexesRef = useRef<Set<number>>(new Set());
   const presentedLineIndexesRef = useRef<Set<number>>(new Set());
   const returnSweepsRef = useRef(0);
+  const sessionModeRef = useRef<ReadingSaccadesMode>(modeProp ?? 'flow');
+  const landingStageRef = useRef<LandingStage>('none');
+  const landingPromptRef = useRef<LandingPrompt | null>(null);
+  const landingAttemptsRef = useRef(0);
+  const landingCorrectRef = useRef(0);
+  const requiredLandingLineIndexesRef = useRef<Set<number>>(new Set());
+  const answeredLandingLineIndexesRef = useRef<Set<number>>(new Set());
+  const landingExposureMsRef = useRef(0);
+  const sessionLandingExposureModeRef = useRef<
+    LandingExposureMode | 'mixed' | null
+  >(null);
+  const sessionScreenReaderAtStartRef = useRef(false);
   const sessionAnchorWordsRef = useRef(1);
   const sessionLineWordsRef = useRef(1);
   const sessionGuideWpmRef = useRef(initialGuideWpm);
@@ -304,16 +418,53 @@ export default function ReadingSaccades({
   );
 
   useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' || phaseRef.current !== 'active') return;
+
+      clearTrackedTimeouts();
+      if (!pausedRef.current) {
+        pauseCountRef.current += 1;
+      }
+      pausedRef.current = true;
+      setPaused(true);
+      stopActiveClock();
+
+      // If the app disappears during the brief glimpse, replay the complete
+      // return step after Resume instead of letting a hidden timer consume it.
+      if (landingStageRef.current === 'flash') {
+        setCurrentLandingStage('none');
+        setCurrentLandingPrompt(null);
+      }
+    });
+    return () => subscription.remove();
+  }, [clearTrackedTimeouts]);
+
+  useEffect(() => {
     if (phaseRef.current !== 'idle') return;
     sessionGuideWpmRef.current = initialGuideWpm;
     setGuideWpm(initialGuideWpm);
   }, [initialGuideWpm]);
+
+  useEffect(() => {
+    if (phaseRef.current !== 'idle' || modeProp == null) return;
+    setSelectedMode(modeProp);
+  }, [modeProp]);
 
   useAutoStart(autoStart, phase, progressLoaded, start);
 
   function setCurrentPhase(nextPhase: Phase) {
     phaseRef.current = nextPhase;
     setPhase(nextPhase);
+  }
+
+  function setCurrentLandingStage(nextStage: LandingStage) {
+    landingStageRef.current = nextStage;
+    setLandingStage(nextStage);
+  }
+
+  function setCurrentLandingPrompt(nextPrompt: LandingPrompt | null) {
+    landingPromptRef.current = nextPrompt;
+    setLandingPrompt(nextPrompt);
   }
 
   function startActiveClock() {
@@ -387,8 +538,112 @@ export default function ReadingSaccades({
     clearTrackedTimeouts();
     pausedRef.current = false;
     setPaused(false);
+    setCurrentLandingStage('none');
+    setCurrentLandingPrompt(null);
     stopActiveClock();
     setCurrentPhase('question');
+  }
+
+  function revealLandingChoices() {
+    if (
+      cancelledRef.current ||
+      phaseRef.current !== 'active' ||
+      landingStageRef.current !== 'flash'
+    ) {
+      return;
+    }
+    stopActiveClock();
+    setCurrentLandingStage('choice');
+  }
+
+  function beginLandingPrompt(toLineIndex: number) {
+    const target = linesRef.current[toLineIndex]?.anchors[0]?.words.join(' ');
+    if (!target) {
+      showAnchor(toLineIndex, 0);
+      scheduleNextStep(guideStepRef.current);
+      return;
+    }
+    const config = getLineLandingConfig(selectedDifficulty);
+    const { options, correctIndex } = buildLineLandingOptions(
+      linesRef.current,
+      toLineIndex,
+      config.optionCount,
+      random
+    );
+    const exposureMode: LandingExposureMode = screenReaderRef.current
+      ? 'manual'
+      : 'timed';
+    const priorExposureMode = sessionLandingExposureModeRef.current;
+    sessionLandingExposureModeRef.current =
+      priorExposureMode === null || priorExposureMode === exposureMode
+        ? exposureMode
+        : 'mixed';
+    setCurrentLandingPrompt({
+      lineIndex: toLineIndex,
+      target,
+      options,
+      correctIndex,
+      selectedIndex: null,
+      correct: null,
+      exposureMode,
+    });
+    setCurrentLandingStage('flash');
+    clearTrackedTimeouts();
+    if (exposureMode === 'manual') {
+      AccessibilityInfo.announceForAccessibility(
+        `Line ${toLineIndex + 1} begins ${target}`
+      );
+      return;
+    }
+    scheduleTimeout(revealLandingChoices, landingExposureMsRef.current);
+  }
+
+  function answerLanding(optionIndex: number) {
+    const prompt = landingPromptRef.current;
+    if (
+      phaseRef.current !== 'active' ||
+      landingStageRef.current !== 'choice' ||
+      !prompt
+    ) {
+      return;
+    }
+    if (answeredLandingLineIndexesRef.current.has(prompt.lineIndex)) return;
+    const correct = optionIndex === prompt.correctIndex;
+    answeredLandingLineIndexesRef.current = new Set(
+      answeredLandingLineIndexesRef.current
+    ).add(prompt.lineIndex);
+    landingAttemptsRef.current += 1;
+    setLandingAttempts(landingAttemptsRef.current);
+    if (correct) {
+      landingCorrectRef.current += 1;
+      setLandingCorrect(landingCorrectRef.current);
+    }
+    setCurrentLandingPrompt({
+      ...prompt,
+      selectedIndex: optionIndex,
+      correct,
+    });
+    setCurrentLandingStage('feedback');
+  }
+
+  function continueAfterLanding() {
+    const prompt = landingPromptRef.current;
+    if (
+      phaseRef.current !== 'active' ||
+      landingStageRef.current !== 'feedback' ||
+      !prompt
+    ) {
+      return;
+    }
+    returnSweepsRef.current += 1;
+    setReturnSweepsCompleted(returnSweepsRef.current);
+    pausedRef.current = false;
+    setPaused(false);
+    setCurrentLandingStage('none');
+    setCurrentLandingPrompt(null);
+    showAnchor(prompt.lineIndex, 0);
+    startActiveClock();
+    scheduleNextStep(guideStepRef.current);
   }
 
   function advanceGuide() {
@@ -402,6 +657,21 @@ export default function ReadingSaccades({
 
     const currentStep = guideStepRef.current;
     if (currentStep.kind === 'return') {
+      if (sessionModeRef.current === 'line-landing') {
+        if (
+          answeredLandingLineIndexesRef.current.has(
+            currentStep.toLineIndex
+          )
+        ) {
+          returnSweepsRef.current += 1;
+          setReturnSweepsCompleted(returnSweepsRef.current);
+          showAnchor(currentStep.toLineIndex, 0);
+          scheduleNextStep(guideStepRef.current);
+          return;
+        }
+        beginLandingPrompt(currentStep.toLineIndex);
+        return;
+      }
       returnSweepsRef.current += 1;
       setReturnSweepsCompleted(returnSweepsRef.current);
       showAnchor(currentStep.toLineIndex, 0);
@@ -427,6 +697,11 @@ export default function ReadingSaccades({
         fromLineIndex: currentStep.lineIndex,
         toLineIndex: currentStep.lineIndex + 1,
       };
+      if (sessionModeRef.current === 'line-landing') {
+        requiredLandingLineIndexesRef.current = new Set(
+          requiredLandingLineIndexesRef.current
+        ).add(returnStep.toLineIndex);
+      }
       guideStepRef.current = returnStep;
       setGuideStep(returnStep);
       scheduleNextStep(returnStep);
@@ -445,6 +720,10 @@ export default function ReadingSaccades({
     presentedWordIndexesRef.current = new Set();
     presentedLineIndexesRef.current = new Set();
     returnSweepsRef.current = 0;
+    landingAttemptsRef.current = 0;
+    landingCorrectRef.current = 0;
+    requiredLandingLineIndexesRef.current = new Set();
+    answeredLandingLineIndexesRef.current = new Set();
     activeElapsedMsRef.current = 0;
     activeSegmentStartedRef.current = null;
     pauseCountRef.current = 0;
@@ -462,6 +741,7 @@ export default function ReadingSaccades({
     const configuredGuideWpm = clampGuideWpm(
       Math.floor(guideWpmProp ?? config.guideWpm)
     );
+    const landingConfig = getLineLandingConfig(selectedDifficulty);
     const sessionStartingWpm = preserveAdjustedPace
       ? sessionGuideWpmRef.current
       : configuredGuideWpm;
@@ -477,6 +757,13 @@ export default function ReadingSaccades({
     linesRef.current = nextLines;
     sessionAnchorWordsRef.current = configuredAnchorWords;
     sessionLineWordsRef.current = configuredLineWords;
+    sessionModeRef.current = selectedMode;
+    sessionLandingExposureModeRef.current = null;
+    sessionScreenReaderAtStartRef.current = screenReaderRef.current;
+    landingExposureMsRef.current = Math.max(
+      1,
+      Math.floor(landingExposureMsProp ?? landingConfig.exposureMs)
+    );
     sessionGuideWpmRef.current = sessionStartingWpm;
     sessionInitialGuideWpmRef.current = sessionStartingWpm;
     sessionTickMsRef.current = tickMs;
@@ -486,6 +773,10 @@ export default function ReadingSaccades({
     setSessionArticle(nextArticle);
     setSessionLines(nextLines);
     setPaused(false);
+    setCurrentLandingStage('none');
+    setCurrentLandingPrompt(null);
+    setLandingAttempts(0);
+    setLandingCorrect(0);
     setGuideWpm(sessionStartingWpm);
     setWordsPresented(0);
     setLinesPresented(0);
@@ -504,7 +795,12 @@ export default function ReadingSaccades({
   }
 
   function changePace(delta: number) {
-    if (phaseRef.current !== 'active') return;
+    if (
+      phaseRef.current !== 'active' ||
+      landingStageRef.current !== 'none'
+    ) {
+      return;
+    }
     const nextGuideWpm = clampGuideWpm(
       sessionGuideWpmRef.current + delta
     );
@@ -516,7 +812,12 @@ export default function ReadingSaccades({
   }
 
   function togglePause() {
-    if (phaseRef.current !== 'active') return;
+    if (
+      phaseRef.current !== 'active' ||
+      landingStageRef.current !== 'none'
+    ) {
+      return;
+    }
     const nextPaused = !pausedRef.current;
     pausedRef.current = nextPaused;
     setPaused(nextPaused);
@@ -531,7 +832,12 @@ export default function ReadingSaccades({
   }
 
   function backOneAnchor() {
-    if (phaseRef.current !== 'active') return;
+    if (
+      phaseRef.current !== 'active' ||
+      landingStageRef.current !== 'none'
+    ) {
+      return;
+    }
     clearTrackedTimeouts();
     backCountRef.current += 1;
     const currentStep = guideStepRef.current;
@@ -576,16 +882,56 @@ export default function ReadingSaccades({
     const completionRate =
       totalWords > 0 ? actualWordsPresented / totalWords : 0;
     const comprehensionAccuracy = comprehensionCorrect ? 1 : 0;
+    const requiredLandingLines = requiredLandingLineIndexesRef.current.size;
+    const answeredLandingLines = answeredLandingLineIndexesRef.current.size;
+    const omittedLandingLines = Math.max(
+      0,
+      requiredLandingLines - answeredLandingLines
+    );
+    const lineLandingAccuracy =
+      answeredLandingLines > 0
+        ? landingCorrectRef.current / answeredLandingLines
+        : 0;
+    const lineLandingConfig = getLineLandingConfig(selectedDifficulty);
+    const taskAccuracy =
+      sessionModeRef.current === 'line-landing'
+        ? (landingCorrectRef.current + comprehensionAccuracy) /
+          Math.max(1, requiredLandingLines + 1)
+        : comprehensionAccuracy;
+    const lineLandingNotApplicable = linesRef.current.length <= 1;
+    const lineLandingQualified =
+      sessionModeRef.current !== 'line-landing' ||
+      lineLandingNotApplicable ||
+      (requiredLandingLines > 0 &&
+        omittedLandingLines === 0 &&
+        lineLandingAccuracy >= lineLandingConfig.requiredAccuracy);
     const completedEnoughForProgress =
-      completionRate >= COMPLETION_THRESHOLD && comprehensionCorrect;
+      completionRate >= COMPLETION_THRESHOLD &&
+      comprehensionCorrect &&
+      lineLandingQualified;
+    const manualLandingExposure =
+      sessionModeRef.current === 'line-landing' &&
+      (sessionLandingExposureModeRef.current === 'manual' ||
+        sessionLandingExposureModeRef.current === 'mixed');
+    const adaptiveQualificationEligible =
+      completedEnoughForProgress && !manualLandingExposure;
+    const lineLandingExposureMode =
+      sessionLandingExposureModeRef.current ??
+      (sessionScreenReaderAtStartRef.current ? 'manual' : 'timed');
 
     setCurrentPhase('ended');
-    void updateProgress(
+    const endNonCalibratingSession = manualLandingExposure
+      ? beginNonCalibratingProgressSession(GAME_ID)
+      : undefined;
+    const progressUpdate = updateProgress(
       GAME_ID,
-      completedEnoughForProgress,
+      adaptiveQualificationEligible,
       actualWordsPresented,
       selectedDifficulty
-    )
+    );
+    // updateProgress captures this guard synchronously before queueing storage.
+    endNonCalibratingSession?.();
+    void progressUpdate
       .then(({ progress }) => {
         if (!cancelledRef.current) setGameProgress(progress);
       })
@@ -596,14 +942,18 @@ export default function ReadingSaccades({
       finishedAtIso: new Date(finishedEpoch).toISOString(),
       elapsedMs,
       score: actualWordsPresented,
-      accuracy: comprehensionAccuracy,
+      accuracy: taskAccuracy,
       details: {
         schemaVersion: 1,
-        activityType: 'reading-saccade-guide',
+        activityType:
+          sessionModeRef.current === 'line-landing'
+            ? 'reading-line-landing'
+            : 'reading-saccade-guide',
         contentId: articleRef.current.id,
         contentVersion: articleRef.current.version,
-        comparisonBand: `reading-saccade-${selectedDifficulty}`,
+        comparisonBand: `reading-saccade-${sessionModeRef.current}-${selectedDifficulty}${sessionModeRef.current === 'line-landing' ? `-${lineLandingExposureMode}` : ''}`,
         difficulty: selectedDifficulty,
+        mode: sessionModeRef.current,
         targetWpm: sessionGuideWpmRef.current,
         initialTargetWpm: sessionInitialGuideWpmRef.current,
         finalTargetWpm: sessionGuideWpmRef.current,
@@ -616,8 +966,25 @@ export default function ReadingSaccades({
         completionRate,
         completionThreshold: COMPLETION_THRESHOLD,
         completedEnoughForProgress,
+        adaptiveQualificationEligible,
         linesPresented: presentedLineIndexesRef.current.size,
         returnSweepsCompleted: returnSweepsRef.current,
+        lineLandingExposureMs: landingExposureMsRef.current,
+        lineLandingExposureMode,
+        screenReaderManualMode:
+          sessionLandingExposureModeRef.current === 'manual' ||
+          sessionLandingExposureModeRef.current === 'mixed' ||
+          (sessionLandingExposureModeRef.current === null &&
+            sessionScreenReaderAtStartRef.current),
+        lineLandingAttempts: landingAttemptsRef.current,
+        lineLandingCorrect: landingCorrectRef.current,
+        lineLandingAccuracy,
+        lineLandingRequired: requiredLandingLines,
+        lineLandingAnswered: answeredLandingLines,
+        lineLandingOmitted: omittedLandingLines,
+        lineLandingNotApplicable,
+        lineLandingRequiredAccuracy: lineLandingConfig.requiredAccuracy,
+        lineLandingQualified,
         pauseCount: pauseCountRef.current,
         backCount: backCountRef.current,
         timingMethod: 'monotonic-active-elapsed',
@@ -656,8 +1023,13 @@ export default function ReadingSaccades({
       : undefined;
   const activeGuideLabel =
     guideStep.kind === 'return'
-      ? `Return to line ${guideStep.toLineIndex + 1}`
+      ? sessionModeRef.current === 'line-landing' && landingStage === 'flash'
+        ? `Line ${guideStep.toLineIndex + 1} begins ${landingPrompt?.target ?? ''}`
+        : sessionModeRef.current === 'line-landing' && landingStage === 'choice'
+          ? `Choose the beginning of line ${guideStep.toLineIndex + 1}`
+          : `Return to line ${guideStep.toLineIndex + 1}`
       : `Current phrase: ${activeAnchor?.words.join(' ') ?? ''}`;
+  const landingControlsLocked = landingStage !== 'none';
   const completionProgress =
     sessionArticle.wordCount > 0
       ? Math.min(1, wordsPresented / sessionArticle.wordCount)
@@ -675,18 +1047,83 @@ export default function ReadingSaccades({
           level={gameProgress.level}
           stars={levelToStars(gameProgress.level)}
           onStart={() => start()}
-          startLabel="Start line guide"
+          startLabel={
+            selectedMode === 'line-landing'
+              ? 'Start line catching'
+              : 'Start line guide'
+          }
         >
+          <View style={styles.modeSelector} testID="saccades-mode-selector">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: selectedMode === 'flow' }}
+              onPress={() => setSelectedMode('flow')}
+              style={({ pressed }) => [
+                styles.modeButton,
+                selectedMode === 'flow' && styles.modeButtonSelected,
+                pressed && styles.pressed,
+              ]}
+              testID="saccades-mode-flow"
+            >
+              <Text
+                style={[
+                  styles.modeButtonText,
+                  selectedMode === 'flow' && styles.modeButtonTextSelected,
+                ]}
+              >
+                Guided flow
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{
+                selected: selectedMode === 'line-landing',
+              }}
+              onPress={() => setSelectedMode('line-landing')}
+              style={({ pressed }) => [
+                styles.modeButton,
+                selectedMode === 'line-landing' && styles.modeButtonSelected,
+                pressed && styles.pressed,
+              ]}
+              testID="saccades-mode-line-landing"
+            >
+              <Text
+                style={[
+                  styles.modeButtonText,
+                  selectedMode === 'line-landing' &&
+                    styles.modeButtonTextSelected,
+                ]}
+              >
+                Line-Landing
+              </Text>
+            </Pressable>
+          </View>
           <View
             accessible
             accessibilityLabel="Example: read across each line, then return down and left to the next line"
             style={styles.idleDemo}
           >
-            <Text style={styles.demoLine}>
-              Read <Text style={styles.demoAnchor}>short groups</Text> across
-            </Text>
-            <Text style={styles.demoLine}>begin the next line here</Text>
-            <Text style={styles.demoLineMuted}>and continue smoothly</Text>
+            {selectedMode === 'flow' ? (
+              <>
+                <Text style={styles.demoLine}>
+                  Read <Text style={styles.demoAnchor}>short groups</Text>{' '}
+                  across
+                </Text>
+                <Text style={styles.demoLine}>begin the next line here</Text>
+                <Text style={styles.demoLineMuted}>and continue smoothly</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.demoLine}>finish this book-like line</Text>
+                <Text style={styles.demoLine}>
+                  <Text style={styles.demoAnchor}>catch its next beginning</Text>{' '}
+                  before it hides
+                </Text>
+                <Text style={styles.demoLineMuted}>
+                  then identify the phrase and keep reading
+                </Text>
+              </>
+            )}
           </View>
           <Text style={styles.safetyNote}>
             Stop immediately if the movement feels uncomfortable.
@@ -800,6 +1237,24 @@ export default function ReadingSaccades({
                         guideStep.kind === 'anchor' &&
                         guideStep.lineIndex === lineIndex &&
                         guideStep.anchorIndex === anchorIndex;
+                      const landingTarget =
+                        sessionModeRef.current === 'line-landing' &&
+                        guideStep.kind === 'return' &&
+                        guideStep.toLineIndex === lineIndex &&
+                        anchorIndex === 0;
+                      const lineStartAlreadyPresented =
+                        presentedWordIndexesRef.current.has(
+                          anchor.startWordIndex
+                        );
+                      const concealedLineStart =
+                        sessionModeRef.current === 'line-landing' &&
+                        anchorIndex === 0 &&
+                        !lineStartAlreadyPresented &&
+                        !(
+                          landingTarget &&
+                          (landingStage === 'flash' ||
+                            landingStage === 'feedback')
+                        );
                       return (
                         <Text
                           accessible={false}
@@ -810,15 +1265,23 @@ export default function ReadingSaccades({
                           testID={
                             active
                               ? 'active-anchor'
+                              : landingTarget && landingStage === 'flash'
+                                ? 'line-landing-flash'
                               : `saccades-anchor-${lineIndex}-${anchorIndex}`
                           }
                           style={[
                             readingDisplay.text,
                             styles.anchor,
                             active && styles.activeAnchor,
+                            concealedLineStart && styles.concealedLineStart,
+                            landingTarget &&
+                              landingStage === 'flash' &&
+                              styles.landingFlash,
                           ]}
                         >
-                          {anchor.words.join(' ')}
+                          {concealedLineStart
+                            ? '••••'
+                            : anchor.words.join(' ')}
                         </Text>
                       );
                     })}
@@ -827,13 +1290,103 @@ export default function ReadingSaccades({
               })}
             </View>
           </ReadingColumn>
+          {landingPrompt && landingStage === 'flash' && (
+            <View style={styles.landingPanel} testID="line-landing-preview">
+              <Text style={styles.landingEyebrow}>LINE-START GLIMPSE</Text>
+              <Text style={styles.landingInstruction}>
+                {landingPrompt.exposureMode === 'manual'
+                  ? 'Take the time you need, then hide the phrase and choose it.'
+                  : 'Keep the return movement natural. The phrase will hide shortly.'}
+              </Text>
+              {landingPrompt.exposureMode === 'manual' && (
+                <>
+                  <Text style={styles.screenReaderLandingText}>
+                    Line beginning: {landingPrompt.target}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={revealLandingChoices}
+                    style={({ pressed }) => [
+                      styles.primaryButton,
+                      styles.manualLandingButton,
+                      pressed && styles.pressed,
+                    ]}
+                    testID="line-landing-manual-continue"
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      Hide phrase and choose
+                    </Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          )}
+          {landingPrompt && landingStage === 'choice' && (
+            <View style={styles.landingPanel} testID="line-landing-choice">
+              <Text style={styles.landingEyebrow}>WHAT STARTED THE LINE?</Text>
+              <View style={styles.landingOptions}>
+                {landingPrompt.options.map((option, optionIndex) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={`${optionIndex}-${option}`}
+                    onPress={() => answerLanding(optionIndex)}
+                    style={({ pressed }) => [
+                      styles.option,
+                      styles.landingOption,
+                      pressed && styles.pressed,
+                    ]}
+                    testID={`line-landing-option-${optionIndex}`}
+                  >
+                    <Text style={styles.optionText}>{option}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+          {landingPrompt && landingStage === 'feedback' && (
+            <View style={styles.landingPanel} testID="line-landing-feedback">
+              <Text
+                style={[
+                  styles.feedbackBadge,
+                  landingPrompt.correct
+                    ? styles.feedbackCorrect
+                    : styles.feedbackIncorrect,
+                ]}
+              >
+                {landingPrompt.correct ? 'Caught' : 'Review the line start'}
+              </Text>
+              {!landingPrompt.correct &&
+                landingPrompt.selectedIndex !== null && (
+                  <Text style={styles.selectedAnswer}>
+                    Your answer:{' '}
+                    {landingPrompt.options[landingPrompt.selectedIndex]}
+                  </Text>
+                )}
+              <Text style={styles.correctAnswerLabel}>Line beginning</Text>
+              <Text style={styles.correctAnswer}>{landingPrompt.target}</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={continueAfterLanding}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  styles.feedbackContinue,
+                  pressed && styles.pressed,
+                ]}
+                testID="continue-line-landing"
+              >
+                <Text style={styles.primaryButtonText}>Continue reading</Text>
+              </Pressable>
+            </View>
+          )}
           <View style={styles.controls} testID="saccades-controls">
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Back one highlighted phrase"
+              disabled={landingControlsLocked}
               onPress={backOneAnchor}
               style={({ pressed }) => [
                 styles.secondaryButton,
+                landingControlsLocked && styles.buttonDisabled,
                 pressed && styles.pressed,
               ]}
               testID="back-anchor"
@@ -843,9 +1396,11 @@ export default function ReadingSaccades({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={paused ? 'Resume line guide' : 'Pause line guide'}
+              disabled={landingControlsLocked}
               onPress={togglePause}
               style={({ pressed }) => [
                 styles.secondaryButton,
+                landingControlsLocked && styles.buttonDisabled,
                 pressed && styles.pressed,
               ]}
               testID="toggle-guide"
@@ -857,11 +1412,12 @@ export default function ReadingSaccades({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Reduce guide speed by 25 words per minute"
-              disabled={guideWpm <= MIN_GUIDE_WPM}
+              disabled={landingControlsLocked || guideWpm <= MIN_GUIDE_WPM}
               onPress={() => changePace(-GUIDE_STEP_WPM)}
               style={({ pressed }) => [
                 styles.secondaryButton,
-                guideWpm <= MIN_GUIDE_WPM && styles.buttonDisabled,
+                (landingControlsLocked || guideWpm <= MIN_GUIDE_WPM) &&
+                  styles.buttonDisabled,
                 pressed && styles.pressed,
               ]}
               testID="saccades-slower"
@@ -871,11 +1427,12 @@ export default function ReadingSaccades({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Increase guide speed by 25 words per minute"
-              disabled={guideWpm >= MAX_GUIDE_WPM}
+              disabled={landingControlsLocked || guideWpm >= MAX_GUIDE_WPM}
               onPress={() => changePace(GUIDE_STEP_WPM)}
               style={({ pressed }) => [
                 styles.secondaryButton,
-                guideWpm >= MAX_GUIDE_WPM && styles.buttonDisabled,
+                (landingControlsLocked || guideWpm >= MAX_GUIDE_WPM) &&
+                  styles.buttonDisabled,
                 pressed && styles.pressed,
               ]}
               testID="saccades-faster"
@@ -902,6 +1459,11 @@ export default function ReadingSaccades({
             {linesPresented} lines visited · line {activeLineIndex + 1} of{' '}
             {sessionLines.length}
           </Text>
+          {sessionModeRef.current === 'line-landing' && (
+            <Text style={styles.progressNote} testID="line-landing-score">
+              {landingCorrect}/{landingAttempts} line starts caught
+            </Text>
+          )}
         </ScrollView>
       )}
 
@@ -982,6 +1544,11 @@ export default function ReadingSaccades({
           <Text style={styles.endMeta}>
             {wordsPresented} of {sessionArticle.wordCount} words guided
           </Text>
+          {sessionModeRef.current === 'line-landing' && (
+            <Text style={styles.endMeta}>
+              {landingCorrect} of {landingAttempts} line starts caught
+            </Text>
+          )}
           <Pressable
             accessibilityRole="button"
             onPress={() => start(true)}
@@ -1028,6 +1595,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     width: '100%',
+  },
+  modeSelector: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    width: '100%',
+  },
+  modeButton: {
+    alignItems: 'center',
+    backgroundColor: colors.cardBackground,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: spacing.sm,
+  },
+  modeButtonSelected: {
+    backgroundColor: colors.infoSurface,
+    borderColor: colors.primary,
+  },
+  modeButtonText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  modeButtonTextSelected: {
+    color: colors.infoForeground,
   },
   demoLine: {
     color: colors.textPrimary,
@@ -1163,6 +1760,36 @@ const styles = StyleSheet.create({
   activeAnchor: {
     backgroundColor: colors.infoSurface,
     color: colors.infoForeground,
+  },
+  concealedLineStart: {
+    color: colors.textMuted,
+    letterSpacing: 1,
+    opacity: 0.38,
+  },
+  landingFlash: {
+    backgroundColor: colors.warningSurface,
+    color: colors.warningForeground,
+  },
+  landingPanel: {
+    backgroundColor: colors.cardBackground,
+    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  landingEyebrow: {
+    color: colors.primaryDark,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    textAlign: 'center',
+  },
+  landingInstruction: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
   },
   pausedPill: {
     backgroundColor: colors.infoSurface,
@@ -1308,6 +1935,15 @@ const styles = StyleSheet.create({
   options: {
     gap: spacing.sm,
   },
+  landingOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  landingOption: {
+    flexBasis: '45%',
+    flexGrow: 1,
+  },
   option: {
     backgroundColor: colors.cardBackground,
     borderColor: colors.border,
@@ -1322,6 +1958,17 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 15,
     lineHeight: 21,
+  },
+  screenReaderLandingText: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '700',
+    lineHeight: 24,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  manualLandingButton: {
+    marginTop: spacing.md,
   },
   endCard: {
     alignItems: 'center',

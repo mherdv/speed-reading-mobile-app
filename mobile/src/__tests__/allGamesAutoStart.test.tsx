@@ -4,6 +4,7 @@ import { act, render } from '@testing-library/react-native';
 // Import all registered games
 import RepeatedReading from '../games/RepeatedReading/RepeatedReading';
 import MainIdeaSprint from '../games/MainIdeaSprint/MainIdeaSprint';
+import PageGlimpse from '../games/PageGlimpse/PageGlimpse';
 import StructureScan from '../games/StructureScan/StructureScan';
 import EvidenceHunt from '../games/EvidenceHunt/EvidenceHunt';
 import ContextBuilder from '../games/ContextBuilder/ContextBuilder';
@@ -13,6 +14,9 @@ import LetterRecognition from '../games/LetterRecognition/LetterRecognition';
 import TextSearch from '../games/TextSearch/TextSearch';
 import EyeMovementTraining from '../games/EyeMovementTraining/EyeMovementTraining';
 import ReadingSaccades from '../games/ReadingSaccades/ReadingSaccades';
+import PreviewCatch from '../games/PreviewCatch/PreviewCatch';
+import PeripheralLetterCatch from '../games/PeripheralLetterCatch/PeripheralLetterCatch';
+import PeripheralWordCatch from '../games/PeripheralWordCatch/PeripheralWordCatch';
 import VisualSpanExpansion from '../games/VisualSpanExpansion/VisualSpanExpansion';
 import FlashReading from '../games/FlashReading/FlashReading';
 import WordsRecall from '../games/WordsRecall/WordsRecall';
@@ -87,6 +91,17 @@ describe('All Games - AutoStart Functionality', () => {
       await waitForAutoStart();
       expect(queryByTestId('start-button')).toBeNull();
       expect(getByTestId('main-idea-passage')).toBeTruthy();
+    });
+  });
+
+  describe('PageGlimpse', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <PageGlimpse autoStart exposureMs={1_000} roundCount={1} />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('page-glimpse-stage')).toBeTruthy();
     });
   });
 
@@ -184,6 +199,54 @@ describe('All Games - AutoStart Functionality', () => {
       await waitForAutoStart();
       expect(queryByTestId('start-button')).toBeNull();
       expect(getByTestId('saccades-active')).toBeTruthy();
+    });
+  });
+
+  describe('PreviewCatch', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <PreviewCatch
+          autoStart
+          exposureMs={1_000}
+          totalRounds={1}
+          random={() => 0.999}
+        />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('preview-catch-active')).toBeTruthy();
+    });
+  });
+
+  describe('PeripheralLetterCatch', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <PeripheralLetterCatch
+          autoStart
+          displayMs={1_000}
+          fixationMs={1_000}
+          totalRounds={1}
+        />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('peripheral-letter-fixation')).toBeTruthy();
+    });
+  });
+
+  describe('PeripheralWordCatch', () => {
+    it('auto-starts when autoStart prop is true', async () => {
+      const { queryByTestId, getByTestId } = render(
+        <PeripheralWordCatch
+          autoStart
+          displayMs={1_000}
+          fixationMs={1_000}
+          totalRounds={1}
+        />
+      );
+      await waitForAutoStart();
+      expect(queryByTestId('start-button')).toBeNull();
+      expect(getByTestId('peripheral-word-fixation')).toBeTruthy();
     });
   });
 

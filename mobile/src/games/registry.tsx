@@ -3,6 +3,7 @@ import React from 'react';
 import RepeatedReading from './RepeatedReading/RepeatedReading';
 import WpmTest from './WpmTest/WpmTest';
 import MainIdeaSprint from './MainIdeaSprint/MainIdeaSprint';
+import PageGlimpse from './PageGlimpse/PageGlimpse';
 import StructureScan from './StructureScan/StructureScan';
 import EvidenceHunt from './EvidenceHunt/EvidenceHunt';
 import ContextBuilder from './ContextBuilder/ContextBuilder';
@@ -12,6 +13,9 @@ import LetterRecognition from './LetterRecognition/LetterRecognition';
 import TextSearch from './TextSearch/TextSearch';
 import EyeMovementTraining from './EyeMovementTraining/EyeMovementTraining';
 import ReadingSaccades from './ReadingSaccades/ReadingSaccades';
+import PreviewCatch from './PreviewCatch/PreviewCatch';
+import PeripheralLetterCatch from './PeripheralLetterCatch/PeripheralLetterCatch';
+import PeripheralWordCatch from './PeripheralWordCatch/PeripheralWordCatch';
 import VisualSpanExpansion from './VisualSpanExpansion/VisualSpanExpansion';
 import FlashReading from './FlashReading/FlashReading';
 import WordsRecall from './WordsRecall/WordsRecall';
@@ -81,6 +85,7 @@ const GAME_COMPONENTS: Record<
   RepeatedReading,
   WpmTest,
   MainIdeaSprint,
+  PageGlimpse,
   StructureScan,
   EvidenceHunt,
   ContextBuilder,
@@ -95,6 +100,9 @@ const GAME_COMPONENTS: Record<
   SchulteMix,
   EyeMovementTraining,
   ReadingSaccades,
+  PreviewCatch,
+  PeripheralLetterCatch,
+  PeripheralWordCatch,
   VisualSpanExpansion,
   PatternScanning,
   TimedWordRecognition,

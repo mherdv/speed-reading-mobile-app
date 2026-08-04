@@ -79,6 +79,30 @@ function encouragement(
         };
   }
 
+  if (result.details?.comprehensionCorrect === false) {
+    return {
+      title: 'Recognition found—protect meaning',
+      body: 'Repeat at a comfortable setting and keep the passage meaning with the visual task.',
+    };
+  }
+
+  if (result.details?.activityType === 'peripheral-word-recognition') {
+    const meaningChecks = result.details.meaningChecks;
+    const meaningAccuracy = result.details.meaningAccuracy;
+    if (meaningChecks === 0) {
+      return {
+        title: 'Word recognition recorded',
+        body: 'No meaning check was completed, so repeat before increasing difficulty.',
+      };
+    }
+    if (typeof meaningAccuracy === 'number' && meaningAccuracy < 0.65) {
+      return {
+        title: 'Word shape caught—review meaning',
+        body: 'Hold this setting and connect the flashed word with its definition.',
+      };
+    }
+  }
+
   if (isGuidedPaceActivity(result.details?.activityType)) {
     return {
       title: 'Guided session complete',
@@ -179,6 +203,17 @@ export function ResultScreen({
       ? value
       : undefined;
   };
+  const booleanDetail = (key: string): boolean | undefined => {
+    const value = result.details?.[key];
+    return typeof value === 'boolean' ? value : undefined;
+  };
+  const comprehensionCorrect = booleanDetail('comprehensionCorrect');
+  const comprehensionValue =
+    comprehensionCorrect === undefined
+      ? 'Not recorded'
+      : comprehensionCorrect
+        ? '1/1'
+        : '0/1';
   const comprehension = getComprehensionCounts(result);
   const resultMetrics: Array<{ value: string; label: string }> = [];
   if (measuredReading) {
@@ -231,18 +266,61 @@ export function ResultScreen({
         label: 'Omitted rounds',
       }
     );
+  } else if (activityType === 'brief-connected-text-retrieval') {
+    const total = numberDetail('questionsTotal') ?? 0;
+    resultMetrics.push(
+      {
+        value: `${numberDetail('correctCount') ?? 0}/${total}`,
+        label: 'Retrievals correct',
+      },
+      {
+        value: `${numberDetail('glimpsesShown') ?? 0}/${total}`,
+        label: 'Glimpses completed',
+      }
+    );
+  } else if (activityType === 'preview-catch') {
+    const rounds = numberDetail('rounds') ?? 0;
+    resultMetrics.push(
+      {
+        value: `${numberDetail('previewCorrect') ?? 0}/${rounds}`,
+        label: 'Previews correct',
+      },
+      {
+        value: comprehensionValue,
+        label: 'Comprehension',
+      }
+    );
+  } else if (activityType === 'peripheral-word-recognition') {
+    const rounds = numberDetail('rounds') ?? 0;
+    const meaningChecks = numberDetail('meaningChecks') ?? 0;
+    resultMetrics.push(
+      {
+        value: `${numberDetail('correct') ?? 0}/${rounds}`,
+        label: 'Words correct',
+      },
+      {
+        value:
+          meaningChecks > 0
+            ? `${numberDetail('meaningCorrect') ?? 0}/${meaningChecks}`
+            : 'Not reached',
+        label: 'Meaning checks',
+      }
+    );
   } else {
     resultMetrics.push({
       value: `${metric.value}`,
       label: metric.label,
     });
-    if (hasAccuracy) {
+    const isSaccadeGuide =
+      activityType === 'reading-saccade-guide' ||
+      activityType === 'reading-line-landing';
+    if (hasAccuracy && !isSaccadeGuide) {
       resultMetrics.push({
         value: `${Math.round((result.accuracy ?? 0) * 100)}%`,
         label: 'Task accuracy',
       });
     }
-    if (activityType === 'reading-saccade-guide') {
+    if (isSaccadeGuide) {
       const wordsPresented = numberDetail('wordsPresented') ?? 0;
       const totalWords = numberDetail('totalWords') ?? 0;
       resultMetrics.push(
@@ -253,8 +331,41 @@ export function ResultScreen({
         {
           value: `${numberDetail('returnSweepsCompleted') ?? 0}`,
           label: 'Return sweeps',
+        },
+        {
+          value: comprehensionValue,
+          label: 'Comprehension',
         }
       );
+      if (activityType === 'reading-line-landing') {
+        const required =
+          numberDetail('lineLandingRequired') ??
+          numberDetail('lineLandingAttempts') ??
+          0;
+        const answered =
+          numberDetail('lineLandingAnswered') ??
+          numberDetail('lineLandingAttempts') ??
+          0;
+        const notApplicable = result.details?.lineLandingNotApplicable === true;
+        resultMetrics.push(
+          {
+            value: notApplicable
+              ? 'N/A'
+              : `${numberDetail('lineLandingCorrect') ?? 0}/${answered}`,
+            label: 'Line starts caught',
+          },
+          {
+            value: notApplicable ? 'N/A' : `${answered}/${required}`,
+            label: 'Checkpoints completed',
+          },
+          {
+            value: notApplicable
+              ? 'N/A'
+              : `${Math.round((numberDetail('lineLandingRequiredAccuracy') ?? 0) * 100)}%`,
+            label: 'Accuracy target',
+          }
+        );
+      }
     }
     const mistakes = numberDetail('mistakes');
     if (schulteGridModeLabel && mistakes !== undefined) {

@@ -15,6 +15,9 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
   MainIdeaSprint:
     'Read a short passage, hide it, and state its central idea before answer choices appear. A short cue-free recall buffer reduces recognition guessing; immediate feedback then helps you separate the author’s main claim from supporting details.',
 
+  PageGlimpse:
+    'Read one to four book-like lines before they hide automatically, then retrieve a missing phrase, a precise detail, or the main idea. Easy, Medium, and Hard progressively add connected lines, denser language, closer distractors, and shorter exposure. With a screen reader, the glimpse waits for your explicit continue and remains separate from timed Adaptive calibration. Corrective feedback remains visible until you continue. Results describe brief connected-text retrieval rather than measured reading WPM.',
+
   StructureScan:
     'Preview a short, structured article for a specific information goal, then choose the heading most likely to contain the answer. This builds purposeful skimming without pretending that skimming replaces careful reading.',
 
@@ -40,7 +43,16 @@ export const GAME_DESCRIPTIONS: Record<GameId, string> = {
     'Take a short visual-comfort break with gentle blinking and distance focus. This routine may help you pause during screen use, but it does not improve eyesight, diagnose eye health, or measure reading speed.',
 
   ReadingSaccades:
-    'Follow short word groups from left to right across a stable, book-like block of 5–8 width-aware lines, then continue at the beginning of the next line. Pause, step back, or change the live guide in 25-WPM steps before answering a passage question. The drill records guide completion and comprehension; it does not track your gaze, treat vision, or prove faster reading.',
+    'Choose Guided Flow or Line-Landing. Guided Flow follows short word groups from left to right across a stable, book-like block of 5–8 width-aware lines. Line-Landing conceals each unvisited line beginning, flashes it during the return movement, and asks you to identify it before reading continues. Screen-reader exposure waits for an explicit action. Pause, step back, or change the live guide in 25-WPM steps, then answer a passage question. The drill records guide completion, unique checkpoint coverage, line-start accuracy, and comprehension; it does not track your gaze, treat vision, or prove faster reading.',
+
+  PreviewCatch:
+    'Keep the current word near the center while an upcoming word appears briefly to its right. Easy and Medium use balanced Same/Changed decisions; Hard requires the exact preview among four visually similar choices. Each session finishes with a connected-passage meaning question. Screen-reader mode waits for an explicit action and is stored in a separate, non-calibrating comparison band. Results keep preview recognition and comprehension separate and do not claim measured reading speed.',
+
+  PeripheralLetterCatch:
+    'Keep your gaze near the central plus while a three-letter group flashes to the left or right, then type all three letters in order. The selected difficulty changes exposure, fitted screen offset, spacing, character similarity, and session length. A saved 15-level challenge adds distance and speed after demonstrated success; misses lower the next challenge, and three consecutive misses end the session without awarding Adaptive completion. Screen-reader feedback is announced and waits for Continue. The score is task-specific peripheral letter recognition, not a reading-speed result.',
+
+  PeripheralWordCatch:
+    'Keep your gaze near the central plus while one word, fitted to the measured game board, flashes to the left or right, then choose it among close-looking alternatives. Periodic meaning checks make recognition depend on vocabulary rather than word shape alone. The selected difficulty changes exposure, fitted offset, choice count, vocabulary complexity, and meaning-check frequency, while a saved 15-level challenge resumes demonstrated performance. Three-miss endings cannot award Adaptive completion, and screen-reader feedback is announced and waits for Continue. The result does not claim measured gaze or reading WPM.',
 
   VisualSpanExpansion:
     'Keep your eyes near a central fixation mark while equal-length words flash at surrounding positions. The selected difficulty sets the word band, while a saved 15-level flash ladder expands the span, shortens exposure, and introduces an opaque lower marker only after the clear stages are mastered. A miss shows both choices, costs 5 points, and narrows the next glance. Treat its score as spatial word-recall performance, not proof of faster connected-text reading.',

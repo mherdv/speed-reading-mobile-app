@@ -1,6 +1,6 @@
 # SpeedRead exercise, competitor, and game-design report
 
-Date: 2026-08-03
+Date: 2026-08-04
 Scope: mobile speed-reading practice, comprehension, scanning, recognition, and screen comfort
 
 ## Revision record
@@ -23,6 +23,7 @@ Scope: mobile speed-reading practice, comprehension, scanning, recognition, and 
 | V23 | Complete | Replaced immediate difficulty-band masking with a persistent 15-level flash ladder: content and exposure grow through nine clear levels, opaque masking begins at level 10, misses lower live load, and demonstrated levels resume in later sessions. |
 | V24 | Complete | Hardened flash progression after two reviewer passes: higher stages now sample genuinely harder content, sustained pace resumes up to 3,000 WPM, number length and spatial/digit span grow deterministically, fixed authored sessions cannot inflate mastery, delayed storage loads cannot erase checkpoints, and result reports use the settings actually played. |
 | V25 | Complete | Added Return-Sweep Flow and Focus Lane as comprehension-checked guided-reading labs, kept their configured pace out of measured WPM, and documented the evidence boundary around return sweeps, centered chunks, preview, and regressions. |
+| V26 | Complete | Added Page Glimpse, Preview Catch, Peripheral Letters, Peripheral Words, and a Line-Landing variation inside Return-Sweep Flow. Two reviewer–implementer passes then hardened unique checkpoint accounting, adaptive qualification, task-specific history, measured-board geometry, keyboard/Dynamic Type layout, reduced motion, and explicit VoiceOver exposure/feedback controls. |
 
 ## Executive decision
 
@@ -111,6 +112,7 @@ This is a comprehensive **actionable** catalog for the current product, not a cl
 | WPM Test | Live | A | Read connected text, stop timing before questions, then report actual word count, measured WPM, comprehension, and quality flags |
 | Repeated Reading | Live | A | Read the same passage twice and compare pace only after a comprehension check |
 | Main Idea | Live | A | Read, hide the passage, retrieve the point, then choose and explain the best main idea |
+| Page Glimpse | Live | A | Read a brief one-to-four-line connected-text glimpse, then retrieve its missing phrase, detail, or main idea without reopening it |
 | Comprehension | Live | A | Follow an adjustable paced highlight, pause or finish safely, then answer passage-dependent questions |
 | Purposeful Text Search | Live | A | Find every requested term in connected text |
 | Structure Scan | Live | A | Preview a structured passage and choose the section most likely to answer a stated reading goal |
@@ -133,7 +135,7 @@ This is a comprehensive **actionable** catalog for the current product, not a cl
 | Exercise | Status | Tier | Core rule |
 | --- | --- | --- | --- |
 | Power Reader | Live | B | Use full-page Flow, a three-slot Focus Lane, or responsive Return-Sweep Flow with built-in or pasted text; pause or adjust pace; do not call its configured rate measured WPM |
-| Return-Sweep Flow (`ReadingSaccades`) | Live | B | Follow highlighted chunks across stable lines, make the reading-like return to the next line, then answer one comprehension question; configured pace is not measured WPM |
+| Return-Sweep Flow + Line-Landing (`ReadingSaccades`) | Live | B | Follow highlighted chunks across stable lines, or identify a briefly flashed next-line beginning during each return; finish with comprehension and keep configured pace separate from measured WPM |
 | Focus Lane (`CenterLineReader`) | Live | B | Read centered 1-, 2-, or 4-word chunks between fixed guides with neighboring chunks retained for preview/regression, then answer two comprehension questions |
 | Flash Recall | Live | C | View one word briefly, type it, and track recognition accuracy |
 | Words Recall | Live | B | View exactly two words, hide them, and type them back in order |
@@ -161,9 +163,11 @@ This is a comprehensive **actionable** catalog for the current product, not a cl
 | Number Search | Live | C | Locate a target number in a changing grid |
 | Number Hunt | Live | C | Decide whether the current number matches the target |
 | Symbol Hunt | Live | C | Decide whether the current symbol matches the target |
-| Odd Word | Live | B | Identify the word that differs from similar words |
 | Word Pair Scan | Live | B | Select every mismatching word pair; a matching-pair tap immediately costs time |
 | Even Numbers | Live | C | Scan a number grid by rows or columns and select every even value |
+| Preview Catch | Live | B | Recognize a briefly shown upcoming word beside central focus, then complete a passage-meaning check |
+| Peripheral Letters | Live | C | Keep central fixation while a balanced left/right trigram flashes, then type all three letters in order |
+| Peripheral Words | Live | B | Keep central fixation while a balanced left/right word flashes, choose it among close-looking alternatives, and periodically verify meaning |
 | Guided Row Scan | Later | C | Sweep rows left-to-right and reverse with accuracy targets |
 | Multi-Target Search | Later | B | Hold two target words and find both in connected text |
 | Distractor Resistance | Later | B | Find a meaningful target among visually similar nonwords |
@@ -418,14 +422,6 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - Result: solved words and accuracy.
 - Difficulty: common 4–6-letter edge transpositions; 6–9-letter internal transpositions; or subtle internal transpositions in 8+-letter words.
 
-### 22. Odd Word
-
-- Inspect a grid of similar words.
-- Select the one word that differs and submit.
-- Continue through rounds while time remains.
-- Result: correct rounds, selections, and accuracy.
-- Difficulty: 4 cards/35 s, 6/30 s, or 8/25 s.
-
 ### 23. Even Numbers
 
 - Scan the grid systematically by rows or columns.
@@ -508,6 +504,9 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 
 ### 32. Return-Sweep Flow (`ReadingSaccades`)
 
+- Choose **Guided Flow** for uninterrupted pacing or **Line-Landing** for an
+  added next-line recognition checkpoint. The selected mode remains explicit
+  throughout the attempt.
 - Follow each emphasized chunk across a stable, book-like line, then continue
   at the first chunk of the next line. Five to eight responsive lines stay in
   view, and full lines distribute phrase groups toward both page edges while
@@ -516,7 +515,13 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
   800 WPM. A pace change reschedules the current guide step immediately and is
   stored as configured pace rather than measured reading speed.
 - Complete the passage and answer one passage-dependent comprehension question.
-- Result: comprehension, configured guide pace, and active presentation time.
+- In Line-Landing, each unvisited line beginning stays concealed. During the
+  return, it flashes briefly and then hides; identify the exact line start from
+  three or four close-length choices before the guide continues. Feedback stays
+  visible until Continue.
+- Result: comprehension, configured guide pace, active presentation time,
+  guide coverage, return sweeps, and—in Line-Landing—line-start recognition
+  accuracy.
   Active time uses a monotonic clock and excludes paused time. Stored measured
   WPM is zero because the configured rate is a guide, not an observed reading
   rate.
@@ -547,6 +552,71 @@ All games must show their rules before start, support manual Easy/Medium/Hard, r
 - The center guide is a pacing and attention aid. It does not prove that a
   reader processed every word simultaneously or that removing ordinary eye
   movements improves reading.
+
+### 34. Page Glimpse
+
+- Read a short, book-like connected-text glimpse before it hides automatically.
+- Retrieve a missing phrase, a precise detail, or the central idea. The text
+  cannot be reopened before answering, and corrective feedback remains visible
+  until Continue.
+- Result: correct retrievals, attempts, accuracy, glimpse duration, and prompt
+  mix. The controlled exposure is not reported as measured reading WPM.
+- Difficulty: 3 one-line rounds at 2.6 seconds; 4 two-line rounds at 2.1
+  seconds; or 5 dense four-line rounds at 1.7 seconds. Each band contains six
+  original validated prompts balanced across the three retrieval types.
+- With a screen reader, the glimpse remains available until an explicit Hide
+  and answer action. Untimed attempts remain in history under a separate
+  comparison band but do not calibrate the timed Adaptive level.
+
+### 35. Preview Catch
+
+- Keep the current word near the center while an upcoming word from the same
+  connected passage appears briefly to its right.
+- Easy and Medium ask whether the preview stayed the same or changed; Hard asks
+  for the exact preview among four visually similar choices. Finish with one
+  passage-dependent meaning question.
+- Result: preview-recognition accuracy and comprehension remain separate. The
+  app does not infer gaze direction or parafoveal processing from a tap.
+- Difficulty: 4 previews at 900 ms; 5 previews at 600 ms with less obvious
+  changes; or 5 previews at 380 ms with exact-word choices. The bank contains
+  nine original passages and 45 validated preview trials.
+- Screen-reader exposure is explicit rather than timer-driven. These untimed
+  attempts remain playable and saved, but cannot advance timed Adaptive
+  difficulty and are not mixed with timed comparison bands.
+
+### 36. Peripheral Letters
+
+- Keep attention near the central plus while one three-letter group flashes on
+  a balanced left or right side, then type all three letters in order.
+- Four correct recalls advance and save the 15-level challenge. A miss lowers
+  the next live challenge by one; three consecutive misses end the attempt
+  after showing the correction.
+- Result: exact-recall accuracy, side balance, exposure, offset, and challenge
+  movement. Pixel offset is screen-fitted and is not presented as calibrated
+  visual angle or measured gaze.
+- Difficulty: 10 rounds at 900–520 ms with wider spacing; 12 rounds at 700–360
+  ms with more similar letters; or 14 rounds at 520–240 ms with the most
+  crowded alphabet and widest fitted offset.
+- Recall uses a keyboard-aware scrolling layout. VoiceOver feedback announces
+  the submitted and correct letters and waits for an explicit Continue.
+
+### 37. Peripheral Words
+
+- Keep attention near the central plus while one fitted word flashes on a
+  balanced left or right side, then select it among close-looking alternatives.
+- Periodic same-category definition checks verify meaning instead of rewarding
+  word-shape guessing alone. Four correct responses advance the saved 15-level
+  challenge; a miss lowers the next live challenge, and three consecutive
+  misses end the attempt after feedback.
+- Result: word-recognition accuracy, meaning-check accuracy, side balance,
+  exposure, offset, and challenge movement; it is not measured reading WPM.
+- Difficulty: 10 rounds at 1,000–560 ms with 3 choices and meaning every fifth
+  trial; 12 rounds at 760–390 ms with 4 choices and meaning every fourth; or 14
+  rounds at 560–260 ms with 5 choices and meaning every third.
+- The target uses the game board's measured width rather than the outer window.
+  VoiceOver feedback is announced and waits for Continue. A three-miss stop
+  never qualifies as a successful Adaptive completion, even if earlier
+  aggregate accuracy was high.
 
 ## Review 1: defects found and corrections
 
@@ -664,13 +734,13 @@ Practice deciding **where to read next** from text structure. The task does not 
 - Whether optional lab users later improve measured reading relative to their own baseline; no transfer is assumed.
 - Search success in the library and time from opening the library to starting a chosen drill.
 
-## Current implementation audit (updated through V25)
+## Current implementation audit (updated through V26)
 
 This section is the authoritative snapshot for the current source. Earlier revision notes remain as history.
 
 ### Availability and offline boundary
 
-- The registry contains **33 exercises**, and all 33 are available in the searchable Home collection. There is no subscription, checkout, or paid-feature gate in the current source.
+- The registry contains **37 exercises**, and all 37 are available in the searchable Home collection. There is no subscription, checkout, or paid-feature gate in the current source.
 - The exercise engines, authored passages, vocabulary pools, built-in Power Reader article library, and pasted-text workflow are local and usable without requesting network content.
 - Project Gutenberg discovery/book retrieval and Power Reader translation are optional network features. A recent Gutenberg title is metadata, not a falsely labeled offline copy.
 - Content in the implemented recall, vocabulary, and search pools is English-only; the interface must not imply multilingual exercise content.
@@ -697,12 +767,16 @@ This section is the authoritative snapshot for the current source. Earlier revis
 | Evidence Hunt | 12 | 12 | 12 | Four-round rotating windows; answer options shuffle while evidence sentences remain in reading order |
 | Context Builder | 24 | 24 | 24 | Five-round rotating windows; meaning and clue options are shuffled |
 | Power Reader offline | 8 | 8 | 8 | User-selected original articles with computed word counts |
+| Page Glimpse | 6 | 6 | 6 | Difficulty-filtered, no-replacement session selection; the bank balances missing phrase, detail, and main-idea prompts |
+| Preview Catch | 3 passages / 15 trials | 3 / 15 | 3 / 15 | One rotating passage per play; each passage has five no-replacement preview targets and one meaning check |
+| Peripheral Letters | 336–360 generated trigrams | 360 | 360 | Unique validated three-letter pools are shuffled; a changed challenge tier rebuilds the appropriate pool |
+| Peripheral Words | 43 reviewed words | 117 | 85 | Length-filtered definitions feed a persistent varied deck; recognition distractors favor close spelling and meaning choices favor the same part of speech |
 
 These are honest limits, not “unlimited content” claims. The current connected-
-text inventory contains 36 Main Idea passages, 24 Structure Scan scenarios, 36
+text inventory contains 36 Main Idea passages, 18 Page Glimpse prompts, 24 Structure Scan scenarios, 36
 Evidence Hunt rounds, 72 Context Builder rounds, 48 general reading samples
 (18 assessment forms and a disjoint 30-passage training bank), 54 Text Search
-passages, and 24 offline Power Reader articles. Paced Comprehension and Repeated
+passages, nine Preview Catch passages with 45 trials, and 24 offline Power Reader articles. Paced Comprehension and Repeated
 Reading deliberately share the training bank, with explicit 10/10/10
 difficulty curation rather than inferred difficulty. Executable validators
 enforce the published counts and the associated ID, difficulty, answer, option,
@@ -718,9 +792,14 @@ Implemented now:
   Flow modes inside Power Reader;
 - comprehension-checked Return-Sweep Flow and Focus Lane guides whose configured
   rates remain separate from measured WPM;
+- optional Line-Landing checkpoints inside Return-Sweep Flow, with separately
+  reported line-start recognition and comprehension;
 - adjustable guide speed, difficulty, and chunk size by level;
 - local pasted text, a 24-article built-in offline library, and optional Project Gutenberg discovery;
-- repeated reading, purposeful search, evidence, structure, context, recall, Schulte number/letter/mix, number preview search, letter-grid search, row/column even-number scanning, and word-pair discrimination;
+- repeated reading, Page Glimpse retrieval, purposeful search, evidence,
+  structure, context, recall, Preview Catch, peripheral letter/word recognition,
+  Schulte number/letter/mix, number preview search, letter-grid search,
+  row/column even-number scanning, and word-pair discrimination;
 - task-specific results that keep configured pacing separate from measured connected-text WPM.
 
 Highest-value gaps:
@@ -751,11 +830,29 @@ The second re-read found two remaining claim risks: guided WPM could still be mi
 - Jest remains non-console-clean because asynchronous React tests emit `act(...)` warnings. They did not fail any assertion, but making unexpected `console.error` fail the suite remains test-hygiene work.
 - The final read-only reviewer pass found no remaining blocker or P1 issue in the changed exercise, result-integrity, touch-target, vocabulary, or Power Reader scope.
 
+### V26 final validation and reviewer signoff
+
+- Strict TypeScript passed.
+- The full Jest run passed: **94 suites and 776 tests**, including all 37 game
+  lifecycles and auto-start paths, content contracts, randomization, adaptive
+  qualification, accessibility, result semantics, replay, and narrow layouts.
+- Expo Doctor passed **18/18** checks; no dependencies changed afterward.
+- The production web/PWA export passed with 650 modules, a roughly 2.03 MB
+  JavaScript bundle, and a service worker precaching 21 offline assets.
+- Two read-only reviewer cycles found and then verified fixes for checkpoint
+  farming/omission, hidden comprehension and meaning metrics, untimed-session
+  calibration, failure-stop qualification, narrow-board target overlap,
+  keyboard/Dynamic Type clipping, reduced motion, and VoiceOver timer traps.
+- Manual screen-reader exposure is captured per session or prompt and reported
+  truthfully. Page Glimpse and Preview Catch untimed sessions stay out of timed
+  Adaptive calibration; Peripheral feedback remains until an announced
+  Continue action.
+
 # Research-cycle platform update
 
-The live catalog now contains 33 exercises. Two connected-reading exercises
-were added because they train skills closer to real reading than another
-symbol-speed drill:
+The live catalog now contains 37 exercises. Evidence Hunt and Context Builder
+were added in this research cycle because they train skills closer to real
+reading than another symbol-speed drill:
 
 ## Evidence Hunt
 
@@ -816,7 +913,7 @@ and skipped rounds are reported as omissions.
   result started after that item was assigned. Once all assigned items are
   completed or skipped, the plan stays terminal and does not replenish that day.
 - Home exercise discovery is icon-first at three items per row with a compact
-  level progress bar. All 33 exercises now share one searchable Home collection
+  level progress bar. All 37 exercises now share one searchable Home collection
   without category sections or a separate library route. Favorites persist
   locally as the only separate game collection.
 - Shared exercise description and difficulty panels scroll independently on
@@ -1308,3 +1405,36 @@ authoritative V21 inventory above.
   tracking, and neither is presented as treatment for dyslexia or another
   learning condition. Any transfer claim must come from later, conventional
   connected-text reads that preserve comprehension.
+
+## V26 brief-text, preview, and line-transition practice
+
+- **Page Glimpse** adds a connected-text retrieval task rather than another
+  isolated-symbol reaction game. Its 18 original items are evenly divided by
+  difficulty and retrieval type, selected without replacement inside a play,
+  and checked by structural validators. The result reports retrieval accuracy,
+  never an inferred WPM from a fixed exposure.
+- **Preview Catch** uses nine original passages and 45 keyed preview targets.
+  Same/Changed trials are balanced, Hard choices are visually similar, answer
+  positions are remapped after shuffling, and each attempt ends with a meaning
+  check. It is a screen-based preview-recognition proxy, not proof that the user
+  held central fixation or processed the target parafoveally.
+- **Peripheral Letters** balances left/right flashes and asks for ordered
+  three-letter recall from a generated, validated pool. **Peripheral Words**
+  uses the reviewed definition bank, close-spelling recognition alternatives,
+  and periodic same-part-of-speech meaning checks. Both fit offsets to the
+  actual usable board, call them pixels rather than visual angle, retain corrections
+  long enough to inspect, and use three consecutive misses as the stop rule.
+- The two peripheral exercises share the persistent 15-level challenge model:
+  demonstrated success increases exposure difficulty and fitted offset, a miss
+  lowers the next live trial, and later sessions resume a safe demonstrated
+  checkpoint. Easy/Medium/Hard remains manually controllable and changes the
+  starting timing, content, spacing or choice load, and session length.
+- **Line-Landing** is an explicit Return-Sweep variation, not a fifth catalog
+  duplicate. It conceals each new line start, briefly exposes it during the
+  transition, waits for an exact choice among close-length alternatives, and
+  resumes only after durable feedback. Its result adds line-start accuracy and
+  return count while keeping configured presentation pace out of measured WPM.
+- All five additions preserve the product boundary: without eye tracking and
+  physical visual-angle calibration, they measure only the response made in
+  the exercise. Any benefit to ordinary reading must be checked later with a
+  conventional connected-text read that preserves comprehension.

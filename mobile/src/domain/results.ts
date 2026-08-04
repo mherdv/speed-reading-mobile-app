@@ -15,7 +15,12 @@ export type ResultMetric = {
     | 'Answer accuracy'
     | 'Evidence accuracy'
     | 'Meaning accuracy'
-    | 'Clue accuracy';
+    | 'Clue accuracy'
+    | 'Preview accuracy'
+    | 'Word accuracy'
+    | 'Line-start accuracy'
+    | 'Comprehension'
+    | 'Retrieval accuracy';
 };
 
 export type ResultComparison = {
@@ -72,6 +77,7 @@ const GUIDED_PACE_ACTIVITY_TYPES = new Set([
   'paced-reading',
   'paced-comprehension',
   'reading-saccade-guide',
+  'reading-line-landing',
   'focus-lane-guided-reading',
 ]);
 
@@ -125,6 +131,24 @@ export function getResultMetric(result: AttemptResult): ResultMetric {
       return { value: Math.round(value * 100), label: 'Accuracy' };
     }
   }
+  if (activityType === 'preview-catch') {
+    const value = result.details?.previewAccuracy;
+    if (typeof value === 'number') {
+      return { value: Math.round(value * 100), label: 'Preview accuracy' };
+    }
+  }
+  if (activityType === 'peripheral-word-recognition') {
+    return {
+      value: Math.round((result.accuracy ?? 0) * 100),
+      label: 'Word accuracy',
+    };
+  }
+  if (activityType === 'brief-connected-text-retrieval') {
+    return {
+      value: Math.round((result.accuracy ?? 0) * 100),
+      label: 'Retrieval accuracy',
+    };
+  }
   const schulteItemsPerMinute = getSchulteItemsPerMinute(result);
   if (schulteItemsPerMinute !== undefined) {
     return { value: schulteItemsPerMinute, label: 'Items/min' };
@@ -167,6 +191,47 @@ export function getResultMetrics(result: AttemptResult): ResultMetric[] {
         { value: Math.round(clue * 100), label: 'Clue accuracy' },
       ];
     }
+  }
+  if (result.details?.activityType === 'preview-catch') {
+    const preview = result.details.previewAccuracy;
+    const comprehension = result.details.comprehensionCorrect;
+    if (typeof preview === 'number' && typeof comprehension === 'boolean') {
+      return [
+        { value: Math.round(preview * 100), label: 'Preview accuracy' },
+        { value: comprehension ? 100 : 0, label: 'Comprehension' },
+      ];
+    }
+  }
+  if (result.details?.activityType === 'peripheral-word-recognition') {
+    const wordMetric: ResultMetric = {
+      value: Math.round((result.accuracy ?? 0) * 100),
+      label: 'Word accuracy',
+    };
+    const meaning = result.details.meaningAccuracy;
+    return typeof meaning === 'number'
+      ? [
+          wordMetric,
+          { value: Math.round(meaning * 100), label: 'Meaning accuracy' },
+        ]
+      : [wordMetric];
+  }
+  if (result.details?.activityType === 'reading-line-landing') {
+    const metrics = [getResultMetric(result)];
+    const lineLanding = result.details.lineLandingAccuracy;
+    const comprehension = result.details.comprehensionCorrect;
+    if (typeof lineLanding === 'number') {
+      metrics.push({
+        value: Math.round(lineLanding * 100),
+        label: 'Line-start accuracy',
+      });
+    }
+    if (typeof comprehension === 'boolean') {
+      metrics.push({
+        value: comprehension ? 100 : 0,
+        label: 'Comprehension',
+      });
+    }
+    return metrics;
   }
   return [getResultMetric(result)];
 }
